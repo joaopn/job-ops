@@ -12,6 +12,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { runCrawler } from '../services/crawler.js';
 import { runJobSpy } from '../services/jobspy.js';
+import { runUkVisaJobs } from '../services/ukvisajobs.js';
 import { scoreJobSuitability } from '../services/scorer.js';
 import { generateSummary } from '../services/summary.js';
 import { generatePdf } from '../services/pdf.js';
@@ -27,7 +28,7 @@ const DEFAULT_PROFILE_PATH = join(__dirname, '../../../../resume-generator/base.
 const DEFAULT_CONFIG: PipelineConfig = {
   topN: 10,
   minSuitabilityScore: 50,
-  sources: ['gradcracker', 'indeed', 'linkedin'],
+  sources: ['gradcracker', 'indeed', 'linkedin', 'ukvisajobs'],
   profilePath: DEFAULT_PROFILE_PATH,
   outputDir: join(__dirname, '../../../data/pdfs'),
 };
@@ -88,22 +89,22 @@ export async function runPipeline(config: Partial<PipelineConfig> = {}): Promise
       error: 'Pipeline is already running',
     };
   }
-  
+
   isPipelineRunning = true;
   resetProgress();
   const mergedConfig = { ...DEFAULT_CONFIG, ...config };
-  
+
   // Create pipeline run record
   const pipelineRun = await pipelineRepo.createPipelineRun();
-  
+
   console.log('🚀 Starting job pipeline...');
   console.log(`   Config: topN=${mergedConfig.topN}, minScore=${mergedConfig.minSuitabilityScore} (manual processing)`);
-  
+
   try {
     // Step 1: Load profile
     console.log('\n📋 Loading profile...');
     const profile = await loadProfile(mergedConfig.profilePath);
-    
+
     // Step 2: Run crawler
     console.log('\n🕷️ Running crawler...');
     progressHelpers.startCrawling();
@@ -154,6 +155,21 @@ export async function runPipeline(config: Partial<PipelineConfig> = {}): Promise
       }
     }
 
+    // Run UKVisaJobs extractor if selected
+    if (mergedConfig.sources.includes('ukvisajobs')) {
+      updateProgress({
+        step: 'crawling',
+        detail: 'UKVisaJobs: scraping visa-sponsoring jobs...',
+      });
+
+      const ukVisaResult = await runUkVisaJobs({ maxJobs: 50 });
+      if (!ukVisaResult.success) {
+        sourceErrors.push(`ukvisajobs: ${ukVisaResult.error ?? 'unknown error'}`);
+      } else {
+        discoveredJobs.push(...ukVisaResult.jobs);
+      }
+    }
+
     if (discoveredJobs.length === 0 && sourceErrors.length > 0) {
       throw new Error(`All sources failed: ${sourceErrors.join('; ')}`);
     }
@@ -163,18 +179,18 @@ export async function runPipeline(config: Partial<PipelineConfig> = {}): Promise
     }
 
     progressHelpers.crawlingComplete(discoveredJobs.length);
-    
+
     // Step 3: Import discovered jobs
     console.log('\n💾 Importing jobs to database...');
     const { created, skipped } = await jobsRepo.bulkCreateJobs(discoveredJobs);
     console.log(`   Created: ${created}, Skipped (duplicates): ${skipped}`);
-    
+
     progressHelpers.importComplete(created, skipped);
-    
+
     await pipelineRepo.updatePipelineRun(pipelineRun.id, {
       jobsDiscovered: created,
     });
-    
+
     // Step 4: Score all discovered jobs missing a score
     console.log('\n🎯 Scoring jobs for suitability...');
     const unprocessedJobs = await jobsRepo.getUnscoredDiscoveredJobs();
@@ -187,7 +203,7 @@ export async function runPipeline(config: Partial<PipelineConfig> = {}): Promise
       totalToProcess: 0,
       currentJob: undefined,
     });
-    
+
     // Score jobs with progress updates
     const scoredJobs: Array<Job & { suitabilityScore: number; suitabilityReason: string }> = [];
     for (let i = 0; i < unprocessedJobs.length; i++) {
@@ -217,21 +233,21 @@ export async function runPipeline(config: Partial<PipelineConfig> = {}): Promise
         suitabilityReason: reason,
       });
     }
-    
+
     progressHelpers.scoringComplete(scoredJobs.length);
     console.log(`\n📊 Scored ${scoredJobs.length} jobs. Ready for manual processing.`);
-    
+
     // Update pipeline run as completed
     await pipelineRepo.updatePipelineRun(pipelineRun.id, {
       status: 'completed',
       completedAt: new Date().toISOString(),
       jobsProcessed: 0,
     });
-    
+
     console.log('\n🎉 Pipeline completed!');
     console.log(`   Jobs discovered: ${created}`);
     console.log('   Jobs processed: 0 (manual)');
-    
+
     progressHelpers.complete(created, 0);
 
     await notifyPipelineWebhook('pipeline.completed', {
@@ -241,22 +257,22 @@ export async function runPipeline(config: Partial<PipelineConfig> = {}): Promise
       jobsProcessed: 0,
     })
     isPipelineRunning = false;
-    
+
     return {
       success: true,
       jobsDiscovered: created,
       jobsProcessed: 0,
     };
-    
+
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
-    
+
     await pipelineRepo.updatePipelineRun(pipelineRun.id, {
       status: 'failed',
       completedAt: new Date().toISOString(),
       errorMessage: message,
     });
-    
+
     progressHelpers.failed(message);
 
     await notifyPipelineWebhook('pipeline.failed', {
@@ -264,9 +280,9 @@ export async function runPipeline(config: Partial<PipelineConfig> = {}): Promise
       error: message,
     })
     isPipelineRunning = false;
-    
+
     console.error('\n❌ Pipeline failed:', message);
-    
+
     return {
       success: false,
       jobsDiscovered: 0,
@@ -287,7 +303,7 @@ export async function processJob(
   error?: string;
 }> {
   console.log(`📝 Processing job ${jobId}...`);
-  
+
   try {
     const job = await jobsRepo.getJobById(jobId);
     if (!job) {
@@ -297,9 +313,9 @@ export async function processJob(
     if (job.status !== 'discovered' && job.status !== 'ready') {
       return { success: false, error: `Job cannot be processed from status: ${job.status}` };
     }
-    
+
     const profile = await loadProfile(DEFAULT_PROFILE_PATH);
-    
+
     // Mark as processing
     await jobsRepo.updateJob(job.id, { status: 'processing' });
 
@@ -314,7 +330,7 @@ export async function processJob(
       job.suitabilityScore = suitability.score;
       job.suitabilityReason = suitability.reason;
     }
-    
+
     // Generate summary (AI)
     // If forcing, always recompute; otherwise compute if missing.
     if (options?.force || !job.tailoredSummary) {
@@ -323,7 +339,7 @@ export async function processJob(
         job.jobDescription || '',
         profile
       );
-      
+
       if (summaryResult.success) {
         await jobsRepo.updateJob(job.id, {
           tailoredSummary: summaryResult.summary,
@@ -331,7 +347,7 @@ export async function processJob(
         job.tailoredSummary = summaryResult.summary ?? null;
       }
     }
-    
+
     // Generate PDF
     console.log('   Generating PDF...');
     const pdfResult = await generatePdf(
@@ -340,16 +356,16 @@ export async function processJob(
       job.jobDescription || '',
       DEFAULT_PROFILE_PATH
     );
-    
+
     // Mark as ready
     await jobsRepo.updateJob(job.id, {
       status: 'ready',
       pdfPath: pdfResult.pdfPath ?? undefined,
     });
-    
+
     console.log('   ✅ Done!');
     return { success: true };
-    
+
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     return { success: false, error: message };

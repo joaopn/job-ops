@@ -60,10 +60,10 @@ apiRouter.get('/jobs', async (req: Request, res: Response) => {
   try {
     const statusFilter = req.query.status as string | undefined;
     const statuses = statusFilter?.split(',').filter(Boolean) as JobStatus[] | undefined;
-    
+
     const jobs = await jobsRepo.getAllJobs(statuses);
     const stats = await jobsRepo.getJobStats();
-    
+
     const response: ApiResponse<JobsListResponse> = {
       success: true,
       data: {
@@ -72,7 +72,7 @@ apiRouter.get('/jobs', async (req: Request, res: Response) => {
         byStatus: stats,
       },
     };
-    
+
     res.json(response);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
@@ -86,11 +86,11 @@ apiRouter.get('/jobs', async (req: Request, res: Response) => {
 apiRouter.get('/jobs/:id', async (req: Request, res: Response) => {
   try {
     const job = await jobsRepo.getJobById(req.params.id);
-    
+
     if (!job) {
       return res.status(404).json({ success: false, error: 'Job not found' });
     }
-    
+
     res.json({ success: true, data: job });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
@@ -113,11 +113,11 @@ apiRouter.patch('/jobs/:id', async (req: Request, res: Response) => {
   try {
     const input = updateJobSchema.parse(req.body);
     const job = await jobsRepo.updateJob(req.params.id, input);
-    
+
     if (!job) {
       return res.status(404).json({ success: false, error: 'Job not found' });
     }
-    
+
     res.json({ success: true, data: job });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -137,11 +137,11 @@ apiRouter.post('/jobs/:id/process', async (req: Request, res: Response) => {
     const force = forceRaw === '1' || forceRaw === 'true';
 
     const result = await processJob(req.params.id, { force });
-    
+
     if (!result.success) {
       return res.status(400).json({ success: false, error: result.error });
     }
-    
+
     const job = await jobsRepo.getJobById(req.params.id);
     res.json({ success: true, data: job });
   } catch (error) {
@@ -156,13 +156,13 @@ apiRouter.post('/jobs/:id/process', async (req: Request, res: Response) => {
 apiRouter.post('/jobs/:id/apply', async (req: Request, res: Response) => {
   try {
     const job = await jobsRepo.getJobById(req.params.id);
-    
+
     if (!job) {
       return res.status(404).json({ success: false, error: 'Job not found' });
     }
-    
+
     const appliedAt = new Date().toISOString();
-    
+
     // Sync to Notion
     const notionResult = await createNotionEntry({
       id: job.id,
@@ -175,7 +175,7 @@ apiRouter.post('/jobs/:id/apply', async (req: Request, res: Response) => {
       pdfPath: job.pdfPath,
       appliedAt,
     });
-    
+
     // Update job status
     const updatedJob = await jobsRepo.updateJob(job.id, {
       status: 'applied',
@@ -186,7 +186,7 @@ apiRouter.post('/jobs/:id/apply', async (req: Request, res: Response) => {
     if (updatedJob) {
       notifyJobCompleteWebhook(updatedJob).catch(console.warn)
     }
-    
+
     res.json({ success: true, data: updatedJob });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
@@ -200,11 +200,11 @@ apiRouter.post('/jobs/:id/apply', async (req: Request, res: Response) => {
 apiRouter.post('/jobs/:id/reject', async (req: Request, res: Response) => {
   try {
     const job = await jobsRepo.updateJob(req.params.id, { status: 'rejected' });
-    
+
     if (!job) {
       return res.status(404).json({ success: false, error: 'Job not found' });
     }
-    
+
     res.json({ success: true, data: job });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
@@ -351,7 +351,7 @@ apiRouter.get('/pipeline/status', async (req: Request, res: Response) => {
   try {
     const { isRunning } = getPipelineStatus();
     const lastRun = await pipelineRepo.getLatestPipelineRun();
-    
+
     const response: ApiResponse<PipelineStatusResponse> = {
       success: true,
       data: {
@@ -360,7 +360,7 @@ apiRouter.get('/pipeline/status', async (req: Request, res: Response) => {
         nextScheduledRun: null, // Would come from n8n
       },
     };
-    
+
     res.json(response);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
@@ -377,20 +377,20 @@ apiRouter.get('/pipeline/progress', (req: Request, res: Response) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('X-Accel-Buffering', 'no'); // Disable Nginx buffering
-  
+
   // Send initial progress
   const sendProgress = (data: unknown) => {
     res.write(`data: ${JSON.stringify(data)}\n\n`);
   };
-  
+
   // Subscribe to progress updates
   const unsubscribe = subscribeToProgress(sendProgress);
-  
+
   // Send heartbeat every 30 seconds to keep connection alive
   const heartbeat = setInterval(() => {
     res.write(': heartbeat\n\n');
   }, 30000);
-  
+
   // Cleanup on close
   req.on('close', () => {
     clearInterval(heartbeat);
@@ -417,19 +417,19 @@ apiRouter.get('/pipeline/runs', async (req: Request, res: Response) => {
 const runPipelineSchema = z.object({
   topN: z.number().min(1).max(50).optional(),
   minSuitabilityScore: z.number().min(0).max(100).optional(),
-  sources: z.array(z.enum(['gradcracker', 'indeed', 'linkedin'])).min(1).optional(),
+  sources: z.array(z.enum(['gradcracker', 'indeed', 'linkedin', 'ukvisajobs'])).min(1).optional(),
 });
 
 apiRouter.post('/pipeline/run', async (req: Request, res: Response) => {
   try {
     const config = runPipelineSchema.parse(req.body);
-    
+
     // Start pipeline in background
     runPipeline(config).catch(console.error);
-    
-    res.json({ 
-      success: true, 
-      data: { message: 'Pipeline started' } 
+
+    res.json({
+      success: true,
+      data: { message: 'Pipeline started' }
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -451,21 +451,21 @@ apiRouter.post('/webhook/trigger', async (req: Request, res: Response) => {
   // Optional: Add authentication check
   const authHeader = req.headers.authorization;
   const expectedToken = process.env.WEBHOOK_SECRET;
-  
+
   if (expectedToken && authHeader !== `Bearer ${expectedToken}`) {
     return res.status(401).json({ success: false, error: 'Unauthorized' });
   }
-  
+
   try {
     // Start pipeline in background
     runPipeline().catch(console.error);
-    
-    res.json({ 
-      success: true, 
-      data: { 
+
+    res.json({
+      success: true,
+      data: {
         message: 'Pipeline triggered',
         triggeredAt: new Date().toISOString(),
-      } 
+      }
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
@@ -483,14 +483,14 @@ apiRouter.post('/webhook/trigger', async (req: Request, res: Response) => {
 apiRouter.delete('/database', async (req: Request, res: Response) => {
   try {
     const result = clearDatabase();
-    
-    res.json({ 
-      success: true, 
-      data: { 
+
+    res.json({
+      success: true,
+      data: {
         message: 'Database cleared',
         jobsDeleted: result.jobsDeleted,
         runsDeleted: result.runsDeleted,
-      } 
+      }
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';

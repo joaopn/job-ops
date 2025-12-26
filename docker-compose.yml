@@ -50,6 +50,14 @@ services:
       # Optional: Webhook secret for n8n
       - WEBHOOK_SECRET=${WEBHOOK_SECRET:-}
 
+      # UKVisaJobs (UK visa sponsorship jobs) - optional
+      - UKVISAJOBS_TOKEN=${UKVISAJOBS_TOKEN:-}
+      - UKVISAJOBS_AUTH_TOKEN=${UKVISAJOBS_AUTH_TOKEN:-}
+      - UKVISAJOBS_CSRF_TOKEN=${UKVISAJOBS_CSRF_TOKEN:-}
+      - UKVISAJOBS_CI_SESSION=${UKVISAJOBS_CI_SESSION:-}
+      - UKVISAJOBS_MAX_JOBS=${UKVISAJOBS_MAX_JOBS:-50}
+      - UKVISAJOBS_SEARCH_KEYWORD=${UKVISAJOBS_SEARCH_KEYWORD:-}
+
       # Python path (uses system python in container)
       - PYTHON_PATH=/usr/bin/python3
     restart: unless-stopped
