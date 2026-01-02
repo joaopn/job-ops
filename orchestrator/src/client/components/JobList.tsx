@@ -3,7 +3,7 @@
  */
 
 import React, { useEffect, useMemo, useState } from "react";
-import { ArrowUpDown, LayoutGrid, Search, Table2, X } from "lucide-react";
+import { ArrowUpDown, Filter, LayoutGrid, Search, Table2, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
@@ -23,7 +23,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import type { Job, JobStatus } from "../../shared/types";
+import type { Job, JobStatus, JobSource } from "../../shared/types";
 import { JobCard } from "./JobCard";
 import { JobTable, type JobSort } from "./JobTable";
 
@@ -49,6 +49,13 @@ const sortLabels: Record<JobSort["key"], string> = {
   source: "Source",
   location: "Location",
   status: "Status",
+};
+
+const sourceLabels: Record<JobSource, string> = {
+  gradcracker: "Gradcracker",
+  indeed: "Indeed",
+  linkedin: "LinkedIn",
+  ukvisajobs: "UK Visa Jobs",
 };
 
 const tabs: Array<{ id: FilterTab; label: string; statuses: JobStatus[] }> = [
@@ -183,6 +190,7 @@ export const JobList: React.FC<JobListProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<FilterTab>("ready");
   const [searchQuery, setSearchQuery] = useState("");
+  const [sourceFilter, setSourceFilter] = useState<JobSource | "all">("all");
   const [sort, setSort] = useState<JobSort>(DEFAULT_SORT);
   const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(() => new Set());
   const [batchAction, setBatchAction] = useState<null | "process" | "reject" | "apply">(null);
@@ -267,14 +275,22 @@ export const JobList: React.FC<JobListProps> = ({
     const normalizedQuery = searchQuery.trim().toLowerCase();
 
     for (const tab of tabs) {
-      const base = jobsForTab.get(tab.id) ?? [];
-      const filtered = normalizedQuery ? base.filter((job) => jobMatchesQuery(job, normalizedQuery)) : base;
+      let filtered = jobsForTab.get(tab.id) ?? [];
+
+      if (sourceFilter !== "all") {
+        filtered = filtered.filter((job) => job.source === sourceFilter);
+      }
+
+      if (normalizedQuery) {
+        filtered = filtered.filter((job) => jobMatchesQuery(job, normalizedQuery));
+      }
+
       const sorted = [...filtered].sort((a, b) => compareJobs(a, b, sort));
       map.set(tab.id, sorted);
     }
 
     return map;
-  }, [jobsForTab, searchQuery, sort]);
+  }, [jobsForTab, searchQuery, sourceFilter, sort]);
 
   const activeTabJobs = visibleJobsForTab.get(activeTab) ?? [];
   const highlightedJob = useMemo(
@@ -303,6 +319,7 @@ export const JobList: React.FC<JobListProps> = ({
   const activeResultsCount = visibleJobsForTab.get(activeTab)?.length ?? 0;
   const hasActiveFilters =
     searchQuery.trim().length > 0 ||
+    sourceFilter !== "all" ||
     sort.key !== DEFAULT_SORT.key ||
     sort.direction !== DEFAULT_SORT.direction;
 
@@ -470,6 +487,33 @@ export const JobList: React.FC<JobListProps> = ({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="h-9">
+                  <Filter className="h-4 w-4" />
+                  <span className="hidden sm:inline">
+                    Source: {sourceFilter === "all" ? "All" : sourceLabels[sourceFilter]}
+                  </span>
+                  <span className="sm:hidden">Source</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>Filter by source</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuRadioGroup
+                  value={sourceFilter}
+                  onValueChange={(value) => setSourceFilter(value as JobSource | "all")}
+                >
+                  <DropdownMenuRadioItem value="all">All Sources</DropdownMenuRadioItem>
+                  {(Object.keys(sourceLabels) as JobSource[]).map((key) => (
+                    <DropdownMenuRadioItem key={key} value={key}>
+                      {sourceLabels[key]}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-9">
                   <ArrowUpDown className="h-4 w-4" />
                   <span className="hidden sm:inline">
                     Sort: {sortLabels[sort.key]} {sort.direction === "asc" ? "↑" : "↓"}
@@ -519,6 +563,7 @@ export const JobList: React.FC<JobListProps> = ({
                 size="sm"
                 onClick={() => {
                   setSearchQuery("");
+                  setSourceFilter("all");
                   setSort(DEFAULT_SORT);
                 }}
               >
