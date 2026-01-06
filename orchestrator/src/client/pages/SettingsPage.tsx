@@ -17,6 +17,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -299,437 +305,519 @@ export const SettingsPage: React.FC = () => {
         <p className="text-sm text-muted-foreground">Configure runtime behavior for this app.</p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Model</CardTitle>
-        </CardHeader>
-
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <div className="text-sm font-medium">Override model</div>
-            <Input
-              value={modelDraft}
-              onChange={(event) => setModelDraft(event.target.value)}
-              placeholder={defaultModel || "openai/gpt-4o-mini"}
-              disabled={isLoading || isSaving}
-            />
-            <div className="text-xs text-muted-foreground">
-              Leave blank to use the default from server env (`MODEL`).
-            </div>
-          </div>
-
-          <Separator />
-
-          <div className="grid gap-2 text-sm sm:grid-cols-2">
-            <div>
-              <div className="text-xs text-muted-foreground">Effective</div>
-              <div className="break-words font-mono text-xs">{effectiveModel || "—"}</div>
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground">Default (env)</div>
-              <div className="break-words font-mono text-xs">{defaultModel || "—"}</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Pipeline Webhook</CardTitle>
-        </CardHeader>
-
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <div className="text-sm font-medium">Pipeline status webhook URL</div>
-            <Input
-              value={pipelineWebhookUrlDraft}
-              onChange={(event) => setPipelineWebhookUrlDraft(event.target.value)}
-              placeholder={defaultPipelineWebhookUrl || "https://..."}
-              disabled={isLoading || isSaving}
-            />
-            <div className="text-xs text-muted-foreground">
-              When set, the server sends a POST on pipeline completion/failure. Leave blank to disable.
-            </div>
-          </div>
-
-          <Separator />
-
-          <div className="grid gap-2 text-sm sm:grid-cols-2">
-            <div>
-              <div className="text-xs text-muted-foreground">Effective</div>
-              <div className="break-words font-mono text-xs">{effectivePipelineWebhookUrl || "—"}</div>
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground">Default (env)</div>
-              <div className="break-words font-mono text-xs">{defaultPipelineWebhookUrl || "—"}</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Job Complete Webhook</CardTitle>
-        </CardHeader>
-
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <div className="text-sm font-medium">Job completion webhook URL</div>
-            <Input
-              value={jobCompleteWebhookUrlDraft}
-              onChange={(event) => setJobCompleteWebhookUrlDraft(event.target.value)}
-              placeholder={defaultJobCompleteWebhookUrl || "https://..."}
-              disabled={isLoading || isSaving}
-            />
-            <div className="text-xs text-muted-foreground">
-              When set, the server sends a POST when you mark a job as applied (includes the job description).
-            </div>
-          </div>
-
-          <Separator />
-
-          <div className="grid gap-2 text-sm sm:grid-cols-2">
-            <div>
-              <div className="text-xs text-muted-foreground">Effective</div>
-              <div className="break-words font-mono text-xs">{effectiveJobCompleteWebhookUrl || "—"}</div>
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground">Default (env)</div>
-              <div className="break-words font-mono text-xs">{defaultJobCompleteWebhookUrl || "—"}</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">UKVisaJobs Extractor</CardTitle>
-        </CardHeader>
-
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <div className="text-sm font-medium">Max jobs to fetch</div>
-            <Input
-              type="number"
-              inputMode="numeric"
-              min={1}
-              max={200}
-              value={ukvisajobsMaxJobsDraft ?? defaultUkvisajobsMaxJobs}
-              onChange={(event) => {
-                const value = parseInt(event.target.value, 10)
-                if (Number.isNaN(value)) {
-                  setUkvisajobsMaxJobsDraft(null)
-                } else {
-                  setUkvisajobsMaxJobsDraft(Math.min(200, Math.max(1, value)))
-                }
-              }}
-              disabled={isLoading || isSaving}
-            />
-            <div className="text-xs text-muted-foreground">
-              Maximum number of jobs to fetch from UKVisaJobs per pipeline run. Range: 1-200.
-            </div>
-          </div>
-
-          <Separator />
-
-          <div className="grid gap-2 text-sm sm:grid-cols-2">
-            <div>
-              <div className="text-xs text-muted-foreground">Effective</div>
-              <div className="break-words font-mono text-xs">{effectiveUkvisajobsMaxJobs}</div>
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground">Default</div>
-              <div className="break-words font-mono text-xs">{defaultUkvisajobsMaxJobs}</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Search Terms</CardTitle>
-        </CardHeader>
-
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <div className="text-sm font-medium">Global search terms</div>
-            <textarea
-              className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-              value={searchTermsDraft ? searchTermsDraft.join('\n') : (defaultSearchTerms ?? []).join('\n')}
-              onChange={(event) => {
-                const text = event.target.value
-                const terms = text.split('\n') // Don't filter here to allow empty lines while typing
-                setSearchTermsDraft(terms)
-              }}
-              onBlur={() => {
-                // Clean up on blur
-                if (searchTermsDraft) {
-                  setSearchTermsDraft(searchTermsDraft.map(t => t.trim()).filter(Boolean))
-                }
-              }}
-              placeholder="e.g. web developer"
-              disabled={isLoading || isSaving}
-              rows={5}
-            />
-            <div className="text-xs text-muted-foreground">
-              One term per line. Applies to UKVisaJobs and other supported extractors.
-            </div>
-          </div>
-
-          <Separator />
-
-          <div className="grid gap-2 text-sm sm:grid-cols-2">
-            <div>
-              <div className="text-xs text-muted-foreground">Effective</div>
-              <div className="break-words font-mono text-xs">{(effectiveSearchTerms || []).join(', ') || "—"}</div>
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground">Default (env)</div>
-              <div className="break-words font-mono text-xs">{(defaultSearchTerms || []).join(', ') || "—"}</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">JobSpy Scraper</CardTitle>
-        </CardHeader>
-
-        <CardContent className="space-y-6">
-          <div className="grid gap-6 md:grid-cols-2">
-            <div className="space-y-2">
-              <div className="text-sm font-medium">Location</div>
-              <Input
-                value={jobspyLocationDraft ?? defaultJobspyLocation}
-                onChange={(event) => setJobspyLocationDraft(event.target.value)}
-                placeholder={defaultJobspyLocation || "UK"}
-                disabled={isLoading || isSaving}
-              />
-              <div className="text-xs text-muted-foreground">
-                Location to search for jobs (e.g. "UK", "London", "Remote").
+      <Accordion type="multiple" className="w-full space-y-4">
+        <AccordionItem value="model" className="border rounded-lg px-4">
+          <AccordionTrigger className="hover:no-underline py-4">
+            <span className="text-base font-semibold">Model</span>
+          </AccordionTrigger>
+          <AccordionContent className="pb-4">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <div className="text-sm font-medium">Override model</div>
+                <Input
+                  value={modelDraft}
+                  onChange={(event) => setModelDraft(event.target.value)}
+                  placeholder={defaultModel || "openai/gpt-4o-mini"}
+                  disabled={isLoading || isSaving}
+                />
+                <div className="text-xs text-muted-foreground">
+                  Leave blank to use the default from server env (`MODEL`).
+                </div>
               </div>
-              <div className="flex gap-2 text-xs text-muted-foreground">
-                <span>Effective: {effectiveJobspyLocation || "—"}</span>
-                <span>Default: {defaultJobspyLocation || "—"}</span>
+
+              <Separator />
+
+              <div className="grid gap-2 text-sm sm:grid-cols-2">
+                <div>
+                  <div className="text-xs text-muted-foreground">Effective</div>
+                  <div className="break-words font-mono text-xs">{effectiveModel || "—"}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Default (env)</div>
+                  <div className="break-words font-mono text-xs">{defaultModel || "—"}</div>
+                </div>
               </div>
             </div>
+          </AccordionContent>
+        </AccordionItem>
 
-            <div className="space-y-2">
-              <div className="text-sm font-medium">Results Wanted</div>
-              <Input
-                type="number"
-                inputMode="numeric"
-                min={1}
-                max={500}
-                value={jobspyResultsWantedDraft ?? defaultJobspyResultsWanted}
-                onChange={(event) => {
-                  const value = parseInt(event.target.value, 10)
-                  if (Number.isNaN(value)) {
-                    setJobspyResultsWantedDraft(null)
-                  } else {
-                    setJobspyResultsWantedDraft(Math.min(500, Math.max(1, value)))
-                  }
-                }}
-                disabled={isLoading || isSaving}
-              />
-              <div className="text-xs text-muted-foreground">
-                Number of results to fetch per term per site. Max 500.
+        <AccordionItem value="pipeline-webhook" className="border rounded-lg px-4">
+          <AccordionTrigger className="hover:no-underline py-4">
+            <span className="text-base font-semibold">Pipeline Webhook</span>
+          </AccordionTrigger>
+          <AccordionContent className="pb-4">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <div className="text-sm font-medium">Pipeline status webhook URL</div>
+                <Input
+                  value={pipelineWebhookUrlDraft}
+                  onChange={(event) => setPipelineWebhookUrlDraft(event.target.value)}
+                  placeholder={defaultPipelineWebhookUrl || "https://..."}
+                  disabled={isLoading || isSaving}
+                />
+                <div className="text-xs text-muted-foreground">
+                  When set, the server sends a POST on pipeline completion/failure. Leave blank to disable.
+                </div>
               </div>
-              <div className="flex gap-2 text-xs text-muted-foreground">
-                <span>Effective: {effectiveJobspyResultsWanted}</span>
-                <span>Default: {defaultJobspyResultsWanted}</span>
-              </div>
-            </div>
 
-            <div className="space-y-2">
-              <div className="text-sm font-medium">Hours Old</div>
-              <Input
-                type="number"
-                inputMode="numeric"
-                min={1}
-                max={168}
-                value={jobspyHoursOldDraft ?? defaultJobspyHoursOld}
-                onChange={(event) => {
-                  const value = parseInt(event.target.value, 10)
-                  if (Number.isNaN(value)) {
-                    setJobspyHoursOldDraft(null)
-                  } else {
-                    setJobspyHoursOldDraft(Math.min(168, Math.max(1, value)))
-                  }
-                }}
-                disabled={isLoading || isSaving}
-              />
-              <div className="text-xs text-muted-foreground">
-                Max age of jobs in hours (e.g. 72 for 3 days).
-              </div>
-              <div className="flex gap-2 text-xs text-muted-foreground">
-                <span>Effective: {effectiveJobspyHoursOld}h</span>
-                <span>Default: {defaultJobspyHoursOld}h</span>
+              <Separator />
+
+              <div className="grid gap-2 text-sm sm:grid-cols-2">
+                <div>
+                  <div className="text-xs text-muted-foreground">Effective</div>
+                  <div className="break-words font-mono text-xs">{effectivePipelineWebhookUrl || "—"}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Default (env)</div>
+                  <div className="break-words font-mono text-xs">{defaultPipelineWebhookUrl || "—"}</div>
+                </div>
               </div>
             </div>
+          </AccordionContent>
+        </AccordionItem>
 
-            <div className="space-y-2">
-              <div className="text-sm font-medium">Indeed Country</div>
-              <Input
-                value={jobspyCountryIndeedDraft ?? defaultJobspyCountryIndeed}
-                onChange={(event) => setJobspyCountryIndeedDraft(event.target.value)}
-                placeholder={defaultJobspyCountryIndeed || "UK"}
-                disabled={isLoading || isSaving}
-              />
-              <div className="text-xs text-muted-foreground">
-                Country domain for Indeed (e.g. "UK" for indeed.co.uk).
+        <AccordionItem value="job-complete-webhook" className="border rounded-lg px-4">
+          <AccordionTrigger className="hover:no-underline py-4">
+            <span className="text-base font-semibold">Job Complete Webhook</span>
+          </AccordionTrigger>
+          <AccordionContent className="pb-4">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <div className="text-sm font-medium">Job completion webhook URL</div>
+                <Input
+                  value={jobCompleteWebhookUrlDraft}
+                  onChange={(event) => setJobCompleteWebhookUrlDraft(event.target.value)}
+                  placeholder={defaultJobCompleteWebhookUrl || "https://..."}
+                  disabled={isLoading || isSaving}
+                />
+                <div className="text-xs text-muted-foreground">
+                  When set, the server sends a POST when you mark a job as applied (includes the job description).
+                </div>
               </div>
-              <div className="flex gap-2 text-xs text-muted-foreground">
-                <span>Effective: {effectiveJobspyCountryIndeed || "—"}</span>
-                <span>Default: {defaultJobspyCountryIndeed || "—"}</span>
-              </div>
-            </div>
-          </div>
 
-          <Separator />
+              <Separator />
 
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="linkedin-desc"
-              checked={jobspyLinkedinFetchDescriptionDraft ?? defaultJobspyLinkedinFetchDescription}
-              onCheckedChange={(checked) => setJobspyLinkedinFetchDescriptionDraft(!!checked)}
-              disabled={isLoading || isSaving}
-            />
-            <div className="grid gap-1.5 leading-none">
-              <label
-                htmlFor="linkedin-desc"
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-              >
-                Fetch LinkedIn Description
-              </label>
-              <p className="text-xs text-muted-foreground">
-                If enabled, JobSpy will make extra requests to fetch full descriptions. Slower but better data.
-              </p>
-              <div className="flex gap-2 text-xs text-muted-foreground">
-                <span>Effective: {effectiveJobspyLinkedinFetchDescription ? "Yes" : "No"}</span>
-                <span>Default: {defaultJobspyLinkedinFetchDescription ? "Yes" : "No"}</span>
+              <div className="grid gap-2 text-sm sm:grid-cols-2">
+                <div>
+                  <div className="text-xs text-muted-foreground">Effective</div>
+                  <div className="break-words font-mono text-xs">{effectiveJobCompleteWebhookUrl || "—"}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Default (env)</div>
+                  <div className="break-words font-mono text-xs">{defaultJobCompleteWebhookUrl || "—"}</div>
+                </div>
               </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </AccordionContent>
+        </AccordionItem>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Resume Projects</CardTitle>
-        </CardHeader>
+        <AccordionItem value="ukvisajobs" className="border rounded-lg px-4">
+          <AccordionTrigger className="hover:no-underline py-4">
+            <span className="text-base font-semibold">UKVisaJobs Extractor</span>
+          </AccordionTrigger>
+          <AccordionContent className="pb-4">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <div className="text-sm font-medium">Max jobs to fetch</div>
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={200}
+                  value={ukvisajobsMaxJobsDraft ?? defaultUkvisajobsMaxJobs}
+                  onChange={(event) => {
+                    const value = parseInt(event.target.value, 10)
+                    if (Number.isNaN(value)) {
+                      setUkvisajobsMaxJobsDraft(null)
+                    } else {
+                      setUkvisajobsMaxJobsDraft(Math.min(200, Math.max(1, value)))
+                    }
+                  }}
+                  disabled={isLoading || isSaving}
+                />
+                <div className="text-xs text-muted-foreground">
+                  Maximum number of jobs to fetch from UKVisaJobs per pipeline run. Range: 1-200.
+                </div>
+              </div>
 
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <div className="text-sm font-medium">Max projects included</div>
-            <Input
-              type="number"
-              inputMode="numeric"
-              min={lockedCount}
-              max={maxProjectsTotal}
-              value={resumeProjectsDraft?.maxProjects ?? 0}
-              onChange={(event) => {
-                if (!resumeProjectsDraft) return
-                const next = Number(event.target.value)
-                const clamped = clampInt(next, lockedCount, maxProjectsTotal)
-                setResumeProjectsDraft({ ...resumeProjectsDraft, maxProjects: clamped })
-              }}
-              disabled={isLoading || isSaving || !resumeProjectsDraft}
-            />
-            <div className="text-xs text-muted-foreground">
-              Locked projects always count towards this cap. Locked: {lockedCount} · AI pool:{" "}
-              {resumeProjectsDraft?.aiSelectableProjectIds.length ?? 0} · Total projects: {maxProjectsTotal}
+              <Separator />
+
+              <div className="grid gap-2 text-sm sm:grid-cols-2">
+                <div>
+                  <div className="text-xs text-muted-foreground">Effective</div>
+                  <div className="break-words font-mono text-xs">{effectiveUkvisajobsMaxJobs}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Default</div>
+                  <div className="break-words font-mono text-xs">{defaultUkvisajobsMaxJobs}</div>
+                </div>
+              </div>
             </div>
-          </div>
+          </AccordionContent>
+        </AccordionItem>
 
-          <Separator />
+        <AccordionItem value="search-terms" className="border rounded-lg px-4">
+          <AccordionTrigger className="hover:no-underline py-4">
+            <span className="text-base font-semibold">Search Terms</span>
+          </AccordionTrigger>
+          <AccordionContent className="pb-4">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <div className="text-sm font-medium">Global search terms</div>
+                <textarea
+                  className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  value={searchTermsDraft ? searchTermsDraft.join('\n') : (defaultSearchTerms ?? []).join('\n')}
+                  onChange={(event) => {
+                    const text = event.target.value
+                    const terms = text.split('\n') // Don't filter here to allow empty lines while typing
+                    setSearchTermsDraft(terms)
+                  }}
+                  onBlur={() => {
+                    // Clean up on blur
+                    if (searchTermsDraft) {
+                      setSearchTermsDraft(searchTermsDraft.map(t => t.trim()).filter(Boolean))
+                    }
+                  }}
+                  placeholder="e.g. web developer"
+                  disabled={isLoading || isSaving}
+                  rows={5}
+                />
+                <div className="text-xs text-muted-foreground">
+                  One term per line. Applies to UKVisaJobs and other supported extractors.
+                </div>
+              </div>
 
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Project</TableHead>
-                <TableHead className="w-[110px]">Base visible</TableHead>
-                <TableHead className="w-[90px]">Locked</TableHead>
-                <TableHead className="w-[140px]">AI selectable</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {profileProjects.map((project) => {
-                const locked = Boolean(resumeProjectsDraft?.lockedProjectIds.includes(project.id))
-                const aiSelectable = Boolean(resumeProjectsDraft?.aiSelectableProjectIds.includes(project.id))
-                const excluded = !locked && !aiSelectable
+              <Separator />
 
-                return (
-                  <TableRow key={project.id}>
-                    <TableCell>
-                      <div className="space-y-0.5">
-                        <div className="font-medium">{project.name || project.id}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {[project.description, project.date].filter(Boolean).join(" · ")}
-                          {excluded ? " · Excluded" : ""}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{project.isVisibleInBase ? "Yes" : "No"}</TableCell>
-                    <TableCell>
-                      <Checkbox
-                        checked={locked}
-                        disabled={isLoading || isSaving || !resumeProjectsDraft}
-                        onCheckedChange={(checked) => {
-                          if (!resumeProjectsDraft) return
-                          const isChecked = checked === true
-                          const lockedIds = resumeProjectsDraft.lockedProjectIds.slice()
-                          const selectableIds = resumeProjectsDraft.aiSelectableProjectIds.slice()
+              <div className="grid gap-2 text-sm sm:grid-cols-2">
+                <div>
+                  <div className="text-xs text-muted-foreground">Effective</div>
+                  <div className="break-words font-mono text-xs">{(effectiveSearchTerms || []).join(', ') || "—"}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Default (env)</div>
+                  <div className="break-words font-mono text-xs">{(defaultSearchTerms || []).join(', ') || "—"}</div>
+                </div>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
 
-                          if (isChecked) {
-                            if (!lockedIds.includes(project.id)) lockedIds.push(project.id)
-                            const nextSelectable = selectableIds.filter((id) => id !== project.id)
-                            const minCap = lockedIds.length
-                            setResumeProjectsDraft({
-                              ...resumeProjectsDraft,
-                              lockedProjectIds: lockedIds,
-                              aiSelectableProjectIds: nextSelectable,
-                              maxProjects: Math.max(resumeProjectsDraft.maxProjects, minCap),
-                            })
-                            return
-                          }
+        <AccordionItem value="jobspy" className="border rounded-lg px-4">
+          <AccordionTrigger className="hover:no-underline py-4">
+            <span className="text-base font-semibold">JobSpy Scraper</span>
+          </AccordionTrigger>
+          <AccordionContent className="pb-4">
+            <div className="space-y-6">
+              <div className="grid gap-6 md:grid-cols-2">
+                <div className="space-y-2">
+                  <div className="text-sm font-medium">Location</div>
+                  <Input
+                    value={jobspyLocationDraft ?? defaultJobspyLocation}
+                    onChange={(event) => setJobspyLocationDraft(event.target.value)}
+                    placeholder={defaultJobspyLocation || "UK"}
+                    disabled={isLoading || isSaving}
+                  />
+                  <div className="text-xs text-muted-foreground">
+                    Location to search for jobs (e.g. "UK", "London", "Remote").
+                  </div>
+                  <div className="flex gap-2 text-xs text-muted-foreground">
+                    <span>Effective: {effectiveJobspyLocation || "—"}</span>
+                    <span>Default: {defaultJobspyLocation || "—"}</span>
+                  </div>
+                </div>
 
-                          const nextLocked = lockedIds.filter((id) => id !== project.id)
-                          if (!selectableIds.includes(project.id)) selectableIds.push(project.id)
-                          setResumeProjectsDraft({
-                            ...resumeProjectsDraft,
-                            lockedProjectIds: nextLocked,
-                            aiSelectableProjectIds: selectableIds,
-                            maxProjects: clampInt(resumeProjectsDraft.maxProjects, nextLocked.length, maxProjectsTotal),
-                          })
-                        }}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Checkbox
-                        checked={locked ? true : aiSelectable}
-                        disabled={locked || isLoading || isSaving || !resumeProjectsDraft}
-                        onCheckedChange={(checked) => {
-                          if (!resumeProjectsDraft) return
-                          const isChecked = checked === true
-                          const selectableIds = resumeProjectsDraft.aiSelectableProjectIds.slice()
-                          const nextSelectable = isChecked
-                            ? selectableIds.includes(project.id)
-                              ? selectableIds
-                              : [...selectableIds, project.id]
-                            : selectableIds.filter((id) => id !== project.id)
-                          setResumeProjectsDraft({ ...resumeProjectsDraft, aiSelectableProjectIds: nextSelectable })
-                        }}
-                      />
-                    </TableCell>
+                <div className="space-y-2">
+                  <div className="text-sm font-medium">Results Wanted</div>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={500}
+                    value={jobspyResultsWantedDraft ?? defaultJobspyResultsWanted}
+                    onChange={(event) => {
+                      const value = parseInt(event.target.value, 10)
+                      if (Number.isNaN(value)) {
+                        setJobspyResultsWantedDraft(null)
+                      } else {
+                        setJobspyResultsWantedDraft(Math.min(500, Math.max(1, value)))
+                      }
+                    }}
+                    disabled={isLoading || isSaving}
+                  />
+                  <div className="text-xs text-muted-foreground">
+                    Number of results to fetch per term per site. Max 500.
+                  </div>
+                  <div className="flex gap-2 text-xs text-muted-foreground">
+                    <span>Effective: {effectiveJobspyResultsWanted}</span>
+                    <span>Default: {defaultJobspyResultsWanted}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="text-sm font-medium">Hours Old</div>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={168}
+                    value={jobspyHoursOldDraft ?? defaultJobspyHoursOld}
+                    onChange={(event) => {
+                      const value = parseInt(event.target.value, 10)
+                      if (Number.isNaN(value)) {
+                        setJobspyHoursOldDraft(null)
+                      } else {
+                        setJobspyHoursOldDraft(Math.min(168, Math.max(1, value)))
+                      }
+                    }}
+                    disabled={isLoading || isSaving}
+                  />
+                  <div className="text-xs text-muted-foreground">
+                    Max age of jobs in hours (e.g. 72 for 3 days).
+                  </div>
+                  <div className="flex gap-2 text-xs text-muted-foreground">
+                    <span>Effective: {effectiveJobspyHoursOld}h</span>
+                    <span>Default: {defaultJobspyHoursOld}h</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="text-sm font-medium">Indeed Country</div>
+                  <Input
+                    value={jobspyCountryIndeedDraft ?? defaultJobspyCountryIndeed}
+                    onChange={(event) => setJobspyCountryIndeedDraft(event.target.value)}
+                    placeholder={defaultJobspyCountryIndeed || "UK"}
+                    disabled={isLoading || isSaving}
+                  />
+                  <div className="text-xs text-muted-foreground">
+                    Country domain for Indeed (e.g. "UK" for indeed.co.uk).
+                  </div>
+                  <div className="flex gap-2 text-xs text-muted-foreground">
+                    <span>Effective: {effectiveJobspyCountryIndeed || "—"}</span>
+                    <span>Default: {defaultJobspyCountryIndeed || "—"}</span>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="linkedin-desc"
+                  checked={jobspyLinkedinFetchDescriptionDraft ?? defaultJobspyLinkedinFetchDescription}
+                  onCheckedChange={(checked) => setJobspyLinkedinFetchDescriptionDraft(!!checked)}
+                  disabled={isLoading || isSaving}
+                />
+                <div className="grid gap-1.5 leading-none">
+                  <label
+                    htmlFor="linkedin-desc"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    Fetch LinkedIn Description
+                  </label>
+                  <p className="text-xs text-muted-foreground">
+                    If enabled, JobSpy will make extra requests to fetch full descriptions. Slower but better data.
+                  </p>
+                  <div className="flex gap-2 text-xs text-muted-foreground">
+                    <span>Effective: {effectiveJobspyLinkedinFetchDescription ? "Yes" : "No"}</span>
+                    <span>Default: {defaultJobspyLinkedinFetchDescription ? "Yes" : "No"}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        <AccordionItem value="resume-projects" className="border rounded-lg px-4">
+          <AccordionTrigger className="hover:no-underline py-4">
+            <span className="text-base font-semibold">Resume Projects</span>
+          </AccordionTrigger>
+          <AccordionContent className="pb-4">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <div className="text-sm font-medium">Max projects included</div>
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  min={lockedCount}
+                  max={maxProjectsTotal}
+                  value={resumeProjectsDraft?.maxProjects ?? 0}
+                  onChange={(event) => {
+                    if (!resumeProjectsDraft) return
+                    const next = Number(event.target.value)
+                    const clamped = clampInt(next, lockedCount, maxProjectsTotal)
+                    setResumeProjectsDraft({ ...resumeProjectsDraft, maxProjects: clamped })
+                  }}
+                  disabled={isLoading || isSaving || !resumeProjectsDraft}
+                />
+                <div className="text-xs text-muted-foreground">
+                  Locked projects always count towards this cap. Locked: {lockedCount} · AI pool:{" "}
+                  {resumeProjectsDraft?.aiSelectableProjectIds.length ?? 0} · Total projects: {maxProjectsTotal}
+                </div>
+              </div>
+
+              <Separator />
+
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Project</TableHead>
+                    <TableHead className="w-[110px]">Base visible</TableHead>
+                    <TableHead className="w-[90px]">Locked</TableHead>
+                    <TableHead className="w-[140px]">AI selectable</TableHead>
                   </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                </TableHeader>
+                <TableBody>
+                  {profileProjects.map((project) => {
+                    const locked = Boolean(resumeProjectsDraft?.lockedProjectIds.includes(project.id))
+                    const aiSelectable = Boolean(resumeProjectsDraft?.aiSelectableProjectIds.includes(project.id))
+                    const excluded = !locked && !aiSelectable
+
+                    return (
+                      <TableRow key={project.id}>
+                        <TableCell>
+                          <div className="space-y-0.5">
+                            <div className="font-medium">{project.name || project.id}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {[project.description, project.date].filter(Boolean).join(" · ")}
+                              {excluded ? " · Excluded" : ""}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{project.isVisibleInBase ? "Yes" : "No"}</TableCell>
+                        <TableCell>
+                          <Checkbox
+                            checked={locked}
+                            disabled={isLoading || isSaving || !resumeProjectsDraft}
+                            onCheckedChange={(checked) => {
+                              if (!resumeProjectsDraft) return
+                              const isChecked = checked === true
+                              const lockedIds = resumeProjectsDraft.lockedProjectIds.slice()
+                              const selectableIds = resumeProjectsDraft.aiSelectableProjectIds.slice()
+
+                              if (isChecked) {
+                                if (!lockedIds.includes(project.id)) lockedIds.push(project.id)
+                                const nextSelectable = selectableIds.filter((id) => id !== project.id)
+                                const minCap = lockedIds.length
+                                setResumeProjectsDraft({
+                                  ...resumeProjectsDraft,
+                                  lockedProjectIds: lockedIds,
+                                  aiSelectableProjectIds: nextSelectable,
+                                  maxProjects: Math.max(resumeProjectsDraft.maxProjects, minCap),
+                                })
+                                return
+                              }
+
+                              const nextLocked = lockedIds.filter((id) => id !== project.id)
+                              if (!selectableIds.includes(project.id)) selectableIds.push(project.id)
+                              setResumeProjectsDraft({
+                                ...resumeProjectsDraft,
+                                lockedProjectIds: nextLocked,
+                                aiSelectableProjectIds: selectableIds,
+                                maxProjects: clampInt(resumeProjectsDraft.maxProjects, nextLocked.length, maxProjectsTotal),
+                              })
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Checkbox
+                            checked={locked ? true : aiSelectable}
+                            disabled={locked || isLoading || isSaving || !resumeProjectsDraft}
+                            onCheckedChange={(checked) => {
+                              if (!resumeProjectsDraft) return
+                              const isChecked = checked === true
+                              const selectableIds = resumeProjectsDraft.aiSelectableProjectIds.slice()
+                              const nextSelectable = isChecked
+                                ? selectableIds.includes(project.id)
+                                  ? selectableIds
+                                  : [...selectableIds, project.id]
+                                : selectableIds.filter((id) => id !== project.id)
+                              setResumeProjectsDraft({ ...resumeProjectsDraft, aiSelectableProjectIds: nextSelectable })
+                            }}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        <AccordionItem value="danger-zone" className="border rounded-lg px-4 border-destructive/20 bg-destructive/5">
+          <AccordionTrigger className="hover:no-underline py-4">
+            <span className="text-base font-semibold text-destructive">Danger Zone</span>
+          </AccordionTrigger>
+          <AccordionContent className="pb-4">
+            <div className="space-y-4">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-0.5">
+                  <div className="text-sm font-medium">Clear Discovered Jobs</div>
+                  <div className="text-xs text-muted-foreground">
+                    Delete all jobs with the status "discovered". Ready, applied, and rejected jobs are kept.
+                  </div>
+                </div>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" size="sm" disabled={isLoading || isSaving}>
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Clear Discovered
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Clear discovered jobs?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This deletes all jobs with the status "discovered". This action cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleClearDiscovered} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                        Clear discovered
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+
+              <Separator className="bg-destructive/10" />
+
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-0.5">
+                  <div className="text-sm font-medium">Clear Database</div>
+                  <div className="text-xs text-muted-foreground">
+                    Delete all jobs and pipeline runs from the database.
+                  </div>
+                </div>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" size="sm" disabled={isLoading || isSaving}>
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Clear Database
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Clear all jobs?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This deletes all jobs and pipeline runs from the database. This action cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleClearDatabase} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                        Clear database
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
 
       <div className="flex flex-wrap gap-2">
         <Button onClick={handleSave} disabled={isLoading || isSaving || !canSave}>
@@ -739,80 +827,6 @@ export const SettingsPage: React.FC = () => {
           Reset to default
         </Button>
       </div>
-
-      <Card className="border-destructive/20 bg-destructive/5">
-        <CardHeader>
-          <CardTitle className="text-destructive">Danger Zone</CardTitle>
-          <CardDescription>
-            Irreversible actions that modify your database.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="space-y-0.5">
-              <div className="text-sm font-medium">Clear Discovered Jobs</div>
-              <div className="text-xs text-muted-foreground">
-                Delete all jobs with the status "discovered". Ready, applied, and rejected jobs are kept.
-              </div>
-            </div>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive" size="sm" disabled={isLoading || isSaving}>
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Clear Discovered
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Clear discovered jobs?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This deletes all jobs with the status "discovered". This action cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleClearDiscovered} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                    Clear discovered
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </div>
-
-          <Separator className="bg-destructive/10" />
-
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="space-y-0.5">
-              <div className="text-sm font-medium">Clear Database</div>
-              <div className="text-xs text-muted-foreground">
-                Delete all jobs and pipeline runs from the database.
-              </div>
-            </div>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive" size="sm" disabled={isLoading || isSaving}>
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Clear Database
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Clear all jobs?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This deletes all jobs and pipeline runs from the database. This action cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleClearDatabase} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                    Clear database
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </div>
-        </CardContent>
-      </Card>
     </main>
   )
 }
