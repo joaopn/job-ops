@@ -156,8 +156,8 @@ export const PipelineProgress: React.FC<PipelineProgressProps> = ({ isRunning })
   return (
     <Card>
       <CardHeader className="space-y-2">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             <CardTitle className="text-base">Pipeline</CardTitle>
             <Badge variant="outline" className={cn("uppercase tracking-wide", stepBadgeClasses[step])}>
               {stepLabels[step]}

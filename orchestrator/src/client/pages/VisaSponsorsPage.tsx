@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Drawer, DrawerClose, DrawerContent } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
 import {
   PageHeader,
@@ -86,6 +87,10 @@ export const VisaSponsorsPage: React.FC = () => {
   const [isSearching, setIsSearching] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+  const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(
+    () => (typeof window !== "undefined" ? window.matchMedia("(min-width: 1024px)").matches : false),
+  );
 
   // Fetch status on mount
   useEffect(() => {
@@ -152,6 +157,31 @@ export const VisaSponsorsPage: React.FC = () => {
     }
   }, [results]);
 
+  useEffect(() => {
+    if (!selectedOrg) {
+      setIsDetailDrawerOpen(false);
+    }
+  }, [selectedOrg]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const media = window.matchMedia("(min-width: 1024px)");
+    const handleChange = () => setIsDesktop(media.matches);
+    handleChange();
+    if (media.addEventListener) {
+      media.addEventListener("change", handleChange);
+      return () => media.removeEventListener("change", handleChange);
+    }
+    media.addListener(handleChange);
+    return () => media.removeListener(handleChange);
+  }, []);
+
+  useEffect(() => {
+    if (isDesktop && isDetailDrawerOpen) {
+      setIsDetailDrawerOpen(false);
+    }
+  }, [isDesktop, isDetailDrawerOpen]);
+
   // Fetch organization details
   const fetchOrgDetails = async (orgName: string) => {
     setIsLoadingDetails(true);
@@ -186,12 +216,102 @@ export const VisaSponsorsPage: React.FC = () => {
     }
   };
 
+  const handleSelectOrg = (orgName: string) => {
+    fetchOrgDetails(orgName);
+    if (!isDesktop) {
+      setIsDetailDrawerOpen(true);
+    }
+  };
+
   const selectedResult = useMemo(
     () => results.find((r) => r.sponsor.organisationName === selectedOrg) ?? null,
     [results, selectedOrg]
   );
 
   const isUpdateInProgress = isUpdating || status?.isUpdating;
+
+  const detailPanelContent = !selectedOrg ? (
+    <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
+      <div className="text-base font-semibold">Select a company</div>
+      <p className="text-sm text-muted-foreground">
+        Pick a company from the results to see details here.
+      </p>
+    </div>
+  ) : isLoadingDetails ? (
+    <div className="flex items-center justify-center h-32">
+      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+    </div>
+  ) : (
+    <div className="space-y-4">
+      {/* Header */}
+      <div>
+        <div className="flex items-center gap-2 mb-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-200">
+            <CheckCircle2 className="h-3 w-3" />
+            Licensed Sponsor
+          </span>
+          {selectedResult && (
+            <span
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide",
+                getScoreTokens(selectedResult.score).badge
+              )}
+            >
+              {selectedResult.score}% Match
+            </span>
+          )}
+        </div>
+        <h2 className="text-lg font-semibold text-foreground">{selectedOrg}</h2>
+      </div>
+
+      {/* Location */}
+      {orgDetails.length > 0 && (orgDetails[0].townCity || orgDetails[0].county) && (
+        <div>
+          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1">
+            Location
+          </div>
+          <div className="flex items-center gap-2 text-sm text-foreground">
+            <MapPin className="h-4 w-4 text-muted-foreground" />
+            {[orgDetails[0].townCity, orgDetails[0].county].filter(Boolean).join(", ")}
+          </div>
+        </div>
+      )}
+
+      {/* Licence types / routes */}
+      <div>
+        <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
+          Licensed Routes ({orgDetails.length})
+        </div>
+        <div className="space-y-2">
+          {orgDetails.map((entry, index) => (
+            <div
+              key={index}
+              className="rounded-lg border border-border/60 bg-muted/20 p-3"
+            >
+              <div className="flex items-start justify-between gap-2 mb-1">
+                <Badge variant="secondary" className="text-xs">
+                  {entry.route}
+                </Badge>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">Type & Rating:</span>{" "}
+                {entry.typeRating}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Info box */}
+      <div className="rounded-lg border border-sky-500/30 bg-sky-500/10 p-3 text-sm">
+        <div className="font-medium text-sky-200 mb-1">What does this mean?</div>
+        <p className="text-xs text-sky-300/80">
+          This organisation is licensed by the UK Home Office to sponsor workers on the
+          routes listed above. An "A rating" means they're fully compliant.
+        </p>
+      </div>
+    </div>
+  );
 
   return (
     <>
@@ -323,7 +443,7 @@ export const VisaSponsorsPage: React.FC = () => {
                 <ListItem
                   key={`${result.sponsor.organisationName}-${index}`}
                   selected={selectedOrg === result.sponsor.organisationName}
-                  onClick={() => fetchOrgDetails(result.sponsor.organisationName)}
+                  onClick={() => handleSelectOrg(result.sponsor.organisationName)}
                   className="gap-3"
                 >
                   <div className="flex-1 min-w-0">
@@ -351,92 +471,27 @@ export const VisaSponsorsPage: React.FC = () => {
           </ListPanel>
 
           {/* Right panel - Details */}
-          <DetailPanel>
-            {!selectedOrg ? (
-              <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
-                <div className="text-base font-semibold">Select a company</div>
-                <p className="text-sm text-muted-foreground">
-                  Pick a company from the results to see details here.
-                </p>
-              </div>
-            ) : isLoadingDetails ? (
-              <div className="flex items-center justify-center h-32">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {/* Header */}
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-200">
-                      <CheckCircle2 className="h-3 w-3" />
-                      Licensed Sponsor
-                    </span>
-                    {selectedResult && (
-                      <span
-                        className={cn(
-                          "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide",
-                          getScoreTokens(selectedResult.score).badge
-                        )}
-                      >
-                        {selectedResult.score}% Match
-                      </span>
-                    )}
-                  </div>
-                  <h2 className="text-lg font-semibold text-foreground">{selectedOrg}</h2>
-                </div>
-
-                {/* Location */}
-                {orgDetails.length > 0 && (orgDetails[0].townCity || orgDetails[0].county) && (
-                  <div>
-                    <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1">
-                      Location
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-foreground">
-                      <MapPin className="h-4 w-4 text-muted-foreground" />
-                      {[orgDetails[0].townCity, orgDetails[0].county].filter(Boolean).join(", ")}
-                    </div>
-                  </div>
-                )}
-
-                {/* Licence types / routes */}
-                <div>
-                  <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
-                    Licensed Routes ({orgDetails.length})
-                  </div>
-                  <div className="space-y-2">
-                    {orgDetails.map((entry, index) => (
-                      <div
-                        key={index}
-                        className="rounded-lg border border-border/60 bg-muted/20 p-3"
-                      >
-                        <div className="flex items-start justify-between gap-2 mb-1">
-                          <Badge variant="secondary" className="text-xs">
-                            {entry.route}
-                          </Badge>
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          <span className="font-medium text-foreground">Type & Rating:</span>{" "}
-                          {entry.typeRating}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Info box */}
-                <div className="rounded-lg border border-sky-500/30 bg-sky-500/10 p-3 text-sm">
-                  <div className="font-medium text-sky-200 mb-1">What does this mean?</div>
-                  <p className="text-xs text-sky-300/80">
-                    This organisation is licensed by the UK Home Office to sponsor workers on the
-                    routes listed above. An "A rating" means they're fully compliant.
-                  </p>
-                </div>
-              </div>
-            )}
+          <DetailPanel className="hidden lg:block">
+            {detailPanelContent}
           </DetailPanel>
         </SplitLayout>
       </PageMain>
+
+      <Drawer open={isDetailDrawerOpen} onOpenChange={setIsDetailDrawerOpen}>
+        <DrawerContent className="max-h-[90vh]">
+          <div className="flex items-center justify-between px-4 pt-2">
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Sponsor details</div>
+            <DrawerClose asChild>
+              <Button variant="ghost" size="sm" className="h-8 px-2 text-xs">
+                Close
+              </Button>
+            </DrawerClose>
+          </div>
+          <div className="max-h-[calc(90vh-3.5rem)] overflow-y-auto px-4 pb-6 pt-3">
+            {detailPanelContent}
+          </div>
+        </DrawerContent>
+      </Drawer>
     </>
   );
 };

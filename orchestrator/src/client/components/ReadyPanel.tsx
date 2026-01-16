@@ -223,9 +223,9 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
           All actions in one line: View, Save, Open, and Mark Applied
       ───────────────────────────────────────────────────────────────────── */}
       <div className="pb-4 border-b border-border/40">
-        <div className="flex gap-1">
+        <div className="grid gap-2 sm:grid-cols-2">
           {/* Show PDF - to verify quickly without download */}
-          <Button asChild variant="outline" className="flex-1 h-9 gap-1 px-2 text-xs">
+          <Button asChild variant="outline" className="h-9 w-full gap-1 px-2 text-xs">
             <a href={pdfHref} target="_blank" rel="noopener noreferrer">
               <FileText className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">View PDF</span>
@@ -233,7 +233,7 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
           </Button>
 
           {/* Download PDF - primary artifact action */}
-          <Button asChild variant="outline" className="flex-1 h-9 gap-1 px-2 text-xs">
+          <Button asChild variant="outline" className="h-9 w-full gap-1 px-2 text-xs">
             <a
               href={pdfHref}
               download={`Shaheer_Sarfaraz_${safeFilenamePart(job.employer)}.pdf`}
@@ -244,7 +244,7 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
           </Button>
 
           {/* Open job - to verify before applying */}
-          <Button asChild variant="outline" className="flex-1 h-9 gap-1 px-2 text-xs">
+          <Button asChild variant="outline" className="h-9 w-full gap-1 px-2 text-xs">
             <a href={jobLink} target="_blank" rel="noopener noreferrer">
               <ExternalLink className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">Open Job Listing</span>
@@ -255,7 +255,7 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
           <Button
             onClick={handleMarkApplied}
             variant="default"
-            className="flex-1 h-9 gap-1 px-2 text-xs"
+            className="h-9 w-full gap-1 px-2 text-xs"
             disabled={isMarkingApplied}
           >
             {isMarkingApplied ? (
@@ -382,10 +382,10 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
           Lightweight undo option after marking applied
       ───────────────────────────────────────────────────────────────────── */}
       {recentlyApplied && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50">
-          <div className="flex items-center gap-3 rounded-lg border bg-card px-4 py-2 shadow-lg">
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] max-w-xl">
+          <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-card px-4 py-2 shadow-lg">
             <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-            <span className="text-sm">
+            <span className="min-w-0 flex-1 truncate text-sm">
               <span className="font-medium">{recentlyApplied.jobTitle}</span>
               <span className="text-muted-foreground"> marked applied</span>
             </span>

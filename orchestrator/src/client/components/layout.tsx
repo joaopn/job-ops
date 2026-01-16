@@ -40,12 +40,12 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   actions,
 }) => (
   <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-    <div className="container mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4">
-      <div className="flex items-center gap-3">
+    <div className="container mx-auto flex max-w-7xl flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 flex-wrap items-center gap-3">
         <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-border/60 bg-muted/30">
           <Icon className="h-4 w-4 text-muted-foreground" />
         </div>
-        <div className="leading-tight">
+        <div className="min-w-0 leading-tight">
           <div className="text-sm font-semibold tracking-tight">{title}</div>
           <div className="text-xs text-muted-foreground">{subtitle}</div>
         </div>
@@ -57,7 +57,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
         {statusIndicator}
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
         {nav?.map((item) => (
           <Button key={item.to} asChild variant="ghost" size="icon" aria-label={item.label}>
             <Link to={item.to}>
@@ -132,7 +132,7 @@ interface ListPanelProps {
 }
 
 export const ListPanel: React.FC<ListPanelProps> = ({ children, header, footer, className }) => (
-  <div className={cn("rounded-xl border border-border/60 bg-card/40 flex flex-col", className)}>
+  <div className={cn("min-w-0 rounded-xl border border-border/60 bg-card/40 flex flex-col", className)}>
     {header && <div className="border-b border-border/60 px-4 py-3">{header}</div>}
     <div className="flex-1 divide-y divide-border/60 overflow-y-auto">{children}</div>
     {footer && <div className="border-t border-border/60 px-4 py-2">{footer}</div>}
@@ -178,7 +178,7 @@ interface DetailPanelProps {
 export const DetailPanel: React.FC<DetailPanelProps> = ({ children, className, sticky = true }) => (
   <div
     className={cn(
-      "rounded-xl border border-border/60 bg-card/40 p-4",
+      "min-w-0 rounded-xl border border-border/60 bg-card/40 p-4",
       sticky && "lg:sticky lg:top-24 lg:self-start",
       className
     )}
@@ -254,11 +254,11 @@ interface FullHeightSplitProps {
 
 export const FullHeightSplit: React.FC<FullHeightSplitProps> = ({
   sidebar,
-  sidebarWidth = "w-[420px]",
+  sidebarWidth = "lg:w-[420px]",
   children,
 }) => (
-  <div className="flex flex-1 overflow-hidden">
-    <div className={cn("flex flex-col border-r", sidebarWidth)}>{sidebar}</div>
+  <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
+    <div className={cn("flex w-full flex-col border-b lg:border-b-0 lg:border-r", sidebarWidth)}>{sidebar}</div>
     <div className="flex-1 overflow-y-auto">{children}</div>
   </div>
 );

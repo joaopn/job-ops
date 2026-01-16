@@ -150,13 +150,13 @@ const DecideMode: React.FC<DecideModeProps> = ({
         </div>
 
         {/* Primary/Secondary actions */}
-        <div className='flex gap-2 pt-2'>
+        <div className='flex flex-col gap-2 pt-2 sm:flex-row'>
           <Button
             variant='outline'
-            size='sm'
+            size='default'
             onClick={onSkip}
             disabled={isSkipping}
-            className='flex-1 h-10 text-muted-foreground hover:text-foreground hover:border-rose-500/30 hover:bg-rose-500/5'
+            className='flex-1 h-11 text-sm text-muted-foreground hover:text-foreground hover:border-rose-500/30 hover:bg-rose-500/5 sm:h-10 sm:text-xs'
           >
             {isSkipping ? (
               <Loader2 className='mr-2 h-4 w-4 animate-spin' />
@@ -166,9 +166,9 @@ const DecideMode: React.FC<DecideModeProps> = ({
             Skip
           </Button>
           <Button
-            size='sm'
+            size='default'
             onClick={onTailor}
-            className='flex-1 h-10 bg-primary/90 hover:bg-primary'
+            className='flex-1 h-11 text-sm bg-primary/90 hover:bg-primary sm:h-10 sm:text-xs'
           >
             <Sparkles className='mr-2 h-4 w-4' />
             Tailor
@@ -388,7 +388,7 @@ const TailorMode: React.FC<TailorModeProps> = ({
   return (
     <div className='flex flex-col h-full'>
       {/* Header with back navigation */}
-      <div className='flex items-center justify-between pb-3'>
+      <div className='flex flex-col gap-2 pb-3 sm:flex-row sm:items-center sm:justify-between'>
         <button
           type='button'
           onClick={onBack}
@@ -434,7 +434,7 @@ const TailorMode: React.FC<TailorModeProps> = ({
       {/* Scrollable content */}
       <div className='flex-1 overflow-y-auto space-y-4 pr-1'>
         {/* AI Generate option */}
-        <div className='flex items-center justify-between rounded-lg border border-border/40 bg-muted/10 p-3'>
+        <div className='flex flex-col gap-2 rounded-lg border border-border/40 bg-muted/10 p-3 sm:flex-row sm:items-center sm:justify-between'>
           <div>
             <div className='text-xs font-medium'>
               Need help getting started?
@@ -448,7 +448,7 @@ const TailorMode: React.FC<TailorModeProps> = ({
             variant='outline'
             onClick={handleGenerateWithAI}
             disabled={isGenerating || isFinalizing}
-            className='h-8 text-xs'
+            className='h-8 w-full text-xs sm:w-auto'
           >
             {isGenerating ? (
               <Loader2 className='mr-1.5 h-3.5 w-3.5 animate-spin' />
@@ -506,7 +506,7 @@ const TailorMode: React.FC<TailorModeProps> = ({
 
         {/* Selected Projects */}
         <div className='space-y-2'>
-          <div className='flex items-center justify-between'>
+          <div className='flex flex-wrap items-start gap-2 sm:items-center sm:justify-between'>
             <label className='text-xs font-medium text-muted-foreground'>
               Selected Projects
             </label>

@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { Drawer, DrawerClose, DrawerContent } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
 import * as api from "../api";
 import type { CreateJobInput } from "../../shared/types";
@@ -86,6 +87,10 @@ export const UkVisaJobsPage: React.FC = () => {
   const [totalJobs, setTotalJobs] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(
+    () => (typeof window !== "undefined" ? window.matchMedia("(min-width: 1024px)").matches : false),
+  );
 
   useEffect(() => {
     if (results.length === 0) {
@@ -97,6 +102,31 @@ export const UkVisaJobsPage: React.FC = () => {
       setSelectedJobId(firstKey);
     }
   }, [results, selectedJobId]);
+
+  useEffect(() => {
+    if (!selectedJobId) {
+      setIsDetailDrawerOpen(false);
+    }
+  }, [selectedJobId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const media = window.matchMedia("(min-width: 1024px)");
+    const handleChange = () => setIsDesktop(media.matches);
+    handleChange();
+    if (media.addEventListener) {
+      media.addEventListener("change", handleChange);
+      return () => media.removeEventListener("change", handleChange);
+    }
+    media.addListener(handleChange);
+    return () => media.removeListener(handleChange);
+  }, []);
+
+  useEffect(() => {
+    if (isDesktop && isDetailDrawerOpen) {
+      setIsDetailDrawerOpen(false);
+    }
+  }, [isDesktop, isDetailDrawerOpen]);
 
   useEffect(() => {
     setSelectedJobIds(new Set());
@@ -204,15 +234,111 @@ export const UkVisaJobsPage: React.FC = () => {
   const canGoPrev = page > 1;
   const canGoNext = page < totalPages;
 
+  const handleSelectJob = (jobId: string) => {
+    setSelectedJobId(jobId);
+    if (!isDesktop) {
+      setIsDetailDrawerOpen(true);
+    }
+  };
+
+  const detailPanelContent = !selectedJob ? (
+    <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
+      <div className="text-base font-semibold">Select a job</div>
+      <p className="text-sm text-muted-foreground">Pick a job from the list to inspect details.</p>
+    </div>
+  ) : (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="truncate text-base font-semibold">{selectedJob.title}</div>
+          <div className="text-sm text-muted-foreground">{selectedJob.employer}</div>
+        </div>
+        <Badge variant="outline" className="uppercase tracking-wide">
+          UK Visa Jobs
+        </Badge>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+        {selectedJob.location && (
+          <span className="flex items-center gap-1">
+            <MapPin className="h-3.5 w-3.5" />
+            {selectedJob.location}
+          </span>
+        )}
+        {selectedDeadline && (
+          <span className="flex items-center gap-1">
+            <Calendar className="h-3.5 w-3.5" />
+            {selectedDeadline}
+          </span>
+        )}
+        {selectedPosted && (
+          <span className="flex items-center gap-1">
+            <Clock className="h-3.5 w-3.5" />
+            Posted {selectedPosted}
+          </span>
+        )}
+        {selectedJob.salary && (
+          <span className="flex items-center gap-1">
+            <DollarSign className="h-3.5 w-3.5" />
+            {selectedJob.salary}
+          </span>
+        )}
+        {selectedJob.degreeRequired && (
+          <span className="flex items-center gap-1">
+            <GraduationCap className="h-3.5 w-3.5" />
+            {selectedJob.degreeRequired}
+          </span>
+        )}
+      </div>
+
+      <div className="grid gap-3 text-sm sm:grid-cols-2">
+        <div>
+          <div className="text-xs text-muted-foreground">Job type</div>
+          <div className="font-medium">{selectedJob.jobType || "Not set"}</div>
+        </div>
+        <div>
+          <div className="text-xs text-muted-foreground">Job level</div>
+          <div className="font-medium">{selectedJob.jobLevel || "Not set"}</div>
+        </div>
+        <div>
+          <div className="text-xs text-muted-foreground">Location</div>
+          <div className="font-medium">{selectedJob.location || "Not set"}</div>
+        </div>
+        <div>
+          <div className="text-xs text-muted-foreground">Deadline</div>
+          <div className="font-medium">{selectedDeadline || "Not set"}</div>
+        </div>
+      </div>
+
+      <Separator />
+
+      <Button asChild size="sm" variant="outline" className="w-full gap-2 sm:w-auto">
+        <a href={selectedJobLink} target="_blank" rel="noopener noreferrer">
+          <ExternalLink className="h-4 w-4" />
+          View job
+        </a>
+      </Button>
+
+      <div className="space-y-2">
+        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Description
+        </div>
+        <div className="rounded-lg border border-border/60 bg-muted/10 p-3 text-sm text-muted-foreground whitespace-pre-wrap">
+          {selectedDescription}
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <>
       <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4">
-          <div className="flex items-center gap-3">
+        <div className="container mx-auto flex max-w-7xl flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-border/60 bg-muted/30">
               <Briefcase className="h-4 w-4 text-muted-foreground" />
             </div>
-            <div className="leading-tight">
+            <div className="min-w-0 leading-tight">
               <div className="text-sm font-semibold tracking-tight">UK Visa Jobs</div>
               <div className="text-xs text-muted-foreground">Live search console</div>
             </div>
@@ -221,7 +347,7 @@ export const UkVisaJobsPage: React.FC = () => {
             </Badge>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex w-full items-center gap-2 sm:w-auto sm:justify-end">
             <Button asChild variant="ghost" size="icon" aria-label="Back to orchestrator">
               <Link to="/">
                 <ArrowLeft className="h-4 w-4" />
@@ -270,11 +396,11 @@ export const UkVisaJobsPage: React.FC = () => {
 
           <Separator className="my-4" />
 
-          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+          <div className="flex flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
             <div>
               Last run: {lastRunAt ? formatDateTime(lastRunAt) : "No searches yet"}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline" className="text-xs">
                 {totalJobs} total
               </Badge>
@@ -290,7 +416,7 @@ export const UkVisaJobsPage: React.FC = () => {
         </section>
 
         <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
-          <div className="relative rounded-xl border border-border/60 bg-card/40">
+          <div className="relative min-w-0 rounded-xl border border-border/60 bg-card/40">
             {isSearching && results.length > 0 && (
               <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-xl bg-background/70 text-sm text-muted-foreground backdrop-blur-sm">
                 <Loader2 className="h-5 w-5 animate-spin" />
@@ -338,7 +464,7 @@ export const UkVisaJobsPage: React.FC = () => {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="gap-2"
+                    className="w-full gap-2 sm:w-auto"
                     onClick={handleImportSelected}
                     disabled={selectedCount === 0 || isImporting}
                   >
@@ -358,11 +484,11 @@ export const UkVisaJobsPage: React.FC = () => {
                         key={key}
                         role="button"
                         tabIndex={0}
-                        onClick={() => setSelectedJobId(key)}
+                        onClick={() => handleSelectJob(key)}
                         onKeyDown={(event) => {
                           if (event.key === "Enter" || event.key === " ") {
                             event.preventDefault();
-                            setSelectedJobId(key);
+                            handleSelectJob(key);
                           }
                         }}
                         className={cn(
@@ -443,7 +569,7 @@ export const UkVisaJobsPage: React.FC = () => {
                   <span>
                     Showing {summaryCounts.startIndex}-{summaryCounts.endIndex} of {totalJobs}
                   </span>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Button
                       variant="outline"
                       size="sm"
@@ -473,98 +599,27 @@ export const UkVisaJobsPage: React.FC = () => {
             )}
           </div>
 
-          <div className="rounded-xl border border-border/60 bg-card/40 p-4 lg:sticky lg:top-24 lg:self-start">
-            {!selectedJob ? (
-              <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
-                <div className="text-base font-semibold">Select a job</div>
-                <p className="text-sm text-muted-foreground">Pick a job from the list to inspect details.</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="truncate text-base font-semibold">{selectedJob.title}</div>
-                    <div className="text-sm text-muted-foreground">{selectedJob.employer}</div>
-                  </div>
-                  <Badge variant="outline" className="uppercase tracking-wide">
-                    UK Visa Jobs
-                  </Badge>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                  {selectedJob.location && (
-                    <span className="flex items-center gap-1">
-                      <MapPin className="h-3.5 w-3.5" />
-                      {selectedJob.location}
-                    </span>
-                  )}
-                  {selectedDeadline && (
-                    <span className="flex items-center gap-1">
-                      <Calendar className="h-3.5 w-3.5" />
-                      {selectedDeadline}
-                    </span>
-                  )}
-                  {selectedPosted && (
-                    <span className="flex items-center gap-1">
-                      <Clock className="h-3.5 w-3.5" />
-                      Posted {selectedPosted}
-                    </span>
-                  )}
-                  {selectedJob.salary && (
-                    <span className="flex items-center gap-1">
-                      <DollarSign className="h-3.5 w-3.5" />
-                      {selectedJob.salary}
-                    </span>
-                  )}
-                  {selectedJob.degreeRequired && (
-                    <span className="flex items-center gap-1">
-                      <GraduationCap className="h-3.5 w-3.5" />
-                      {selectedJob.degreeRequired}
-                    </span>
-                  )}
-                </div>
-
-                <div className="grid gap-3 text-sm sm:grid-cols-2">
-                  <div>
-                    <div className="text-xs text-muted-foreground">Job type</div>
-                    <div className="font-medium">{selectedJob.jobType || "Not set"}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground">Job level</div>
-                    <div className="font-medium">{selectedJob.jobLevel || "Not set"}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground">Location</div>
-                    <div className="font-medium">{selectedJob.location || "Not set"}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground">Deadline</div>
-                    <div className="font-medium">{selectedDeadline || "Not set"}</div>
-                  </div>
-                </div>
-
-                <Separator />
-
-                <Button asChild size="sm" variant="outline" className="gap-2">
-                  <a href={selectedJobLink} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink className="h-4 w-4" />
-                    View job
-                  </a>
-                </Button>
-
-                <div className="space-y-2">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Description
-                  </div>
-                  <div className="rounded-lg border border-border/60 bg-muted/10 p-3 text-sm text-muted-foreground whitespace-pre-wrap">
-                    {selectedDescription}
-                  </div>
-                </div>
-              </div>
-            )}
+          <div className="min-w-0 rounded-xl border border-border/60 bg-card/40 p-4 lg:sticky lg:top-24 lg:self-start hidden lg:block">
+            {detailPanelContent}
           </div>
         </section>
       </main>
+
+      <Drawer open={isDetailDrawerOpen} onOpenChange={setIsDetailDrawerOpen}>
+        <DrawerContent className="max-h-[90vh]">
+          <div className="flex items-center justify-between px-4 pt-2">
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Job details</div>
+            <DrawerClose asChild>
+              <Button variant="ghost" size="sm" className="h-8 px-2 text-xs">
+                Close
+              </Button>
+            </DrawerClose>
+          </div>
+          <div className="max-h-[calc(90vh-3.5rem)] overflow-y-auto px-4 pb-6 pt-3">
+            {detailPanelContent}
+          </div>
+        </DrawerContent>
+      </Drawer>
     </>
   );
 };

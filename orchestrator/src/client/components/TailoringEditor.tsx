@@ -154,14 +154,15 @@ export const TailoringEditor: React.FC<TailoringEditorProps> = ({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-row items-center justify-between space-y-0 pb-2">
+      <div className="flex flex-col gap-2 pb-2 sm:flex-row sm:items-center sm:justify-between">
         <h3 className="text-sm font-semibold text-muted-foreground">Editor</h3>
-        <div className="flex gap-2">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
           <Button
             size="sm"
             variant="outline"
             onClick={handleSummarize}
             disabled={isSummarizing || isGeneratingPdf || isSaving}
+            className="w-full sm:w-auto"
           >
             {isSummarizing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
             AI Summarize
@@ -170,6 +171,7 @@ export const TailoringEditor: React.FC<TailoringEditorProps> = ({
             size="sm"
             onClick={handleGeneratePdf}
             disabled={isSummarizing || isGeneratingPdf || isSaving || !summary}
+            className="w-full sm:w-auto"
           >
             {isGeneratingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
             Generate PDF
@@ -203,7 +205,7 @@ export const TailoringEditor: React.FC<TailoringEditorProps> = ({
         <Separator />
 
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-start gap-2 sm:items-center sm:justify-between">
             <label className="text-sm font-medium">Selected Projects</label>
             {tooManyProjects && (
               <span className="flex items-center gap-1 text-xs text-amber-600 font-medium">

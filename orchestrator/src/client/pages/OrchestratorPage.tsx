@@ -47,6 +47,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { Drawer, DrawerClose, DrawerContent } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
 import { copyTextToClipboard, formatJobForWebhook } from "@client/lib/jobCopy";
 import { PipelineProgress, DiscoveredPanel } from "../components";
@@ -314,6 +315,10 @@ export const OrchestratorPage: React.FC = () => {
   const [editedDescription, setEditedDescription] = useState("");
   const [isSavingDescription, setIsSavingDescription] = useState(false);
   const [hasUnsavedTailoring, setHasUnsavedTailoring] = useState(false);
+  const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(
+    () => (typeof window !== "undefined" ? window.matchMedia("(min-width: 1024px)").matches : false),
+  );
   const saveTailoringRef = useRef<null | (() => Promise<void>)>(null);
   const [pipelineSources, setPipelineSources] = useState<JobSource[]>(() => {
     try {
@@ -488,6 +493,31 @@ export const OrchestratorPage: React.FC = () => {
     }
   }, [activeJobs, selectedJobId]);
 
+  useEffect(() => {
+    if (!selectedJobId) {
+      setIsDetailDrawerOpen(false);
+    }
+  }, [selectedJobId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const media = window.matchMedia("(min-width: 1024px)");
+    const handleChange = () => setIsDesktop(media.matches);
+    handleChange();
+    if (media.addEventListener) {
+      media.addEventListener("change", handleChange);
+      return () => media.removeEventListener("change", handleChange);
+    }
+    media.addListener(handleChange);
+    return () => media.removeListener(handleChange);
+  }, []);
+
+  useEffect(() => {
+    if (isDesktop && isDetailDrawerOpen) {
+      setIsDetailDrawerOpen(false);
+    }
+  }, [isDesktop, isDetailDrawerOpen]);
+
   const selectedJob = useMemo(
     () => (selectedJobId ? jobs.find((job) => job.id === selectedJobId) ?? null : null),
     [jobs, selectedJobId],
@@ -598,6 +628,393 @@ export const OrchestratorPage: React.FC = () => {
   const isProcessingSelected =
     selectedJob ? processingJobId === selectedJob.id || selectedJob.status === "processing" : false;
 
+  const handleSelectJob = (jobId: string) => {
+    setSelectedJobId(jobId);
+    if (!isDesktop) {
+      setIsDetailDrawerOpen(true);
+    }
+  };
+
+  const detailPanelContent =
+    activeTab === "discovered" ? (
+      <DiscoveredPanel
+        job={selectedJob}
+        onJobUpdated={loadJobs}
+        onJobMoved={(jobId) => {
+          // Select next job in list after current one is moved
+          const currentIndex = activeJobs.findIndex((j) => j.id === jobId);
+          const nextJob = activeJobs[currentIndex + 1] || activeJobs[currentIndex - 1];
+          setSelectedJobId(nextJob?.id ?? null);
+        }}
+      />
+    ) : activeTab === "ready" ? (
+      /* ReadyPanel for Ready tab - shipping lane workflow: verify + download + apply + mark applied */
+      <ReadyPanel
+        job={selectedJob}
+        onJobUpdated={loadJobs}
+        onJobMoved={(jobId) => {
+          // Select next job in list after current one is moved
+          const currentIndex = activeJobs.findIndex((j) => j.id === jobId);
+          const nextJob = activeJobs[currentIndex + 1] || activeJobs[currentIndex - 1];
+          setSelectedJobId(nextJob?.id ?? null);
+        }}
+        onEditTailoring={() => {
+          setActiveTab("discovered");
+          // Brief delay to let tab switch, then we're showing generic panel with tailoring
+          setTimeout(() => setDetailTab("tailoring"), 50);
+        }}
+        onEditDescription={() => {
+          setActiveTab("discovered");
+          setTimeout(() => {
+            setDetailTab("description");
+            setIsEditingDescription(true);
+          }, 50);
+        }}
+      />
+    ) : !selectedJob ? (
+      <div className="flex h-full min-h-[200px] flex-col items-center justify-center gap-1 text-center">
+        <div className="text-sm font-medium text-muted-foreground">No job selected</div>
+        <p className="text-xs text-muted-foreground/70">Select a job to view details</p>
+      </div>
+    ) : (
+      <div className="space-y-3">
+        {/* Detail header: lighter weight than list items */}
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="truncate text-sm font-semibold text-foreground/90">{selectedJob.title}</div>
+            <div className="text-xs text-muted-foreground">{selectedJob.employer}</div>
+          </div>
+          <Badge variant="outline" className="text-[10px] uppercase tracking-wide text-muted-foreground border-border/50">
+            {sourceLabel[selectedJob.source]}
+          </Badge>
+        </div>
+
+        {/* Tertiary metadata - subdued */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground/70">
+          {selectedJob.location && (
+            <span className="flex items-center gap-1">
+              <MapPin className="h-3 w-3" />
+              {selectedJob.location}
+            </span>
+          )}
+          {selectedDeadline && (
+            <span className="flex items-center gap-1">
+              <Calendar className="h-3 w-3" />
+              {selectedDeadline}
+            </span>
+          )}
+          {selectedJob.salary && (
+            <span className="flex items-center gap-1">
+              <DollarSign className="h-3 w-3" />
+              {selectedJob.salary}
+            </span>
+          )}
+        </div>
+
+        {/* Status and score: single line, subdued */}
+        <div className="flex items-center justify-between gap-2 py-1 border-y border-border/30">
+          <StatusPill status={selectedJob.status} />
+          <ScoreMeter score={selectedJob.suitabilityScore} />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Button asChild size="sm" variant="ghost" className="h-8 gap-1.5 text-xs">
+            <a href={selectedJobLink} target="_blank" rel="noopener noreferrer">
+              <ExternalLink className="h-3.5 w-3.5" />
+              View
+            </a>
+          </Button>
+
+          {showReadyPdf &&
+            (selectedHasPdf ? (
+              <Button asChild size="sm" variant="ghost" className="h-8 gap-1.5 text-xs">
+                <a href={selectedPdfHref} target="_blank" rel="noopener noreferrer">
+                  <FileText className="h-3.5 w-3.5" />
+                  PDF
+                </a>
+              </Button>
+            ) : (
+              <Button size="sm" variant="ghost" className="h-8 gap-1.5 text-xs" disabled>
+                <FileText className="h-3.5 w-3.5" />
+                PDF
+              </Button>
+            ))}
+
+          {showGeneratePdf && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1.5 text-xs"
+              onClick={() => handleProcess(selectedJob.id)}
+              disabled={!canProcess || isProcessingSelected}
+            >
+              {isProcessingSelected ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RefreshCcw className="h-3.5 w-3.5" />
+              )}
+              {isProcessingSelected ? "Generating..." : "Generate"}
+            </Button>
+          )}
+
+          {canApply && (
+            <Button
+              size="sm"
+              className="h-8 gap-1.5 text-xs bg-emerald-600/20 text-emerald-300 hover:bg-emerald-600/30 border border-emerald-500/30"
+              onClick={() => handleApply(selectedJob.id)}
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Applied
+            </Button>
+          )}
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="icon" variant="ghost" aria-label="More actions">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {canProcess && !showGeneratePdf && (
+                <DropdownMenuItem
+                  onSelect={() => handleProcess(selectedJob.id)}
+                  disabled={isProcessingSelected}
+                >
+                  <RefreshCcw className="mr-2 h-4 w-4" />
+                  {isProcessingSelected
+                    ? "Processing..."
+                    : selectedJob.status === "ready"
+                      ? "Regenerate PDF"
+                      : "Generate PDF"}
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem
+                onSelect={() => {
+                  setDetailTab("description");
+                  setIsEditingDescription(true);
+                }}
+              >
+                <Edit2 className="mr-2 h-4 w-4" />
+                Edit description
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => void handleCopyInfo(selectedJob)}>
+                <Copy className="mr-2 h-4 w-4" />
+                Copy info
+              </DropdownMenuItem>
+              {selectedHasPdf && (
+                <>
+                  {!showReadyPdf && (
+                    <DropdownMenuItem asChild>
+                      <a href={selectedPdfHref} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="mr-2 h-4 w-4" />
+                        View PDF
+                      </a>
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem asChild>
+                    <a
+                      href={selectedPdfHref}
+                      download={`Shaheer_Sarfaraz_${safeFilenamePart(selectedJob.employer)}.pdf`}
+                    >
+                      <FileText className="mr-2 h-4 w-4" />
+                      Download PDF
+                    </a>
+                  </DropdownMenuItem>
+                </>
+              )}
+              {canSkip && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onSelect={() => handleSkip(selectedJob.id)}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <XCircle className="mr-2 h-4 w-4" />
+                    Skip job
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        <Tabs value={detailTab} onValueChange={(value) => setDetailTab(value as typeof detailTab)}>
+          <TabsList className="h-auto flex-wrap justify-start gap-1 text-xs">
+            <TabsTrigger value="overview" className="text-xs">Overview</TabsTrigger>
+            <TabsTrigger value="tailoring" className="text-xs">Tailoring</TabsTrigger>
+            <TabsTrigger value="description" className="text-xs">Description</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="overview" className="space-y-3 pt-2">
+            {selectedJob.suitabilityReason && (
+              <div className="rounded border border-border/30 bg-muted/10 px-3 py-2 text-xs text-muted-foreground italic">
+                "{selectedJob.suitabilityReason}"
+              </div>
+            )}
+
+            <div className="grid gap-2 text-xs sm:grid-cols-2">
+              <div>
+                <div className="text-[10px] text-muted-foreground/70 uppercase tracking-wide">Discipline</div>
+                <div className="text-foreground/80">{selectedJob.disciplines || "-"}</div>
+              </div>
+              <div>
+                <div className="text-[10px] text-muted-foreground/70 uppercase tracking-wide">Function</div>
+                <div className="text-foreground/80">{selectedJob.jobFunction || "-"}</div>
+              </div>
+              <div>
+                <div className="text-[10px] text-muted-foreground/70 uppercase tracking-wide">Level</div>
+                <div className="text-foreground/80">{selectedJob.jobLevel || "-"}</div>
+              </div>
+              <div>
+                <div className="text-[10px] text-muted-foreground/70 uppercase tracking-wide">Type</div>
+                <div className="text-foreground/80">{selectedJob.jobType || "-"}</div>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <button
+                type="button"
+                className="w-full text-left rounded border border-border/30 bg-muted/5 px-2.5 py-2 text-[11px] text-muted-foreground/80 line-clamp-4 whitespace-pre-wrap leading-relaxed hover:bg-muted/10 transition-colors"
+                onClick={() => setDetailTab("description")}
+              >
+                {description}
+              </button>
+              <div className="text-center">
+                <button
+                  type="button"
+                  className="text-[10px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+                  onClick={() => setDetailTab("description")}
+                >
+                  View full description →
+                </button>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="tailoring" className="pt-3">
+            <TailoringEditor
+              job={selectedJob}
+              onUpdate={loadJobs}
+              onDirtyChange={setHasUnsavedTailoring}
+              onRegisterSave={(save) => {
+                saveTailoringRef.current = save;
+              }}
+              onBeforeGenerate={() => confirmAndSaveEdits({ includeTailoring: false })}
+            />
+          </TabsContent>
+
+          <TabsContent value="description" className="space-y-3 pt-3">
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Job description
+              </div>
+              <div className="flex items-center gap-1">
+                {!isEditingDescription ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setIsEditingDescription(true)}
+                    className="h-8 px-2 text-xs"
+                  >
+                    <Edit2 className="mr-1.5 h-3.5 w-3.5" />
+                    Edit
+                  </Button>
+                ) : (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setIsEditingDescription(false);
+                        setEditedDescription(selectedJob.jobDescription || "");
+                      }}
+                      className="h-8 px-2 text-xs text-muted-foreground"
+                      disabled={isSavingDescription}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={handleSaveDescription}
+                      className="h-8 px-3 text-xs"
+                      disabled={isSavingDescription}
+                    >
+                      {isSavingDescription ? (
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Save className="mr-1.5 h-3.5 w-3.5" />
+                      )}
+                      Save Changes
+                    </Button>
+                  </>
+                )}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="icon" variant="ghost" className="h-8 w-8" aria-label="Description actions">
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        void copyTextToClipboard(selectedJob.jobDescription || "");
+                        toast.success("Copied raw description");
+                      }}
+                    >
+                      <Copy className="mr-2 h-4 w-4" />
+                      Copy raw text
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-border/60 bg-muted/10 p-3 text-sm text-muted-foreground">
+              {isEditingDescription ? (
+                <div className="space-y-3">
+                  <Textarea
+                    value={editedDescription}
+                    onChange={(event) => setEditedDescription(event.target.value)}
+                    className="min-h-[400px] font-mono text-sm leading-relaxed focus-visible:ring-1"
+                    placeholder="Enter job description..."
+                  />
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setIsEditingDescription(false);
+                        setEditedDescription(selectedJob.jobDescription || "");
+                      }}
+                      disabled={isSavingDescription}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleSaveDescription}
+                      disabled={isSavingDescription}
+                    >
+                      {isSavingDescription ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="mr-2 h-4 w-4" />
+                      )}
+                      Save Description
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="whitespace-pre-wrap leading-relaxed">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{description}</ReactMarkdown>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+        </Tabs>
+      </div>
+    );
+
   const toggleSource = (source: JobSource, checked: boolean) => {
     const next = checked
       ? Array.from(new Set([...pipelineSources, source]))
@@ -627,12 +1044,12 @@ export const OrchestratorPage: React.FC = () => {
   return (
     <>
       <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4">
-          <div className="flex items-center gap-3">
+        <div className="container mx-auto flex max-w-7xl flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-border/60 bg-muted/30">
               <Sparkles className="h-4 w-4 text-muted-foreground" />
             </div>
-            <div className="leading-tight">
+            <div className="min-w-0 leading-tight">
               <div className="text-sm font-semibold tracking-tight">Job Ops</div>
               <div className="text-xs text-muted-foreground">Orchestrator</div>
             </div>
@@ -644,7 +1061,7 @@ export const OrchestratorPage: React.FC = () => {
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
             <Button asChild variant="ghost" size="icon" aria-label="Visa Sponsors search">
               <Link to="/visa-sponsors">
                 <Shield className="h-4 w-4" />
@@ -661,15 +1078,26 @@ export const OrchestratorPage: React.FC = () => {
               </Link>
             </Button>
 
-            <div className="flex items-center gap-1">
-              <Button size="sm" onClick={handleRunPipeline} disabled={isPipelineRunning} className="gap-2">
+            <div className="flex w-full items-center gap-1 sm:w-auto">
+              <Button
+                size="sm"
+                onClick={handleRunPipeline}
+                disabled={isPipelineRunning}
+                className="w-full gap-2 sm:w-auto"
+              >
                 {isPipelineRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
                 {isPipelineRunning ? "Running" : "Run pipeline"}
               </Button>
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button size="icon" variant="outline" disabled={isPipelineRunning} aria-label="Select pipeline sources">
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    disabled={isPipelineRunning}
+                    aria-label="Select pipeline sources"
+                    className="shrink-0"
+                  >
                     <ChevronDown className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -752,7 +1180,7 @@ export const OrchestratorPage: React.FC = () => {
         <section className="space-y-4">
           <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as FilterTab)}>
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <TabsList className="h-9 w-full lg:w-auto">
+              <TabsList className="h-auto w-full flex-wrap justify-start gap-1 lg:w-auto">
                 {tabs.map((tab) => (
                   <TabsTrigger key={tab.id} value={tab.id} className="flex-1 flex items-center lg:flex-none gap-1.5">
                     <span>{tab.label}</span>
@@ -764,7 +1192,7 @@ export const OrchestratorPage: React.FC = () => {
               </TabsList>
 
               <div className="flex flex-wrap items-center gap-2">
-                <div className="relative w-full min-w-[180px] flex-1 lg:max-w-[240px] lg:flex-none">
+                <div className="relative w-full min-w-0 flex-1 sm:min-w-[180px] lg:max-w-[240px] lg:flex-none">
                   <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/60" />
                   <Input
                     value={searchQuery}
@@ -776,7 +1204,11 @@ export const OrchestratorPage: React.FC = () => {
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-full gap-1.5 text-xs text-muted-foreground hover:text-foreground sm:w-auto"
+                    >
                       <Filter className="h-3.5 w-3.5" />
                       {sourceFilter === "all" ? "All sources" : sourceLabel[sourceFilter]}
                     </Button>
@@ -800,7 +1232,11 @@ export const OrchestratorPage: React.FC = () => {
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-full gap-1.5 text-xs text-muted-foreground hover:text-foreground sm:w-auto"
+                    >
                       <ArrowUpDown className="h-3.5 w-3.5" />
                       {sortLabels[sort.key]}
                     </Button>
@@ -844,7 +1280,7 @@ export const OrchestratorPage: React.FC = () => {
           {/* List/Detail grid - directly under tabs, no extra section */}
           <div className="grid gap-4 lg:grid-cols-[minmax(0,400px)_minmax(0,1fr)]">
             {/* Primary region: Job list with highest visual weight */}
-            <div className="rounded-xl border border-border bg-card shadow-sm">
+            <div className="min-w-0 rounded-xl border border-border bg-card shadow-sm">
               {isLoading && jobs.length === 0 ? (
                 <div className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center">
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -867,7 +1303,7 @@ export const OrchestratorPage: React.FC = () => {
                     <button
                       key={job.id}
                       type="button"
-                      onClick={() => setSelectedJobId(job.id)}
+                      onClick={() => handleSelectJob(job.id)}
                       className={cn(
                         "flex w-full items-center gap-3 px-4 py-3 text-left transition-colors",
                         isSelected 
@@ -921,390 +1357,28 @@ export const OrchestratorPage: React.FC = () => {
           </div>
 
           {/* Inspector panel: visually subordinate to list */}
-          <div className="rounded-lg border border-border/40 bg-muted/5 p-4 lg:sticky lg:top-24 lg:self-start lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto">
-            {/* Use DiscoveredPanel for Discovered tab - two-mode triage workflow */}
-            {activeTab === "discovered" ? (
-              <DiscoveredPanel
-                job={selectedJob}
-                onJobUpdated={loadJobs}
-                onJobMoved={(jobId) => {
-                  // Select next job in list after current one is moved
-                  const currentIndex = activeJobs.findIndex((j) => j.id === jobId);
-                  const nextJob = activeJobs[currentIndex + 1] || activeJobs[currentIndex - 1];
-                  setSelectedJobId(nextJob?.id ?? null);
-                }}
-              />
-            ) : activeTab === "ready" ? (
-              /* ReadyPanel for Ready tab - shipping lane workflow: verify → download → apply → mark applied */
-              <ReadyPanel
-                job={selectedJob}
-                onJobUpdated={loadJobs}
-                onJobMoved={(jobId) => {
-                  // Select next job in list after current one is moved
-                  const currentIndex = activeJobs.findIndex((j) => j.id === jobId);
-                  const nextJob = activeJobs[currentIndex + 1] || activeJobs[currentIndex - 1];
-                  setSelectedJobId(nextJob?.id ?? null);
-                }}
-                onEditTailoring={() => {
-                  setActiveTab("discovered");
-                  // Brief delay to let tab switch, then we're showing generic panel with tailoring
-                  setTimeout(() => setDetailTab("tailoring"), 50);
-                }}
-                onEditDescription={() => {
-                  setActiveTab("discovered");
-                  setTimeout(() => {
-                    setDetailTab("description");
-                    setIsEditingDescription(true);
-                  }, 50);
-                }}
-              />
-            ) : !selectedJob ? (
-              <div className="flex h-full min-h-[200px] flex-col items-center justify-center gap-1 text-center">
-                <div className="text-sm font-medium text-muted-foreground">No job selected</div>
-                <p className="text-xs text-muted-foreground/70">Select a job to view details</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {/* Detail header: lighter weight than list items */}
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold text-foreground/90">{selectedJob.title}</div>
-                    <div className="text-xs text-muted-foreground">{selectedJob.employer}</div>
-                  </div>
-                  <Badge variant="outline" className="text-[10px] uppercase tracking-wide text-muted-foreground border-border/50">
-                    {sourceLabel[selectedJob.source]}
-                  </Badge>
-                </div>
-
-                {/* Tertiary metadata - subdued */}
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground/70">
-                  {selectedJob.location && (
-                    <span className="flex items-center gap-1">
-                      <MapPin className="h-3 w-3" />
-                      {selectedJob.location}
-                    </span>
-                  )}
-                  {selectedDeadline && (
-                    <span className="flex items-center gap-1">
-                      <Calendar className="h-3 w-3" />
-                      {selectedDeadline}
-                    </span>
-                  )}
-                  {selectedJob.salary && (
-                    <span className="flex items-center gap-1">
-                      <DollarSign className="h-3 w-3" />
-                      {selectedJob.salary}
-                    </span>
-                  )}
-                </div>
-
-                {/* Status and score: single line, subdued */}
-                <div className="flex items-center justify-between gap-2 py-1 border-y border-border/30">
-                  <StatusPill status={selectedJob.status} />
-                  <ScoreMeter score={selectedJob.suitabilityScore} />
-                </div>
-
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <Button asChild size="sm" variant="ghost" className="h-8 gap-1.5 text-xs">
-                    <a href={selectedJobLink} target="_blank" rel="noopener noreferrer">
-                      <ExternalLink className="h-3.5 w-3.5" />
-                      View
-                    </a>
-                  </Button>
-
-                  {showReadyPdf &&
-                    (selectedHasPdf ? (
-                      <Button asChild size="sm" variant="ghost" className="h-8 gap-1.5 text-xs">
-                        <a href={selectedPdfHref} target="_blank" rel="noopener noreferrer">
-                          <FileText className="h-3.5 w-3.5" />
-                          PDF
-                        </a>
-                      </Button>
-                    ) : (
-                      <Button size="sm" variant="ghost" className="h-8 gap-1.5 text-xs" disabled>
-                        <FileText className="h-3.5 w-3.5" />
-                        PDF
-                      </Button>
-                    ))}
-
-                  {showGeneratePdf && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-8 gap-1.5 text-xs"
-                      onClick={() => handleProcess(selectedJob.id)}
-                      disabled={!canProcess || isProcessingSelected}
-                    >
-                      {isProcessingSelected ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <RefreshCcw className="h-3.5 w-3.5" />
-                      )}
-                      {isProcessingSelected ? "Generating..." : "Generate"}
-                    </Button>
-                  )}
-
-                  {canApply && (
-                    <Button
-                      size="sm"
-                      className="h-8 gap-1.5 text-xs bg-emerald-600/20 text-emerald-300 hover:bg-emerald-600/30 border border-emerald-500/30"
-                      onClick={() => handleApply(selectedJob.id)}
-                    >
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                      Applied
-                    </Button>
-                  )}
-
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button size="icon" variant="ghost" aria-label="More actions">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      {canProcess && !showGeneratePdf && (
-                        <DropdownMenuItem
-                          onSelect={() => handleProcess(selectedJob.id)}
-                          disabled={isProcessingSelected}
-                        >
-                          <RefreshCcw className="mr-2 h-4 w-4" />
-                          {isProcessingSelected
-                            ? "Processing..."
-                            : selectedJob.status === "ready"
-                              ? "Regenerate PDF"
-                              : "Generate PDF"}
-                        </DropdownMenuItem>
-                      )}
-                      <DropdownMenuItem
-                        onSelect={() => {
-                          setDetailTab("description");
-                          setIsEditingDescription(true);
-                        }}
-                      >
-                        <Edit2 className="mr-2 h-4 w-4" />
-                        Edit description
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => void handleCopyInfo(selectedJob)}>
-                        <Copy className="mr-2 h-4 w-4" />
-                        Copy info
-                      </DropdownMenuItem>
-                      {selectedHasPdf && (
-                        <>
-                          {!showReadyPdf && (
-                            <DropdownMenuItem asChild>
-                              <a href={selectedPdfHref} target="_blank" rel="noopener noreferrer">
-                                <ExternalLink className="mr-2 h-4 w-4" />
-                                View PDF
-                              </a>
-                            </DropdownMenuItem>
-                          )}
-                          <DropdownMenuItem asChild>
-                            <a
-                              href={selectedPdfHref}
-                              download={`Shaheer_Sarfaraz_${safeFilenamePart(selectedJob.employer)}.pdf`}
-                            >
-                              <FileText className="mr-2 h-4 w-4" />
-                              Download PDF
-                            </a>
-                          </DropdownMenuItem>
-                        </>
-                      )}
-                      {canSkip && (
-                        <>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onSelect={() => handleSkip(selectedJob.id)}
-                            className="text-destructive focus:text-destructive"
-                          >
-                            <XCircle className="mr-2 h-4 w-4" />
-                            Skip job
-                          </DropdownMenuItem>
-                        </>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-                <Tabs value={detailTab} onValueChange={(value) => setDetailTab(value as typeof detailTab)}>
-                  <TabsList className="h-8 text-xs">
-                    <TabsTrigger value="overview" className="text-xs">Overview</TabsTrigger>
-                    <TabsTrigger value="tailoring" className="text-xs">Tailoring</TabsTrigger>
-                    <TabsTrigger value="description" className="text-xs">Description</TabsTrigger>
-                  </TabsList>
-
-                  <TabsContent value="overview" className="space-y-3 pt-2">
-                    {selectedJob.suitabilityReason && (
-                      <div className="rounded border border-border/30 bg-muted/10 px-3 py-2 text-xs text-muted-foreground italic">
-                        "{selectedJob.suitabilityReason}"
-                      </div>
-                    )}
-
-                    <div className="grid gap-2 text-xs sm:grid-cols-2">
-                      <div>
-                        <div className="text-[10px] text-muted-foreground/70 uppercase tracking-wide">Discipline</div>
-                        <div className="text-foreground/80">{selectedJob.disciplines || "—"}</div>
-                      </div>
-                      <div>
-                        <div className="text-[10px] text-muted-foreground/70 uppercase tracking-wide">Function</div>
-                        <div className="text-foreground/80">{selectedJob.jobFunction || "—"}</div>
-                      </div>
-                      <div>
-                        <div className="text-[10px] text-muted-foreground/70 uppercase tracking-wide">Level</div>
-                        <div className="text-foreground/80">{selectedJob.jobLevel || "—"}</div>
-                      </div>
-                      <div>
-                        <div className="text-[10px] text-muted-foreground/70 uppercase tracking-wide">Type</div>
-                        <div className="text-foreground/80">{selectedJob.jobType || "—"}</div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <button
-                        type="button"
-                        className="w-full text-left rounded border border-border/30 bg-muted/5 px-2.5 py-2 text-[11px] text-muted-foreground/80 line-clamp-4 whitespace-pre-wrap leading-relaxed hover:bg-muted/10 transition-colors"
-                        onClick={() => setDetailTab("description")}
-                      >
-                        {description}
-                      </button>
-                      <div className="text-center">
-                        <button
-                          type="button"
-                          className="text-[10px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
-                          onClick={() => setDetailTab("description")}
-                        >
-                          View full description →
-                        </button>
-                      </div>
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="tailoring" className="pt-3">
-                    <TailoringEditor
-                      job={selectedJob}
-                      onUpdate={loadJobs}
-                      onDirtyChange={setHasUnsavedTailoring}
-                      onRegisterSave={(save) => {
-                        saveTailoringRef.current = save;
-                      }}
-                      onBeforeGenerate={() => confirmAndSaveEdits({ includeTailoring: false })}
-                    />
-                  </TabsContent>
-
-                  <TabsContent value="description" className="space-y-3 pt-3">
-                    <div className="flex items-center justify-between">
-                      <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        Job description
-                      </div>
-                      <div className="flex items-center gap-1">
-                        {!isEditingDescription ? (
-                          <Button 
-                            size="sm" 
-                            variant="ghost" 
-                            onClick={() => setIsEditingDescription(true)}
-                            className="h-8 px-2 text-xs"
-                          >
-                            <Edit2 className="mr-1.5 h-3.5 w-3.5" />
-                            Edit
-                          </Button>
-                        ) : (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => {
-                                setIsEditingDescription(false);
-                                setEditedDescription(selectedJob.jobDescription || "");
-                              }}
-                              className="h-8 px-2 text-xs text-muted-foreground"
-                              disabled={isSavingDescription}
-                            >
-                              Cancel
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={handleSaveDescription}
-                              className="h-8 px-3 text-xs"
-                              disabled={isSavingDescription}
-                            >
-                              {isSavingDescription ? (
-                                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                              ) : (
-                                <Save className="mr-1.5 h-3.5 w-3.5" />
-                              )}
-                              Save Changes
-                            </Button>
-                          </>
-                        )}
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button size="icon" variant="ghost" className="h-8 w-8" aria-label="Description actions">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem 
-                              onSelect={() => {
-                                void copyTextToClipboard(selectedJob.jobDescription || "");
-                                toast.success("Copied raw description");
-                              }}
-                            >
-                              <Copy className="mr-2 h-4 w-4" />
-                              Copy raw text
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </div>
-
-                    <div className="rounded-lg border border-border/60 bg-muted/10 p-3 text-sm text-muted-foreground">
-                      {isEditingDescription ? (
-                        <div className="space-y-3">
-                          <Textarea
-                            value={editedDescription}
-                            onChange={(event) => setEditedDescription(event.target.value)}
-                            className="min-h-[400px] font-mono text-sm leading-relaxed focus-visible:ring-1"
-                            placeholder="Enter job description..."
-                          />
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setIsEditingDescription(false);
-                                setEditedDescription(selectedJob.jobDescription || "");
-                              }}
-                              disabled={isSavingDescription}
-                            >
-                              Cancel
-                            </Button>
-                            <Button
-                              size="sm"
-                              onClick={handleSaveDescription}
-                              disabled={isSavingDescription}
-                            >
-                              {isSavingDescription ? (
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              ) : (
-                                <CheckCircle2 className="mr-2 h-4 w-4" />
-                              )}
-                              Save Description
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="whitespace-pre-wrap leading-relaxed">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{description}</ReactMarkdown>
-                        </div>
-                      )}
-                    </div>
-                  </TabsContent>
-                </Tabs>
-              </div>
-            )}
+          <div className="min-w-0 rounded-lg border border-border/40 bg-muted/5 p-4 lg:sticky lg:top-24 lg:self-start lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto hidden lg:block">
+            {detailPanelContent}
           </div>
           </div>
         </section>
       </main>
+
+      <Drawer open={isDetailDrawerOpen} onOpenChange={setIsDetailDrawerOpen}>
+        <DrawerContent className="max-h-[90vh]">
+          <div className="flex items-center justify-between px-4 pt-2">
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Job details</div>
+            <DrawerClose asChild>
+              <Button variant="ghost" size="sm" className="h-8 px-2 text-xs">
+                Close
+              </Button>
+            </DrawerClose>
+          </div>
+          <div className="max-h-[calc(90vh-3.5rem)] overflow-y-auto px-4 pb-6 pt-3">
+            {detailPanelContent}
+          </div>
+        </DrawerContent>
+      </Drawer>
     </>
   );
 };
