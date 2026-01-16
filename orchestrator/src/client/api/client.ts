@@ -19,6 +19,7 @@ import type {
   VisaSponsorStatusResponse,
   VisaSponsor,
 } from '../../shared/types';
+import { trackEvent } from '../lib/analytics';
 
 const API_BASE = '/api';
 
@@ -116,6 +117,12 @@ export async function searchUkVisaJobs(input: {
   searchTerm?: string;
   page?: number;
 }): Promise<UkVisaJobsSearchResponse> {
+  if (input.searchTerm?.trim()) {
+    trackEvent('ukvisajobs_search', {
+      searchTerm: input.searchTerm.trim(),
+      page: input.page ?? 1,
+    });
+  }
   return fetchApi<UkVisaJobsSearchResponse>('/ukvisajobs/search', {
     method: 'POST',
     body: JSON.stringify(input),
@@ -202,6 +209,13 @@ export async function searchVisaSponsors(input: {
   limit?: number;
   minScore?: number;
 }): Promise<VisaSponsorSearchResponse> {
+  if (input.query?.trim()) {
+    trackEvent('visa_sponsor_search', {
+      query: input.query.trim(),
+      limit: input.limit,
+      minScore: input.minScore,
+    });
+  }
   return fetchApi<VisaSponsorSearchResponse>('/visa-sponsors/search', {
     method: 'POST',
     body: JSON.stringify(input),
