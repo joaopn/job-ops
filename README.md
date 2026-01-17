@@ -31,7 +31,6 @@ docker compose up -d --build
 Essential variables in `.env`:
 - `OPENROUTER_API_KEY`: For job scoring and tailoring.
 - `RXRESUME_EMAIL`/`PASSWORD`: To automate PDF exports.
-- `JOBSPY_SEARCH_TERMS`: Keywords for Indeed/LinkedIn scraping.
 
 ## Structure
 - `/orchestrator`: React frontend + Node.js backend & pipeline.
@@ -45,7 +44,7 @@ Orchestrator docs here: `documentation/orchestrator.md`
 ## Read-only mode (Basic Auth)
 
 Set `BASIC_AUTH_USER` and `BASIC_AUTH_PASSWORD` in `.env` to make the app read-only for the public.
-All write actions (POST/PATCH/DELETE) require Basic Auth; browsing and viewing remain public.
+After this, all write actions (POST/PATCH/DELETE) require Basic Auth; browsing and viewing remain public.
 2. Put your exported RXResume JSON at `resume-generator/base.json`.
 3. Start: `docker compose up -d --build`
 4. Open:
@@ -88,26 +87,16 @@ pip install playwright
 python -m playwright install firefox
 ```
 
-If you're on Windows, set `PYTHON_PATH` in `orchestrator/.env` to your venv python (e.g. `..\resume-generator\.venv\Scripts\python.exe`) or use Docker/WSL.
-
 Dev URLs:
 - API: `http://localhost:3001/api`
 - UI (Vite): `http://localhost:5173`
 
-## Key endpoints
-
-- Jobs: `GET /api/jobs`, `POST /api/jobs/:id/process`, `POST /api/jobs/:id/apply`, `POST /api/jobs/:id/skip`, `POST /api/jobs/process-discovered`
-- Pipeline: `POST /api/pipeline/run`, `GET /api/pipeline/status`, `GET /api/pipeline/progress` (SSE)
-- Webhook: `POST /api/webhook/trigger` (optional auth via `WEBHOOK_SECRET`)
-- Ops: `DELETE /api/database` (wipes DB)
-
 ## Notes / sharp edges
 
 - **Crawl targets**: edit `extractors/gradcracker/src/main.ts` to change the Gradcracker location/role matrix.
-- **Notion sync is schema-dependent**: `orchestrator/src/server/services/notion.ts` assumes property names; adjust to match your Notion database.
 - **Pipeline config knobs**: `POST /api/pipeline/run` accepts `{ topN, minSuitabilityScore }`; `PIPELINE_TOP_N`/`PIPELINE_MIN_SCORE` are used by `npm run pipeline:run` (CLI runner).
 - **Anti-bot reality**: crawling is headless + "humanized", but sites can still block; expect occasional flakiness.
 
 ## License
 
-MIT
+AGPLv3
