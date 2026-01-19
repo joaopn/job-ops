@@ -851,7 +851,9 @@ apiRouter.post('/manual-jobs/import', async (req: Request, res: Response) => {
       } catch (error) {
         console.warn('Manual job scoring failed:', error);
       }
-    })();
+    })().catch((error) => {
+      console.warn('Manual job scoring task failed to start:', error);
+    });
 
     res.json({ success: true, data: createdJob });
   } catch (error) {
