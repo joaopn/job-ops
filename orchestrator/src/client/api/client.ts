@@ -186,12 +186,19 @@ export async function updateSettings(update: {
   jobspyCountryIndeed?: string | null
   jobspySites?: string[] | null
   jobspyLinkedinFetchDescription?: boolean | null
+  rxResumeBaseResumeId?: string | null
 }): Promise<AppSettings> {
   return fetchApi<AppSettings>('/settings', {
     method: 'PATCH',
     body: JSON.stringify(update),
   });
 }
+
+export async function getRxResumes(): Promise<{ id: string; name: string }[]> {
+  const data = await fetchApi<{ resumes: { id: string; name: string }[] }>('/settings/rx-resumes');
+  return data.resumes;
+}
+
 
 // Database API
 export async function clearDatabase(): Promise<{

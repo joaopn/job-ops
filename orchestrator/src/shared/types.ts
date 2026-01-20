@@ -275,7 +275,7 @@ export interface AppSettings {
   overrideModelTailoring: string | null;
   modelProjectSelection: string; // resolved
   overrideModelProjectSelection: string | null;
-  
+
   pipelineWebhookUrl: string;
   defaultPipelineWebhookUrl: string;
   overridePipelineWebhookUrl: string | null;
@@ -313,4 +313,6 @@ export interface AppSettings {
   jobspyLinkedinFetchDescription: boolean;
   defaultJobspyLinkedinFetchDescription: boolean;
   overrideJobspyLinkedinFetchDescription: boolean | null;
+  rxResumeBaseResumeId: string | null;
+  hasRxResumeApiKey: boolean;
 }

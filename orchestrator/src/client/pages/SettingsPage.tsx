@@ -22,6 +22,7 @@ import { PipelineWebhookSection } from "./settings/components/PipelineWebhookSec
 import { ResumeProjectsSection } from "./settings/components/ResumeProjectsSection"
 import { SearchTermsSection } from "./settings/components/SearchTermsSection"
 import { UkvisajobsSection } from "./settings/components/UkvisajobsSection"
+import { ReactiveResumeSection } from "./settings/components/ReactiveResumeSection"
 
 export const SettingsPage: React.FC = () => {
   const [settings, setSettings] = useState<AppSettings | null>(null)
@@ -41,6 +42,7 @@ export const SettingsPage: React.FC = () => {
   const [jobspyCountryIndeedDraft, setJobspyCountryIndeedDraft] = useState<string | null>(null)
   const [jobspySitesDraft, setJobspySitesDraft] = useState<string[] | null>(null)
   const [jobspyLinkedinFetchDescriptionDraft, setJobspyLinkedinFetchDescriptionDraft] = useState<boolean | null>(null)
+  const [rxResumeBaseResumeIdDraft, setRxResumeBaseResumeIdDraft] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [statusesToClear, setStatusesToClear] = useState<JobStatus[]>(['discovered'])
@@ -69,6 +71,7 @@ export const SettingsPage: React.FC = () => {
         setJobspyCountryIndeedDraft(data.overrideJobspyCountryIndeed)
         setJobspySitesDraft(data.overrideJobspySites)
         setJobspyLinkedinFetchDescriptionDraft(data.overrideJobspyLinkedinFetchDescription)
+        setRxResumeBaseResumeIdDraft(data.rxResumeBaseResumeId)
       })
       .catch((error) => {
         const message = error instanceof Error ? error.message : "Failed to load settings"
@@ -163,7 +166,8 @@ export const SettingsPage: React.FC = () => {
       jobspyHoursOldDraft !== (overrideJobspyHoursOld ?? null) ||
       jobspyCountryIndeedDraft !== (overrideJobspyCountryIndeed ?? null) ||
       JSON.stringify((jobspySitesDraft ?? []).slice().sort()) !== JSON.stringify((overrideJobspySites ?? []).slice().sort()) ||
-      jobspyLinkedinFetchDescriptionDraft !== (overrideJobspyLinkedinFetchDescription ?? null)
+      jobspyLinkedinFetchDescriptionDraft !== (overrideJobspyLinkedinFetchDescription ?? null) ||
+      rxResumeBaseResumeIdDraft !== (settings.rxResumeBaseResumeId ?? null)
     )
   }, [
     settings,
@@ -198,6 +202,7 @@ export const SettingsPage: React.FC = () => {
     overrideJobspyCountryIndeed,
     overrideJobspySites,
     overrideJobspyLinkedinFetchDescription,
+    rxResumeBaseResumeIdDraft,
   ])
 
   const handleSave = async () => {
@@ -222,6 +227,7 @@ export const SettingsPage: React.FC = () => {
       const jobspyCountryIndeedOverride = jobspyCountryIndeedDraft === defaultJobspyCountryIndeed ? null : jobspyCountryIndeedDraft
       const jobspySitesOverride = arraysEqual((jobspySitesDraft ?? []).slice().sort(), (defaultJobspySites ?? []).slice().sort()) ? null : jobspySitesDraft
       const jobspyLinkedinFetchDescriptionOverride = jobspyLinkedinFetchDescriptionDraft === defaultJobspyLinkedinFetchDescription ? null : jobspyLinkedinFetchDescriptionDraft
+      const rxResumeBaseResumeIdOverride = rxResumeBaseResumeIdDraft
       const updated = await api.updateSettings({
         model: trimmed.length > 0 ? trimmed : null,
         modelScorer: trimmedScorer.length > 0 ? trimmedScorer : null,
@@ -239,6 +245,7 @@ export const SettingsPage: React.FC = () => {
         jobspyCountryIndeed: jobspyCountryIndeedOverride,
         jobspySites: jobspySitesOverride,
         jobspyLinkedinFetchDescription: jobspyLinkedinFetchDescriptionOverride,
+        rxResumeBaseResumeId: rxResumeBaseResumeIdOverride,
       })
       setSettings(updated)
       setModelDraft(updated.overrideModel ?? "")
@@ -257,6 +264,7 @@ export const SettingsPage: React.FC = () => {
       setJobspyCountryIndeedDraft(updated.overrideJobspyCountryIndeed)
       setJobspySitesDraft(updated.overrideJobspySites)
       setJobspyLinkedinFetchDescriptionDraft(updated.overrideJobspyLinkedinFetchDescription)
+      setRxResumeBaseResumeIdDraft(updated.rxResumeBaseResumeId)
       toast.success("Settings saved")
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to save settings"
@@ -340,6 +348,7 @@ export const SettingsPage: React.FC = () => {
         jobspyCountryIndeed: null,
         jobspySites: null,
         jobspyLinkedinFetchDescription: null,
+        rxResumeBaseResumeId: null,
       })
       setSettings(updated)
       setModelDraft("")
@@ -358,6 +367,7 @@ export const SettingsPage: React.FC = () => {
       setJobspyCountryIndeedDraft(null)
       setJobspySitesDraft(null)
       setJobspyLinkedinFetchDescriptionDraft(null)
+      setRxResumeBaseResumeIdDraft(null)
       toast.success("Reset to default")
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to reset settings"
@@ -468,6 +478,13 @@ export const SettingsPage: React.FC = () => {
             profileProjects={profileProjects}
             lockedCount={lockedCount}
             maxProjectsTotal={maxProjectsTotal}
+            isLoading={isLoading}
+            isSaving={isSaving}
+          />
+          <ReactiveResumeSection
+            rxResumeBaseResumeIdDraft={rxResumeBaseResumeIdDraft}
+            setRxResumeBaseResumeIdDraft={setRxResumeBaseResumeIdDraft}
+            hasRxResumeApiKey={settings?.hasRxResumeApiKey ?? false}
             isLoading={isLoading}
             isSaving={isSaving}
           />

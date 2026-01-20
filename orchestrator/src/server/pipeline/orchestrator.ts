@@ -25,6 +25,7 @@ import * as settingsRepo from '../repositories/settings.js';
 import { progressHelpers, resetProgress, updateProgress } from './progress.js';
 import type { CreateJobInput, Job, JobSource, PipelineConfig } from '../../shared/types.js';
 import { getDataDir } from '../config/dataDir.js';
+import { getResume } from '../services/rxresume.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_PROFILE_PATH = join(__dirname, '../../../../resume-generator/base.json');
@@ -553,10 +554,16 @@ export function getPipelineStatus(): { isRunning: boolean } {
  */
 async function loadProfile(profilePath: string): Promise<Record<string, unknown>> {
   try {
+    const rxResumeBaseResumeId = await settingsRepo.getSetting('rxResumeBaseResumeId');
+    if (rxResumeBaseResumeId) {
+      const resume = await getResume(rxResumeBaseResumeId);
+      return resume.data as Record<string, unknown>;
+    }
+
     const content = await readFile(profilePath, 'utf-8');
     return JSON.parse(content);
   } catch (error) {
-    console.warn('Failed to load profile, using empty object');
+    console.warn(`Failed to load profile from ${profilePath}, using empty object`, error);
     return {};
   }
 }

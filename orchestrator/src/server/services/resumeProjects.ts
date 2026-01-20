@@ -1,7 +1,8 @@
-import { readFile } from 'fs/promises';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
+import { getSetting } from '../repositories/settings.js';
+import { getResume } from './rxresume.js';
 import type { ResumeProjectCatalogItem, ResumeProjectsSettings } from '../../shared/types.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -12,8 +13,30 @@ export const DEFAULT_RESUME_PROFILE_PATH =
 type ResumeProjectSelectionItem = ResumeProjectCatalogItem & { summaryText: string };
 
 export async function loadResumeProfile(profilePath: string = DEFAULT_RESUME_PROFILE_PATH): Promise<unknown> {
-  const content = await readFile(profilePath, 'utf-8');
-  return JSON.parse(content) as unknown;
+  try {
+    const rxResumeBaseResumeId = await getSetting('rxResumeBaseResumeId');
+    if (rxResumeBaseResumeId) {
+      const resume = await getResume(rxResumeBaseResumeId);
+      return resume.data;
+    }
+
+    const { readFile } = await import('fs/promises');
+    const content = await readFile(profilePath, 'utf-8');
+    return JSON.parse(content);
+  } catch (error) {
+    console.warn(`Failed to load profile, using fallback if possible`, error);
+    // If Reactive Resume failed but we have a path, try reading file
+    if (profilePath) {
+      try {
+        const { readFile } = await import('fs/promises');
+        const content = await readFile(profilePath, 'utf-8');
+        return JSON.parse(content);
+      } catch (innerError) {
+        // ignore
+      }
+    }
+    return {};
+  }
 }
 
 export function extractProjectsFromProfile(profile: unknown): {
