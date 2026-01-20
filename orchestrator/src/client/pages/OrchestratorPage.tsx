@@ -3,6 +3,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -24,17 +25,81 @@ import { usePipelineSources } from "./orchestrator/usePipelineSources";
 import { getJobCounts } from "./orchestrator/utils";
 
 export const OrchestratorPage: React.FC = () => {
+  const { tab } = useParams<{ tab: string }>();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const activeTab = useMemo(() => {
+    const validTabs: FilterTab[] = ["ready", "discovered", "applied", "all"];
+    if (tab && validTabs.includes(tab as FilterTab)) {
+      return tab as FilterTab;
+    }
+    return "ready";
+  }, [tab]);
+
+  // Sync searchQuery with URL
+  const searchQuery = searchParams.get("q") || "";
+  const setSearchQuery = (q: string) => {
+    setSearchParams(
+      (prev) => {
+        if (q) prev.set("q", q);
+        else prev.delete("q");
+        return prev;
+      },
+      { replace: true },
+    );
+  };
+
+  // Sync sourceFilter with URL
+  const sourceFilter = (searchParams.get("source") as JobSource | "all") || "all";
+  const setSourceFilter = (source: JobSource | "all") => {
+    setSearchParams(
+      (prev) => {
+        if (source !== "all") prev.set("source", source);
+        else prev.delete("source");
+        return prev;
+      },
+      { replace: true },
+    );
+  };
+
+  // Sync sort with URL
+  const sort = useMemo((): JobSort => {
+    const s = searchParams.get("sort");
+    if (!s) return DEFAULT_SORT;
+    const [key, direction] = s.split(":");
+    return { key: key as any, direction: direction as any };
+  }, [searchParams]);
+
+  const setSort = (newSort: JobSort) => {
+    setSearchParams(
+      (prev) => {
+        prev.set("sort", `${newSort.key}:${newSort.direction}`);
+        return prev;
+      },
+      { replace: true },
+    );
+  };
+
+  // Effect to sync URL if it was invalid
+  useEffect(() => {
+    const validTabs: FilterTab[] = ["ready", "discovered", "applied", "all"];
+    if (tab && !validTabs.includes(tab as FilterTab)) {
+      navigate("/ready", { replace: true });
+    }
+  }, [tab, navigate]);
+
   const [navOpen, setNavOpen] = useState(false);
   const [isManualImportOpen, setIsManualImportOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<FilterTab>("ready");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [sourceFilter, setSourceFilter] = useState<JobSource | "all">("all");
-  const [sort, setSort] = useState<JobSort>(DEFAULT_SORT);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(
     () => (typeof window !== "undefined" ? window.matchMedia("(min-width: 1024px)").matches : false),
   );
+
+  const setActiveTab = (newTab: FilterTab) => {
+    navigate(`/${newTab}`);
+  };
 
   const { pipelineSources, setPipelineSources, toggleSource } = usePipelineSources();
   const { jobs, stats, isLoading, isPipelineRunning, setIsPipelineRunning, loadJobs } = useOrchestratorData();
