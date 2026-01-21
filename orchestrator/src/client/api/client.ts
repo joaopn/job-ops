@@ -171,15 +171,11 @@ export async function getSettings(): Promise<AppSettings> {
 }
 
 export async function getProfileProjects(): Promise<ResumeProjectCatalogItem[]> {
-  return fetchApi<ResumeProjectCatalogItem[]>('/profile/projects', {
-    method: 'POST',
-  });
+  return fetchApi<ResumeProjectCatalogItem[]>('/profile/projects');
 }
 
 export async function getProfile(): Promise<any> {
-  return fetchApi<any>('/profile', {
-    method: 'POST',
-  });
+  return fetchApi<any>('/profile');
 }
 
 

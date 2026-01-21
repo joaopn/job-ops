@@ -4,9 +4,9 @@ import { extractProjectsFromProfile, loadResumeProfile } from '../../services/re
 export const profileRouter = Router();
 
 /**
- * POST /api/profile/projects - Get all projects available in the base resume
+ * GET /api/profile/projects - Get all projects available in the base resume
  */
-profileRouter.post('/projects', async (req: Request, res: Response) => {
+profileRouter.get('/projects', async (req: Request, res: Response) => {
   try {
     const profile = await loadResumeProfile();
     const { catalog } = extractProjectsFromProfile(profile);
@@ -18,9 +18,9 @@ profileRouter.post('/projects', async (req: Request, res: Response) => {
 });
 
 /**
- * POST /api/profile - Get the full base resume profile
+ * GET /api/profile - Get the full base resume profile
  */
-profileRouter.post('/', async (req: Request, res: Response) => {
+profileRouter.get('/', async (req: Request, res: Response) => {
   try {
     const profile = await loadResumeProfile();
     res.json({ success: true, data: profile });
