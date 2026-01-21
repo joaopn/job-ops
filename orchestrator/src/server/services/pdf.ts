@@ -13,6 +13,7 @@ import { getSetting } from '../repositories/settings.js';
 import { pickProjectIdsForJob } from './projectSelection.js';
 import { extractProjectsFromProfile, resolveResumeProjectsSettings } from './resumeProjects.js';
 import { getDataDir } from '../config/dataDir.js';
+import { getProfile } from './profile.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -59,7 +60,9 @@ export async function generatePdf(
     }
 
     // Read base resume
-    const baseResume = JSON.parse(await readFile(resumeJsonPath, 'utf-8'));
+    const baseResume = baseResumePath
+      ? JSON.parse(await readFile(baseResumePath, 'utf-8'))
+      : JSON.parse(JSON.stringify(await getProfile())); // Deep copy from cache
 
     // Inject tailored summary
     if (tailoredContent.summary) {

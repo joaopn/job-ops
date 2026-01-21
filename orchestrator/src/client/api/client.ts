@@ -171,7 +171,15 @@ export async function getSettings(): Promise<AppSettings> {
 }
 
 export async function getProfileProjects(): Promise<ResumeProjectCatalogItem[]> {
-  return fetchApi<ResumeProjectCatalogItem[]>('/profile/projects');
+  return fetchApi<ResumeProjectCatalogItem[]>('/profile/projects', {
+    method: 'POST',
+  });
+}
+
+export async function getProfile(): Promise<any> {
+  return fetchApi<any>('/profile', {
+    method: 'POST',
+  });
 }
 
 

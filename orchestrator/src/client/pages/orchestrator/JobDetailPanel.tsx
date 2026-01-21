@@ -30,6 +30,7 @@ import { copyTextToClipboard, formatJobForWebhook, safeFilenamePart, stripHtml }
 import { DiscoveredPanel, FitAssessment, JobHeader, TailoredSummary } from "../../components";
 import { ReadyPanel } from "../../components/ReadyPanel";
 import { TailoringEditor } from "../../components/TailoringEditor";
+import { useProfile } from "../../hooks/useProfile";
 import * as api from "../../api";
 import type { Job } from "../../../shared/types";
 import type { FilterTab } from "./constants";
@@ -58,6 +59,8 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
   const [hasUnsavedTailoring, setHasUnsavedTailoring] = useState(false);
   const [processingJobId, setProcessingJobId] = useState<string | null>(null);
   const saveTailoringRef = useRef<null | (() => Promise<void>)>(null);
+
+  const { personName } = useProfile();
 
   useEffect(() => {
     setHasUnsavedTailoring(false);
@@ -363,7 +366,7 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
                 <DropdownMenuItem asChild>
                   <a
                     href={selectedPdfHref}
-                    download={`Shaheer_Sarfaraz_${safeFilenamePart(selectedJob.employer)}.pdf`}
+                    download={`${personName.replace(/\s+/g, '_')}_${safeFilenamePart(selectedJob.employer)}.pdf`}
                   >
                     <FileText className="mr-2 h-4 w-4" />
                     Download PDF

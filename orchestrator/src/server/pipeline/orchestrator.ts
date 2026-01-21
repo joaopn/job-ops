@@ -16,6 +16,7 @@ import { runUkVisaJobs } from '../services/ukvisajobs.js';
 import { scoreJobSuitability } from '../services/scorer.js';
 import { generateTailoring } from '../services/summary.js';
 import { generatePdf } from '../services/pdf.js';
+import { getProfile } from '../services/profile.js';
 import { getSetting } from '../repositories/settings.js';
 import { pickProjectIdsForJob } from '../services/projectSelection.js';
 import { extractProjectsFromProfile, resolveResumeProjectsSettings } from '../services/resumeProjects.js';
@@ -112,7 +113,7 @@ export async function runPipeline(config: Partial<PipelineConfig> = {}): Promise
   try {
     // Step 1: Load profile
     console.log('\n📋 Loading profile...');
-    const profile = await loadProfile(mergedConfig.profilePath);
+    const profile = await getProfile();
 
     // Step 2: Run crawler
     console.log('\n🕷️ Running crawler...');
@@ -429,7 +430,7 @@ export async function summarizeJob(
     const job = await jobsRepo.getJobById(jobId);
     if (!job) return { success: false, error: 'Job not found' };
 
-    const profile = await loadProfile(DEFAULT_PROFILE_PATH);
+    const profile = await getProfile();
 
     // 1. Generate Summary & Tailoring
     let tailoredSummary = job.tailoredSummary;
@@ -566,15 +567,3 @@ export function getPipelineStatus(): { isRunning: boolean } {
   return { isRunning: isPipelineRunning };
 }
 
-/**
- * Load the user profile from JSON file.
- */
-async function loadProfile(profilePath: string): Promise<Record<string, unknown>> {
-  try {
-    const content = await readFile(profilePath, 'utf-8');
-    return JSON.parse(content);
-  } catch (error) {
-    console.warn('Failed to load profile, using empty object');
-    return {};
-  }
-}

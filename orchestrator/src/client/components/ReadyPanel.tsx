@@ -45,6 +45,7 @@ import { cn, copyTextToClipboard, formatJobForWebhook } from "@/lib/utils";
 import * as api from "../api";
 import { FitAssessment, JobHeader, TailoredSummary } from ".";
 import { TailorMode } from "./discovered-panel/TailorMode";
+import { useProfile } from "../hooks/useProfile";
 import type { Job, ResumeProjectCatalogItem } from "../../shared/types";
 
 type PanelMode = "ready" | "tailor";
@@ -73,6 +74,8 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
     employer: string;
     timeoutId: ReturnType<typeof setTimeout>;
   } | null>(null);
+
+  const { personName } = useProfile();
 
   // Load project catalog once
   useEffect(() => {
@@ -279,7 +282,7 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
           <Button asChild variant="outline" className="h-9 w-full gap-1 px-2 text-xs">
             <a
               href={pdfHref}
-              download={`Shaheer_Sarfaraz_${safeFilenamePart(job.employer)}.pdf`}
+              download={`${personName.replace(/\s+/g, '_')}_${safeFilenamePart(job.employer)}.pdf`}
             >
               <Download className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">Download PDF</span>

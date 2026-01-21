@@ -4,6 +4,8 @@ import { fileURLToPath } from 'url';
 
 import type { ResumeProjectCatalogItem, ResumeProjectsSettings } from '../../shared/types.js';
 
+import { getProfile } from './profile.js';
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export const DEFAULT_RESUME_PROFILE_PATH =
@@ -12,6 +14,9 @@ export const DEFAULT_RESUME_PROFILE_PATH =
 type ResumeProjectSelectionItem = ResumeProjectCatalogItem & { summaryText: string };
 
 export async function loadResumeProfile(profilePath: string = DEFAULT_RESUME_PROFILE_PATH): Promise<unknown> {
+  if (profilePath === DEFAULT_RESUME_PROFILE_PATH) {
+    return getProfile();
+  }
   const content = await readFile(profilePath, 'utf-8');
   return JSON.parse(content) as unknown;
 }
