@@ -21,13 +21,11 @@ vi.mock("../../pipeline/index.js", () => {
   };
 
   return {
-    runPipeline: vi
-      .fn()
-      .mockResolvedValue({
-        success: true,
-        jobsDiscovered: 0,
-        jobsProcessed: 0,
-      }),
+    runPipeline: vi.fn().mockResolvedValue({
+      success: true,
+      jobsDiscovered: 0,
+      jobsProcessed: 0,
+    }),
     processJob: vi.fn().mockResolvedValue({ success: true }),
     summarizeJob: vi.fn().mockResolvedValue({ success: true }),
     generateFinalPdf: vi.fn().mockResolvedValue({ success: true }),

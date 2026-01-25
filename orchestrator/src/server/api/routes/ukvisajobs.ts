@@ -29,23 +29,19 @@ ukVisaJobsRouter.post("/search", async (req: Request, res: Response) => {
     const input = ukVisaJobsSearchSchema.parse(req.body ?? {});
 
     if (isUkVisaJobsSearchRunning) {
-      return res
-        .status(409)
-        .json({
-          success: false,
-          error: "UK Visa Jobs search is already running",
-        });
+      return res.status(409).json({
+        success: false,
+        error: "UK Visa Jobs search is already running",
+      });
     }
 
     const { isRunning } = getPipelineStatus();
     if (isRunning) {
-      return res
-        .status(409)
-        .json({
-          success: false,
-          error:
-            "Pipeline is running. Stop it before running UK Visa Jobs search.",
-        });
+      return res.status(409).json({
+        success: false,
+        error:
+          "Pipeline is running. Stop it before running UK Visa Jobs search.",
+      });
     }
 
     isUkVisaJobsSearchRunning = true;
@@ -53,12 +49,10 @@ ukVisaJobsRouter.post("/search", async (req: Request, res: Response) => {
 
     const rawTerms = input.searchTerms ?? [];
     if (rawTerms.length > 1) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          error: "Pagination supports a single search term.",
-        });
+      return res.status(400).json({
+        success: false,
+        error: "Pagination supports a single search term.",
+      });
     }
 
     const searchTerm = input.searchTerm ?? input.query ?? rawTerms[0];
