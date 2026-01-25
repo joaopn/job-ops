@@ -122,6 +122,10 @@ describe.sequential("Jobs API routes", () => {
       employer: "Acme",
       jobUrl: "https://example.com/job/5",
       jobDescription: "Test description",
+    });
+
+    const { updateJob } = await import("../../repositories/jobs.js");
+    await updateJob(job.id, {
       suitabilityScore: 55,
       suitabilityReason: "Old fit",
     });

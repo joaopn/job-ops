@@ -71,7 +71,31 @@ vi.mock("fs/promises", async () => {
   };
 });
 
+vi.mock("node:fs/promises", async () => {
+  return {
+    default: mocks,
+    ...mocks,
+  };
+});
+
 vi.mock("fs", () => ({
+  existsSync: vi.fn().mockReturnValue(true),
+  createWriteStream: vi.fn().mockReturnValue({
+    on: vi.fn(),
+    write: vi.fn(),
+    end: vi.fn(),
+  }),
+  default: {
+    existsSync: vi.fn().mockReturnValue(true),
+    createWriteStream: vi.fn().mockReturnValue({
+      on: vi.fn(),
+      write: vi.fn(),
+      end: vi.fn(),
+    }),
+  },
+}));
+
+vi.mock("node:fs", () => ({
   existsSync: vi.fn().mockReturnValue(true),
   createWriteStream: vi.fn().mockReturnValue({
     on: vi.fn(),
@@ -125,7 +149,7 @@ vi.mock("./resumeProjects.js", () => ({
 
 // Mock the RxResumeClient
 vi.mock("./rxresume-client.js", () => ({
-  RxResumeClient: vi.fn().mockImplementation(() => mockRxResumeClient),
+  RxResumeClient: vi.fn().mockImplementation(function() { return mockRxResumeClient; }),
 }));
 
 // Mock stream pipeline for downloading PDF
@@ -136,8 +160,30 @@ vi.mock("stream/promises", () => ({
   },
 }));
 
+vi.mock("node:stream/promises", () => ({
+  pipeline: vi.fn().mockResolvedValue(undefined),
+  default: {
+    pipeline: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
 // Mock stream Readable
 vi.mock("stream", () => ({
+  Readable: {
+    fromWeb: vi.fn().mockReturnValue({
+      pipe: vi.fn(),
+    }),
+  },
+  default: {
+    Readable: {
+      fromWeb: vi.fn().mockReturnValue({
+        pipe: vi.fn(),
+      }),
+    },
+  },
+}));
+
+vi.mock("node:stream", () => ({
   Readable: {
     fromWeb: vi.fn().mockReturnValue({
       pipe: vi.fn(),

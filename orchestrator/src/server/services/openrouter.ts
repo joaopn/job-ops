@@ -136,7 +136,7 @@ export async function callOpenRouter<T>(
       const shouldRetry =
         message.includes("parse") ||
         status === 429 ||
-        (status >= 500 && status <= 599) ||
+        (status !== undefined && status >= 500 && status <= 599) ||
         message.toLowerCase().includes("timeout") ||
         message.toLowerCase().includes("fetch failed");
 

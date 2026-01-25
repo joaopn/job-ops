@@ -49,7 +49,7 @@ export async function getProfile(forceRefresh = false): Promise<ResumeProfile> {
       throw new Error("Resume data is empty or invalid");
     }
 
-    cachedProfile = resume.data;
+    cachedProfile = resume.data as unknown as ResumeProfile;
     cachedResumeId = rxresumeBaseResumeId;
     console.log(`✅ Profile loaded from RxResume v4 API`);
     return cachedProfile;

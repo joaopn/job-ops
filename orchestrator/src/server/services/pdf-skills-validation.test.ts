@@ -76,7 +76,31 @@ vi.mock("fs/promises", async () => {
   };
 });
 
+vi.mock("node:fs/promises", async () => {
+  return {
+    default: mocks,
+    ...mocks,
+  };
+});
+
 vi.mock("fs", () => ({
+  existsSync: vi.fn().mockReturnValue(true),
+  createWriteStream: vi.fn().mockReturnValue({
+    on: vi.fn(),
+    write: vi.fn(),
+    end: vi.fn(),
+  }),
+  default: {
+    existsSync: vi.fn().mockReturnValue(true),
+    createWriteStream: vi.fn().mockReturnValue({
+      on: vi.fn(),
+      write: vi.fn(),
+      end: vi.fn(),
+    }),
+  },
+}));
+
+vi.mock("node:fs", () => ({
   existsSync: vi.fn().mockReturnValue(true),
   createWriteStream: vi.fn().mockReturnValue({
     on: vi.fn(),
@@ -126,7 +150,9 @@ vi.mock("./resumeProjects.js", () => ({
 
 // Mock the RxResumeClient
 vi.mock("./rxresume-client.js", () => ({
-  RxResumeClient: vi.fn().mockImplementation(() => mockRxResumeClient),
+  RxResumeClient: vi.fn().mockImplementation(function (this: any) {
+    return mockRxResumeClient;
+  }),
 }));
 
 // Mock stream pipeline for downloading PDF
@@ -137,8 +163,30 @@ vi.mock("stream/promises", () => ({
   },
 }));
 
+vi.mock("node:stream/promises", () => ({
+  pipeline: vi.fn().mockResolvedValue(undefined),
+  default: {
+    pipeline: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
 // Mock stream Readable
 vi.mock("stream", () => ({
+  Readable: {
+    fromWeb: vi.fn().mockReturnValue({
+      pipe: vi.fn(),
+    }),
+  },
+  default: {
+    Readable: {
+      fromWeb: vi.fn().mockReturnValue({
+        pipe: vi.fn(),
+      }),
+    },
+  },
+}));
+
+vi.mock("node:stream", () => ({
   Readable: {
     fromWeb: vi.fn().mockReturnValue({
       pipe: vi.fn(),
@@ -217,12 +265,20 @@ describe("PDF Service Skills Validation", () => {
       sections: {
         ...mockProfile.sections,
         skills: {
+          ...mockProfile.sections.skills,
           items: [
-            { name: "Invalid Skill" }, // Missing visible, description, id, level
+            {
+              id: "invalid-1",
+              name: "Invalid Skill",
+              description: "",
+              level: 1,
+              keywords: [],
+              visible: true,
+            },
           ],
         },
       },
-    };
+    } as any;
     vi.mocked(getProfile).mockResolvedValueOnce(invalidProfile);
 
     // No tailoring, pass dummy path to bypass getProfile cache and use readFile mock
@@ -246,14 +302,36 @@ describe("PDF Service Skills Validation", () => {
       sections: {
         ...mockProfile.sections,
         skills: {
+          ...mockProfile.sections.skills,
           items: [
-            { name: "Skill 1", keywords: ["a"] },
-            { name: "Skill 2", keywords: ["b"] },
-            { name: "Skill 3", keywords: ["c"] },
+            {
+              id: "",
+              name: "Skill 1",
+              keywords: ["a"],
+              description: "",
+              level: 1,
+              visible: true,
+            },
+            {
+              id: "",
+              name: "Skill 2",
+              keywords: ["b"],
+              description: "",
+              level: 1,
+              visible: true,
+            },
+            {
+              id: "",
+              name: "Skill 3",
+              keywords: ["c"],
+              description: "",
+              level: 1,
+              visible: true,
+            },
           ],
         },
       },
-    };
+    } as any;
     vi.mocked(getProfile).mockResolvedValueOnce(profileWithoutIds);
 
     await generatePdf("job-cuid2-test", {}, "Job Desc", "dummy.json");
@@ -285,10 +363,20 @@ describe("PDF Service Skills Validation", () => {
       sections: {
         ...mockProfile.sections,
         skills: {
-          items: [{ name: "Skill Without ID", keywords: ["test"] }],
+          ...mockProfile.sections.skills,
+          items: [
+            {
+              id: "",
+              name: "Skill Without ID",
+              keywords: ["test"],
+              description: "",
+              level: 1,
+              visible: true,
+            },
+          ],
         },
       },
-    };
+    } as any;
     vi.mocked(getProfile).mockResolvedValueOnce(profileWithoutIds);
 
     await generatePdf("job-no-skill-prefix", {}, "Job Desc", "dummy.json");

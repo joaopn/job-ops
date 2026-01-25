@@ -29,15 +29,24 @@ describe("Resume Projects Logic", () => {
               {
                 id: "p1",
                 name: "Proj 1",
+                description: "Desc 1",
                 summary: "<p>Desc 1</p>",
+                date: "2024",
                 visible: true,
               },
-              { id: "p2", name: "Proj 2", summary: "Desc 2", visible: false },
-              { name: "No ID" }, // Should be skipped
+              {
+                id: "p2",
+                name: "Proj 2",
+                description: "Desc 2",
+                summary: "Desc 2",
+                date: "2023",
+                visible: false,
+              },
+              { name: "No ID" } as any, // Should be skipped
             ],
           },
         },
-      };
+      } as any;
 
       const { catalog, selectionItems } =
         rp.extractProjectsFromProfile(profile);
