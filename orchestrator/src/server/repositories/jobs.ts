@@ -6,13 +6,20 @@ import { randomUUID } from "node:crypto";
 import type {
   CreateJobInput,
   Job,
+  JobListItem,
   JobStatus,
+  JobsRevisionResponse,
   UpdateJobInput,
 } from "@shared/types";
 import { and, desc, eq, inArray, isNull, lt, ne, sql } from "drizzle-orm";
 import { db, schema } from "../db/index";
 
 const { jobs } = schema;
+
+function normalizeStatusFilter(statuses?: JobStatus[]): string | null {
+  if (!statuses || statuses.length === 0) return null;
+  return Array.from(new Set(statuses)).sort().join(",");
+}
 
 /**
  * Get all jobs, optionally filtered by status.
@@ -29,6 +36,87 @@ export async function getAllJobs(statuses?: JobStatus[]): Promise<Job[]> {
 
   const rows = await query;
   return rows.map(mapRowToJob);
+}
+
+/**
+ * Get lightweight list items for jobs, optionally filtered by status.
+ */
+export async function getJobListItems(
+  statuses?: JobStatus[],
+): Promise<JobListItem[]> {
+  const selection = {
+    id: jobs.id,
+    source: jobs.source,
+    title: jobs.title,
+    employer: jobs.employer,
+    jobUrl: jobs.jobUrl,
+    applicationLink: jobs.applicationLink,
+    datePosted: jobs.datePosted,
+    deadline: jobs.deadline,
+    salary: jobs.salary,
+    location: jobs.location,
+    status: jobs.status,
+    suitabilityScore: jobs.suitabilityScore,
+    sponsorMatchScore: jobs.sponsorMatchScore,
+    jobType: jobs.jobType,
+    jobFunction: jobs.jobFunction,
+    salaryMinAmount: jobs.salaryMinAmount,
+    salaryMaxAmount: jobs.salaryMaxAmount,
+    salaryCurrency: jobs.salaryCurrency,
+    discoveredAt: jobs.discoveredAt,
+    appliedAt: jobs.appliedAt,
+    updatedAt: jobs.updatedAt,
+  } as const;
+
+  const query =
+    statuses && statuses.length > 0
+      ? db
+          .select(selection)
+          .from(jobs)
+          .where(inArray(jobs.status, statuses))
+          .orderBy(desc(jobs.discoveredAt))
+      : db.select(selection).from(jobs).orderBy(desc(jobs.discoveredAt));
+
+  const rows = await query;
+  return rows.map((row) => ({
+    ...row,
+    source: row.source as JobListItem["source"],
+    status: row.status as JobStatus,
+  }));
+}
+
+/**
+ * Get a lightweight revision token for jobs list invalidation.
+ */
+export async function getJobsRevision(
+  statuses?: JobStatus[],
+): Promise<JobsRevisionResponse> {
+  const statusFilter = normalizeStatusFilter(statuses);
+  const whereClause =
+    statuses && statuses.length > 0
+      ? inArray(jobs.status, statuses)
+      : undefined;
+
+  const baseQuery = db
+    .select({
+      latestUpdatedAt: sql<string | null>`max(${jobs.updatedAt})`,
+      total: sql<number>`count(*)`,
+    })
+    .from(jobs);
+  const [row] = whereClause
+    ? await baseQuery.where(whereClause)
+    : await baseQuery;
+
+  const latestUpdatedAt = row?.latestUpdatedAt ?? null;
+  const total = row?.total ?? 0;
+  const revision = `${latestUpdatedAt ?? "none"}:${total}:${statusFilter ?? "all"}`;
+
+  return {
+    revision,
+    latestUpdatedAt,
+    total,
+    statusFilter,
+  };
 }
 
 /**

@@ -12,9 +12,11 @@ import type {
   BulkJobActionResponse,
   DemoInfoResponse,
   Job,
+  JobListItem,
   JobOutcome,
   JobSource,
   JobsListResponse,
+  JobsRevisionResponse,
   ManualJobDraft,
   ManualJobFetchResponse,
   ManualJobInferenceResponse,
@@ -157,9 +159,39 @@ async function fetchApi<T>(
 }
 
 // Jobs API
-export async function getJobs(statuses?: string[]): Promise<JobsListResponse> {
-  const query = statuses?.length ? `?status=${statuses.join(",")}` : "";
-  return fetchApi<JobsListResponse>(`/jobs${query}`);
+export function getJobs(): Promise<JobsListResponse<JobListItem>>;
+export function getJobs(options: {
+  statuses?: string[];
+  view?: "list";
+}): Promise<JobsListResponse<JobListItem>>;
+export function getJobs(options?: {
+  statuses?: string[];
+  view: "full";
+}): Promise<JobsListResponse<Job>>;
+export async function getJobs(options?: {
+  statuses?: string[];
+  view?: "full" | "list";
+}): Promise<JobsListResponse<Job> | JobsListResponse<JobListItem>> {
+  const params = new URLSearchParams();
+  if (options?.statuses?.length)
+    params.set("status", options.statuses.join(","));
+  if (options?.view) params.set("view", options.view);
+  const query = params.toString();
+  return fetchApi<JobsListResponse<Job> | JobsListResponse<JobListItem>>(
+    `/jobs${query ? `?${query}` : ""}`,
+  );
+}
+
+export async function getJobsRevision(options?: {
+  statuses?: string[];
+}): Promise<JobsRevisionResponse> {
+  const params = new URLSearchParams();
+  if (options?.statuses?.length)
+    params.set("status", options.statuses.join(","));
+  const query = params.toString();
+  return fetchApi<JobsRevisionResponse>(
+    `/jobs/revision${query ? `?${query}` : ""}`,
+  );
 }
 
 export async function getJob(id: string): Promise<Job> {
