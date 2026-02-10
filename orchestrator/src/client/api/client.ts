@@ -40,11 +40,19 @@ const API_BASE = "/api";
 
 class ApiClientError extends Error {
   requestId?: string;
+  status?: number;
+  code?: string;
 
-  constructor(message: string, requestId?: string) {
+  constructor(
+    message: string,
+    options?: { requestId?: string; status?: number; code?: string },
+  ) {
+    const requestId = options?.requestId;
     super(requestId ? `${message} (requestId: ${requestId})` : message);
     this.name = "ApiClientError";
     this.requestId = requestId;
+    this.status = options?.status;
+    this.code = options?.code;
   }
 }
 
@@ -60,6 +68,43 @@ type LegacyApiResponse<T> =
       message?: string;
       details?: unknown;
     };
+
+export type BasicAuthCredentials = {
+  username: string;
+  password: string;
+};
+
+export type BasicAuthPromptRequest = {
+  endpoint: string;
+  method: string;
+  attempt: number;
+  usernameHint?: string;
+  errorMessage?: string;
+};
+
+type BasicAuthPromptHandler = (
+  request: BasicAuthPromptRequest,
+) => Promise<BasicAuthCredentials | null>;
+
+let basicAuthPromptHandler: BasicAuthPromptHandler | null = null;
+let basicAuthPromptInFlight: Promise<BasicAuthCredentials | null> | null = null;
+let cachedBasicAuthCredentials: BasicAuthCredentials | null = null;
+
+export function setBasicAuthPromptHandler(
+  handler: BasicAuthPromptHandler | null,
+): void {
+  basicAuthPromptHandler = handler;
+}
+
+export function clearBasicAuthCredentials(): void {
+  cachedBasicAuthCredentials = null;
+}
+
+export function __resetApiClientAuthForTests(): void {
+  basicAuthPromptHandler = null;
+  basicAuthPromptInFlight = null;
+  cachedBasicAuthCredentials = null;
+}
 
 function normalizeApiResponse<T>(
   payload: unknown,
@@ -104,16 +149,98 @@ function describeAction(endpoint: string, method?: string): string {
   return "This action ran in demo simulation mode.";
 }
 
-async function fetchApi<T>(
+function encodeBasicAuth(credentials: BasicAuthCredentials): string {
+  return `Basic ${btoa(`${credentials.username}:${credentials.password}`)}`;
+}
+
+function normalizeHeaders(headers?: HeadersInit): Record<string, string> {
+  if (!headers) return {};
+  if (headers instanceof Headers) {
+    const next: Record<string, string> = {};
+    headers.forEach((value, key) => {
+      next[key] = value;
+    });
+    return next;
+  }
+  if (Array.isArray(headers)) {
+    return Object.fromEntries(headers);
+  }
+  return { ...headers };
+}
+
+function isWriteMethod(method: string): boolean {
+  return !["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase());
+}
+
+function isUnauthorizedResponse<T>(
+  response: Response,
+  parsed: ApiResponse<T> | LegacyApiResponse<T>,
+): boolean {
+  if (response.status !== 401) return false;
+  if ("ok" in parsed) {
+    return parsed.ok ? false : parsed.error.code === "UNAUTHORIZED";
+  }
+  return !parsed.success;
+}
+
+function toApiError<T>(
+  response: Response,
+  parsed: ApiResponse<T> | LegacyApiResponse<T>,
+): ApiClientError {
+  if ("ok" in parsed) {
+    if (!parsed.ok) {
+      return new ApiClientError(parsed.error.message || "API request failed", {
+        requestId: parsed.meta?.requestId,
+        status: response.status,
+        code: parsed.error.code,
+      });
+    }
+    return new ApiClientError("API request failed", {
+      requestId: parsed.meta?.requestId,
+      status: response.status,
+    });
+  }
+  if (parsed.success) {
+    return new ApiClientError(parsed.message || "API request failed", {
+      status: response.status,
+    });
+  }
+  return new ApiClientError(
+    parsed.error || parsed.message || "API request failed",
+    {
+      status: response.status,
+    },
+  );
+}
+
+async function requestBasicAuthCredentials(
+  request: BasicAuthPromptRequest,
+): Promise<BasicAuthCredentials | null> {
+  if (!basicAuthPromptHandler) return null;
+  if (!basicAuthPromptInFlight) {
+    basicAuthPromptInFlight = basicAuthPromptHandler(request).finally(() => {
+      basicAuthPromptInFlight = null;
+    });
+  }
+  return basicAuthPromptInFlight;
+}
+
+async function fetchAndParse<T>(
   endpoint: string,
-  options?: RequestInit,
-): Promise<T> {
+  options: RequestInit | undefined,
+  authHeader?: string,
+): Promise<{
+  response: Response;
+  parsed: ApiResponse<T> | LegacyApiResponse<T>;
+}> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...normalizeHeaders(options?.headers),
+  };
+  if (authHeader) headers.Authorization = authHeader;
   const response = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options?.headers,
-    },
+    headers,
   });
 
   const text = await response.text();
@@ -122,40 +249,88 @@ async function fetchApi<T>(
   try {
     payload = JSON.parse(text);
   } catch {
-    // If the response is not JSON, it's likely an HTML error page
-    console.error("API returned non-JSON response:", text.substring(0, 500));
+    // If the response is not JSON, it's likely an HTML error page.
     throw new ApiClientError(
       `Server error (${response.status}): Expected JSON but received HTML. Is the backend server running?`,
+      { status: response.status },
     );
   }
   const parsed = normalizeApiResponse<T>(payload);
+  return { response, parsed };
+}
 
-  if ("ok" in parsed) {
-    if (!parsed.ok) {
-      if (parsed.meta?.blockedReason) {
-        showDemoBlockedToast(parsed.meta.blockedReason);
-      }
-      throw new ApiClientError(
-        parsed.error.message || "API request failed",
-        parsed.meta?.requestId,
-      );
-    }
-    if (parsed.meta?.simulated) {
-      showDemoSimulatedToast(describeAction(endpoint, options?.method));
-    }
-    return parsed.data as T;
-  }
+async function fetchApi<T>(
+  endpoint: string,
+  options?: RequestInit,
+): Promise<T> {
+  const method = (options?.method || "GET").toUpperCase();
+  let authHeader = cachedBasicAuthCredentials
+    ? encodeBasicAuth(cachedBasicAuthCredentials)
+    : undefined;
+  let authAttempt = 0;
+  let usernameHint = cachedBasicAuthCredentials?.username;
 
-  if (!parsed.success) {
-    throw new ApiClientError(
-      parsed.error || parsed.message || "API request failed",
+  while (true) {
+    const { response, parsed } = await fetchAndParse(
+      endpoint,
+      options,
+      authHeader,
     );
-  }
 
-  const data = parsed.data;
-  if (data !== undefined) return data as T;
-  if (parsed.message !== undefined) return { message: parsed.message } as T;
-  return null as T;
+    if (
+      isWriteMethod(method) &&
+      isUnauthorizedResponse(response, parsed) &&
+      basicAuthPromptHandler &&
+      authAttempt < 2
+    ) {
+      const credentials = await requestBasicAuthCredentials({
+        endpoint,
+        method,
+        attempt: authAttempt + 1,
+        usernameHint,
+        errorMessage:
+          authAttempt > 0
+            ? "Invalid credentials. Please try again."
+            : undefined,
+      });
+      if (!credentials) {
+        throw toApiError(response, parsed);
+      }
+      cachedBasicAuthCredentials = credentials;
+      usernameHint = credentials.username;
+      authHeader = encodeBasicAuth(credentials);
+      authAttempt += 1;
+      continue;
+    }
+
+    if ("ok" in parsed) {
+      if (!parsed.ok) {
+        if (parsed.error.code === "UNAUTHORIZED") {
+          clearBasicAuthCredentials();
+        }
+        if (parsed.meta?.blockedReason) {
+          showDemoBlockedToast(parsed.meta.blockedReason);
+        }
+        throw toApiError(response, parsed);
+      }
+      if (parsed.meta?.simulated) {
+        showDemoSimulatedToast(describeAction(endpoint, options?.method));
+      }
+      return parsed.data as T;
+    }
+
+    if (!parsed.success) {
+      if (response.status === 401) {
+        clearBasicAuthCredentials();
+      }
+      throw toApiError(response, parsed);
+    }
+
+    const data = parsed.data;
+    if (data !== undefined) return data as T;
+    if (parsed.message !== undefined) return { message: parsed.message } as T;
+    return null as T;
+  }
 }
 
 // Jobs API
