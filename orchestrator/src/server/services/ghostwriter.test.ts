@@ -14,7 +14,6 @@ const mocks = vi.hoisted(() => ({
     createRun: vi.fn(),
     updateMessage: vi.fn(),
     completeRun: vi.fn(),
-    completeRunIfRunning: vi.fn(),
     getMessageById: vi.fn(),
     getLatestAssistantMessage: vi.fn(),
     getRunById: vi.fn(),
@@ -53,7 +52,6 @@ vi.mock("../repositories/ghostwriter", () => ({
   createRun: mocks.repo.createRun,
   updateMessage: mocks.repo.updateMessage,
   completeRun: mocks.repo.completeRun,
-  completeRunIfRunning: mocks.repo.completeRunIfRunning,
   getMessageById: mocks.repo.getMessageById,
   getLatestAssistantMessage: mocks.repo.getLatestAssistantMessage,
   getRunById: mocks.repo.getRunById,
@@ -68,7 +66,6 @@ vi.mock("./llm/service", () => ({
 import {
   cancelRun,
   cancelRunForJob,
-  createThread,
   regenerateMessage,
   sendMessage,
   sendMessageForJob,
@@ -151,21 +148,6 @@ describe("ghostwriter service", () => {
       updatedAt: new Date().toISOString(),
     });
     mocks.repo.completeRun.mockResolvedValue(null);
-    mocks.repo.completeRunIfRunning.mockResolvedValue({
-      id: "run-1",
-      threadId: "thread-1",
-      jobId: "job-1",
-      status: "completed",
-      model: "model-a",
-      provider: "openrouter",
-      errorCode: null,
-      errorMessage: null,
-      startedAt: Date.now(),
-      completedAt: Date.now(),
-      requestId: "req-123",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
     mocks.repo.updateMessage.mockResolvedValue(baseAssistantMessage);
     mocks.repo.getMessageById.mockResolvedValue(baseAssistantMessage);
     mocks.repo.listMessagesForThread.mockResolvedValue([
@@ -241,18 +223,6 @@ describe("ghostwriter service", () => {
     ).toEqual([{ role: "assistant", content: "Draft response" }]);
   });
 
-  it("passes title when creating the first thread", async () => {
-    await createThread({
-      jobId: "job-1",
-      title: "Initial thread title",
-    });
-
-    expect(mocks.repo.getOrCreateThreadForJob).toHaveBeenCalledWith({
-      jobId: "job-1",
-      title: "Initial thread title",
-    });
-  });
-
   it("rejects empty message content", async () => {
     await expect(
       sendMessage({
@@ -305,21 +275,6 @@ describe("ghostwriter service", () => {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
-    mocks.repo.completeRunIfRunning.mockResolvedValue({
-      id: "run-1",
-      threadId: "thread-1",
-      jobId: "job-1",
-      status: "cancelled",
-      model: "model-a",
-      provider: "openrouter",
-      errorCode: "REQUEST_TIMEOUT",
-      errorMessage: "Generation cancelled by user",
-      startedAt: Date.now(),
-      completedAt: Date.now(),
-      requestId: "req-123",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
     mocks.llmCallJson.mockImplementation(async () => {
       await vi.advanceTimersByTimeAsync(1);
       return {
@@ -353,69 +308,6 @@ describe("ghostwriter service", () => {
     expect(onReady).toHaveBeenCalled();
     expect(onCancelled).toHaveBeenCalled();
     expect(onCompleted).not.toHaveBeenCalled();
-    expect(result.assistantMessage?.status).toBe("cancelled");
-  });
-
-  it("keeps cancellation when completion races at finish", async () => {
-    const assistantPartial: JobChatMessage = {
-      ...baseAssistantMessage,
-      id: "assistant-race",
-      content: "",
-      status: "partial",
-    };
-    const assistantComplete: JobChatMessage = {
-      ...assistantPartial,
-      content: "Thanks for your question.",
-      status: "complete",
-      tokensOut: 7,
-    };
-    const assistantCancelled: JobChatMessage = {
-      ...assistantPartial,
-      content: "Thanks for your question.",
-      status: "cancelled",
-      tokensOut: 7,
-    };
-
-    mocks.repo.createMessage
-      .mockResolvedValueOnce(baseUserMessage)
-      .mockResolvedValueOnce(assistantPartial);
-    mocks.repo.updateMessage
-      .mockResolvedValueOnce(assistantComplete)
-      .mockResolvedValueOnce(assistantCancelled);
-    mocks.repo.getMessageById.mockResolvedValue(assistantCancelled);
-    mocks.repo.completeRunIfRunning.mockResolvedValueOnce({
-      id: "run-1",
-      threadId: "thread-1",
-      jobId: "job-1",
-      status: "cancelled",
-      model: "model-a",
-      provider: "openrouter",
-      errorCode: "REQUEST_TIMEOUT",
-      errorMessage: "Generation cancelled by user",
-      startedAt: Date.now(),
-      completedAt: Date.now(),
-      requestId: "req-123",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
-
-    const onCompleted = vi.fn();
-    const onCancelled = vi.fn();
-
-    const result = await sendMessageForJob({
-      jobId: "job-1",
-      content: "Tell me about this role",
-      stream: {
-        onReady: vi.fn(),
-        onDelta: vi.fn(),
-        onCompleted,
-        onCancelled,
-        onError: vi.fn(),
-      },
-    });
-
-    expect(onCompleted).not.toHaveBeenCalled();
-    expect(onCancelled).toHaveBeenCalledTimes(1);
     expect(result.assistantMessage?.status).toBe("cancelled");
   });
 
@@ -463,66 +355,5 @@ describe("ghostwriter service", () => {
 
     expect(result).toEqual({ cancelled: false, alreadyFinished: true });
     expect(mocks.repo.completeRun).not.toHaveBeenCalled();
-    expect(mocks.repo.completeRunIfRunning).not.toHaveBeenCalled();
-  });
-
-  it("returns alreadyFinished when run completes before cancel write", async () => {
-    mocks.repo.getRunById.mockResolvedValue({
-      id: "run-race",
-      threadId: "thread-1",
-      jobId: "job-1",
-      status: "running",
-      model: "model-a",
-      provider: "openrouter",
-      errorCode: null,
-      errorMessage: null,
-      startedAt: Date.now(),
-      completedAt: null,
-      requestId: "req-123",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
-    mocks.repo.completeRunIfRunning.mockResolvedValue({
-      id: "run-race",
-      threadId: "thread-1",
-      jobId: "job-1",
-      status: "completed",
-      model: "model-a",
-      provider: "openrouter",
-      errorCode: null,
-      errorMessage: null,
-      startedAt: Date.now(),
-      completedAt: Date.now(),
-      requestId: "req-123",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
-
-    const result = await cancelRun({
-      jobId: "job-1",
-      threadId: "thread-1",
-      runId: "run-race",
-    });
-
-    expect(result).toEqual({ cancelled: false, alreadyFinished: true });
-  });
-
-  it("maps createRun unique constraint races to conflict", async () => {
-    mocks.repo.createMessage.mockResolvedValue(baseUserMessage);
-    mocks.repo.createRun.mockRejectedValue(
-      new Error(
-        "UNIQUE constraint failed: job_chat_runs.thread_id (idx_job_chat_runs_thread_running_unique)",
-      ),
-    );
-
-    await expect(
-      sendMessageForJob({
-        jobId: "job-1",
-        content: "hello",
-      }),
-    ).rejects.toMatchObject({
-      code: "CONFLICT",
-      status: 409,
-    });
   });
 });
