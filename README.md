@@ -9,7 +9,6 @@ Self-hosted. Docker-based. **Stop applying manually.**
 [![License](https://img.shields.io/github/license/DaKheera47/job-ops)](LICENSE)
 [![Contributors](https://img.shields.io/github/contributors-anon/dakheera47/job-ops)](Contributors)
 
-
 ## 🎥 40s Demo: Crawl → Score → PDF → Track
 
 <details>
@@ -29,7 +28,23 @@ Apply & Track
   https://github.com/user-attachments/assets/06e5e782-47f5-42d0-8b28-b89102d7ea1b
 </details>
 
+## 📚 Documentation (Start Here)
+
+JobOps ships with full docs for setup, architecture, extractors, and troubleshooting.
+
+If you want the serious view of the project, start here:
+
+- [Documentation Home](https://jobops.dakheera47/docs/)
+- [Self-Hosting Guide](https://jobops.dakheera47/docs/getting-started/self-hosting)
+- [Feature Overview](https://jobops.dakheera47/docs/features/overview)
+- [Orchestrator Pipeline](https://jobops.dakheera47/docs/features/orchestrator)
+- [Extractor System](https://jobops.dakheera47/docs/extractors/overview)
+- [Troubleshooting](https://jobops.dakheera47/docs/troubleshooting/common-problems)
+
 ## 🚀 Quick Start (10 Min)
+
+Prefer guided setup? Follow the [Self-Hosting Guide](https://jobops.dakheera47/docs/getting-started/self-hosting).
+
 ```bash
 # 1. Download
 git clone https://github.com/DaKheera47/job-ops.git
@@ -69,7 +84,7 @@ docker compose up -d
 | **Gradcracker** | STEM / Grads (UK) |
 | **UK Visa Jobs** | Sponsorship (UK) |
 
-*(More extractors can be added via TypeScript - see `/docs/extractors/overview`)*
+*(More extractors can be added via TypeScript - see [extractors documentation](https://jobops.dakheera47/docs/extractors/overview))*
 
 ## Post-App Tracking (Killer Feature)
 
@@ -78,25 +93,7 @@ Connect Gmail → AI routes emails to your applied jobs.
 * "We'd like to interview you..." → **Status: Interviewing** (Auto-updated)
 * "Unfortunately..." → **Status: Rejected** (Auto-updated)
 
-See `/docs/features/post-application-tracking` for setup.
-
-## Accounts & Setup
-
-| Service | Role | Cost |
-| --- | --- | --- |
-| **OpenRouter** | AI Intelligence | Pay-as-you-go |
-| **RxResume v4** | PDF Generation | Free |
-| **Gmail** | Email Tracking | Free (Optional) |
-
-The onboarding wizard at `localhost:3005` will guide you through connecting these services.
-
-## Documentation
-
-* [Documentation Home](/docs/) - Start here for guides and architecture.
-* [Extractors Guide](/docs/extractors/overview) - How to configure crawl targets.
-* [Orchestrator](/docs/features/orchestrator) - How the pipeline works.
-* [Self-Hosting](/docs/getting-started/self-hosting) - Advanced Docker and Gmail setup.
-* [Tracking](/docs/features/post-application-tracking) - Email integration details.
+See [post-application tracking docs](https://jobops.dakheera47/docs/features/post-application-tracking) for setup.
 
 **Note on Analytics**: The alpha version includes anonymous analytics (Umami) to help debug performance. To opt-out, block `umami.dakheera47.com` in your firewall/DNS.
 
