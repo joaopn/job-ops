@@ -1,21 +1,30 @@
 /// <reference types="vitest" />
 
-import { execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-let gitVersion: string;
-try {
-  gitVersion = execSync("git describe --tags --always", {
-    stdio: ["ignore", "pipe", "ignore"],
-  })
-    .toString()
-    .trim();
-} catch {
-  gitVersion = process.env.APP_VERSION ?? "unknown";
+function readAppVersion(): string {
+  const packageJsonPath = new URL("./package.json", import.meta.url);
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
+    version?: unknown;
+  };
+
+  if (
+    typeof packageJson.version !== "string" ||
+    !/^\d+\.\d+\.\d+$/.test(packageJson.version)
+  ) {
+    throw new Error(
+      "orchestrator/package.json must contain a semver version in x.y.z format",
+    );
+  }
+
+  return `v${packageJson.version}`;
 }
+
+const appVersion = readAppVersion();
 
 declare global {
   // eslint-disable-next-line no-var
@@ -66,6 +75,6 @@ export default defineConfig({
     emptyOutDir: true,
   },
   define: {
-    __APP_VERSION__: JSON.stringify(gitVersion),
+    __APP_VERSION__: JSON.stringify(appVersion),
   },
 });
