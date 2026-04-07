@@ -144,7 +144,7 @@ export function DesignResumeRail({
       <DesignResumeSection
         value="picture"
         title="Picture"
-        subtitle="Inline controls matching the imported resume picture block."
+        subtitle="Manage your resume photo and how it appears."
       >
         <PictureSection
           picture={picture}
@@ -158,7 +158,7 @@ export function DesignResumeRail({
       <DesignResumeSection
         value="basics"
         title="Basics"
-        subtitle="Core identity fields used by profile context and exports."
+        subtitle="Edit your name, headline, and contact details."
       >
         <BasicsSection basics={basics} onUpdateBasics={updateBasics} />
       </DesignResumeSection>
@@ -166,7 +166,7 @@ export function DesignResumeRail({
       <DesignResumeSection
         value="basics-custom-fields"
         title="Basics Custom Fields"
-        subtitle="Inline badges and links shown with the main contact block."
+        subtitle="Add extra links or short details near your contact info."
         badge={customFields.length === 0 ? "Empty" : `${customFields.length}`}
       >
         <BasicsCustomFieldsSection
@@ -178,7 +178,7 @@ export function DesignResumeRail({
       <DesignResumeSection
         value="summary"
         title="Summary"
-        subtitle="Rich text content stored as HTML."
+        subtitle="Write the short intro that appears near the top of your resume."
       >
         <SummarySection summary={summary} onUpdateSummary={updateSummary} />
       </DesignResumeSection>

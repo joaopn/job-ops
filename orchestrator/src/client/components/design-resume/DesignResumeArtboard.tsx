@@ -56,12 +56,11 @@ export function DesignResumeArtboard() {
                           <MoveDiagonal2 className="h-6 w-6" />
                         </div>
                         <div className="text-3xl font-semibold tracking-tight text-foreground">
-                          Artboard reserved
+                          Preview coming soon
                         </div>
                         <p className="text-sm leading-7 text-muted-foreground">
-                          The central canvas already supports zooming and
-                          panning so we can drop in the renderer preview later
-                          without rebuilding the page structure.
+                          This area is ready for zooming and panning once the
+                          live preview is added.
                         </p>
                       </div>
                     </div>

@@ -95,7 +95,7 @@ export function PictureSection({
             Show picture
           </div>
           <div className="text-xs text-muted-foreground">
-            Toggles image visibility in the stored resume.
+            Turn your photo on or off.
           </div>
         </div>
         <Switch
@@ -323,7 +323,7 @@ export function SummarySection({
             Show summary
           </div>
           <div className="text-xs text-muted-foreground">
-            Preserves the section visibility flag from the imported resume.
+            Show or hide this section on your resume.
           </div>
         </div>
         <Switch

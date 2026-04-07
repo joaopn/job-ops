@@ -123,13 +123,13 @@ export const DesignResumePage: React.FC = () => {
       const imported = await api.importDesignResumeFromRxResume();
       setDesignResume(imported);
       setSaveState("saved");
-      toast.success("Imported Reactive Resume into Design Resume.");
+      toast.success("Imported your resume.");
     } catch (importError) {
       setSaveState("error");
       toast.error(
         importError instanceof Error
           ? importError.message
-          : "Failed to import Reactive Resume.",
+          : "Failed to import your resume.",
       );
     }
   };
@@ -138,7 +138,7 @@ export const DesignResumePage: React.FC = () => {
     try {
       const exported = await api.exportDesignResume();
       makeDownload(exported.fileName, exported.document);
-      toast.success("Exported Reactive Resume JSON.");
+      toast.success("Exported your resume JSON.");
     } catch (exportError) {
       toast.error(
         exportError instanceof Error
@@ -192,7 +192,7 @@ export const DesignResumePage: React.FC = () => {
         <PageHeader
           icon={PenSquare}
           title="Design Resume"
-          subtitle="Loading your local resume context"
+          subtitle="Loading your resume"
         />
         <PageMain>
           <div className="rounded-2xl border border-border/70 bg-background/95 px-6 py-20 text-center text-sm text-muted-foreground">
@@ -279,19 +279,19 @@ export const DesignResumePage: React.FC = () => {
           <div className="flex h-full items-center justify-center rounded-2xl border border-border/70 bg-background/95 px-6 py-20 text-center">
             <div className="mx-auto max-w-xl space-y-4">
               <div className="inline-flex rounded-full border border-border/70 bg-muted/20 px-3 py-1 text-[11px] uppercase tracking-[0.24em] text-muted-foreground">
-                Resume context
+                Design Resume
               </div>
               <h2 className="text-3xl font-semibold tracking-tight text-foreground">
-                Import your current Reactive Resume once, then design locally.
+                Import your resume to start editing it here.
               </h2>
               <p className="text-sm leading-7 text-muted-foreground">
-                JobOps will use this local Design Resume as the source of truth
-                for tailoring, scoring, and project context.
+                Once imported, you can update your resume here without jumping
+                between tools.
               </p>
               <div className="flex justify-center gap-3">
                 <Button type="button" onClick={handleImport}>
                   <Import className="mr-2 h-4 w-4" />
-                  Import from Reactive Resume
+                  Import resume
                 </Button>
                 {error ? (
                   <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm text-rose-300">
@@ -312,7 +312,7 @@ export const DesignResumePage: React.FC = () => {
                     Design Resume
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Edit your resume details. Changes are saved automatically.
+                    Update your resume details here. Changes save automatically.
                   </p>
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto p-4">{rail}</div>

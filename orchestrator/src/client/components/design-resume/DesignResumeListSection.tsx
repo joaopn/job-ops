@@ -33,8 +33,8 @@ export function DesignResumeListSection({
               {items.length} item{items.length === 1 ? "" : "s"}
             </div>
             <div className="text-xs text-muted-foreground">
-              Edit, reorder, and hide entries for{" "}
-              {definition.title.toLowerCase()}.
+              Add entries, reorder them, or hide the ones you do not want to
+              show.
             </div>
           </div>
           <Button type="button" variant="outline" onClick={onAdd}>
