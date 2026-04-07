@@ -1361,7 +1361,7 @@ export const DesignResumePage: React.FC = () => {
         ) : (
           <div className='grid h-full min-h-0 gap-6 lg:grid-cols-[400px_minmax(0,1fr)] xl:grid-cols-[500px_minmax(0,1fr)]'>
             <aside className='hidden min-h-0 lg:block'>
-              <div className='flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-border/70 bg-background/95'>
+              <div className='flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-border/70 bg-muted/20'>
                 <div className='border-b border-border/70 px-4 py-4'>
                   <div className='text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground'>
                     Design Resume
@@ -1374,7 +1374,7 @@ export const DesignResumePage: React.FC = () => {
                 <div className='min-h-0 flex-1 overflow-y-auto p-4'>{rail}</div>
               </div>
             </aside>
-            <section className='relative flex min-h-0 flex-col overflow-hidden rounded-2xl border border-border/70 bg-background/95'>
+            <section className='relative flex min-h-0 flex-col overflow-hidden rounded-2xl border border-border/70'>
               <div className='relative min-h-0 flex-1 overflow-hidden'>
                 <TransformWrapper
                   initialScale={0.9}
