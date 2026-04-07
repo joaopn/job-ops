@@ -114,6 +114,29 @@ describe.sequential("Settings API routes", () => {
     );
   });
 
+  it("does not expose the basic auth password when only the password is configured", async () => {
+    const partialBasicAuth = await startServer({
+      env: {
+        BASIC_AUTH_PASSWORD: "secret-only",
+        BASIC_AUTH_USER: "",
+        LLM_API_KEY: "secret-key",
+        RXRESUME_EMAIL: "resume@example.com",
+      },
+    });
+
+    try {
+      const res = await fetch(`${partialBasicAuth.baseUrl}/api/settings`);
+      const body = await res.json();
+
+      expect(body.ok).toBe(true);
+      expect(body.data.basicAuthActive).toBe(false);
+      expect(body.data.basicAuthPassword).toBeNull();
+      expect(body.data.basicAuthPasswordHint).toBe("secr");
+    } finally {
+      await stopServer(partialBasicAuth);
+    }
+  });
+
   it("normalizes hyphenated openai-compatible env defaults", async () => {
     const hyphenated = await startServer({
       env: {
