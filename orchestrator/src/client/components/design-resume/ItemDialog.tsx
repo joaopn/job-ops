@@ -1,3 +1,4 @@
+import { TokenizedInput } from "@client/pages/orchestrator/TokenizedInput";
 import { createId } from "@paralleldrive/cuid2";
 import { Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -88,6 +89,13 @@ function fieldIdForPath(path: string): string {
   return `design-resume-item-${path.replaceAll(/[^a-zA-Z0-9_-]/g, "-")}`;
 }
 
+function parseTagInput(input: string): string[] {
+  return input
+    .split(/[\n,]/g)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
 export function ItemDialog({
   open,
   title,
@@ -110,9 +118,11 @@ export function ItemDialog({
     [item],
   );
   const [draft, setDraft] = useState<Record<string, unknown>>(initialDraft);
+  const [tagDrafts, setTagDrafts] = useState<Record<string, string>>({});
 
   useEffect(() => {
     setDraft(initialDraft);
+    setTagDrafts({});
   }, [initialDraft]);
 
   const updateField = (path: string, value: unknown) => {
@@ -169,20 +179,21 @@ export function ItemDialog({
                   <label className="text-sm font-medium" htmlFor={fieldId}>
                     {field.label}
                   </label>
-                  <Input
+                  <TokenizedInput
                     id={fieldId}
-                    value={(value as string[]).join(", ")}
-                    placeholder={field.placeholder ?? "Comma-separated"}
-                    onChange={(event) =>
-                      updateField(
-                        field.key,
-                        event.currentTarget.value
-                          .split(",")
-                          .map((entry) => entry.trim())
-                          .filter(Boolean),
-                      )
+                    values={value as string[]}
+                    draft={tagDrafts[field.key] ?? ""}
+                    parseInput={parseTagInput}
+                    onDraftChange={(next) =>
+                      setTagDrafts((current) => ({
+                        ...current,
+                        [field.key]: next,
+                      }))
                     }
-                    className="bg-background/60"
+                    onValuesChange={(next) => updateField(field.key, next)}
+                    placeholder={field.placeholder ?? "Add a value"}
+                    helperText="Press Enter, comma, or paste a list to add items."
+                    removeLabelPrefix="Remove tag"
                   />
                 </div>
               );
