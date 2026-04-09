@@ -5,7 +5,7 @@ vi.mock("@server/repositories/settings", () => ({
 }));
 
 vi.mock("./design-resume", () => ({
-  getCurrentDesignResume: vi.fn(),
+  getCurrentDesignResumeOrNullOnLegacy: vi.fn(),
   designResumeToProfile: vi.fn(),
 }));
 
@@ -29,7 +29,10 @@ vi.mock("./rxresume", () => ({
 }));
 
 import { getAllSettings } from "@server/repositories/settings";
-import { designResumeToProfile, getCurrentDesignResume } from "./design-resume";
+import {
+  designResumeToProfile,
+  getCurrentDesignResumeOrNullOnLegacy,
+} from "./design-resume";
 import { getEnvSettingsData } from "./envSettings";
 import { getProfile } from "./profile";
 import {
@@ -43,7 +46,7 @@ describe("getEffectiveSettings", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(getAllSettings).mockResolvedValue({});
-    vi.mocked(getCurrentDesignResume).mockResolvedValue({
+    vi.mocked(getCurrentDesignResumeOrNullOnLegacy).mockResolvedValue({
       id: "primary",
       resumeJson: {},
     } as never);
@@ -87,5 +90,12 @@ describe("getEffectiveSettings", () => {
     expect(settings.profileProjects).toEqual([
       { id: "local-project", label: "Local project" },
     ]);
+  });
+
+  it("falls back when no compatible local Design Resume is available", async () => {
+    vi.mocked(getCurrentDesignResumeOrNullOnLegacy).mockResolvedValue(null);
+
+    await expect(getEffectiveSettings()).resolves.toBeTruthy();
+    expect(designResumeToProfile).not.toHaveBeenCalled();
   });
 });

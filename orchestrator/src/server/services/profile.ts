@@ -1,6 +1,9 @@
 import { logger } from "@infra/logger";
 import type { ResumeProfile } from "@shared/types";
-import { designResumeToProfile } from "./design-resume";
+import {
+  designResumeToProfile,
+  isLegacyDesignResumeError,
+} from "./design-resume";
 import { getResume, RxResumeAuthConfigError } from "./rxresume";
 import { getConfiguredRxResumeBaseResumeId } from "./rxresume/baseResumeId";
 
@@ -22,10 +25,22 @@ export async function getProfile(forceRefresh = false): Promise<ResumeProfile> {
     return cachedLocalProfile;
   }
 
-  const localProfile = await designResumeToProfile();
-  if (localProfile) {
-    cachedLocalProfile = localProfile;
-    return localProfile;
+  try {
+    const localProfile = await designResumeToProfile();
+    if (localProfile) {
+      cachedLocalProfile = localProfile;
+      return localProfile;
+    }
+  } catch (error) {
+    if (!isLegacyDesignResumeError(error)) {
+      throw error;
+    }
+    logger.warn(
+      "Ignoring legacy local Design Resume while loading profile fallback",
+      {
+        error,
+      },
+    );
   }
 
   const { resumeId: rxresumeBaseResumeId } =

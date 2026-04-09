@@ -4,6 +4,7 @@ import { clearProfileCache, getProfile } from "./profile";
 // Mock the dependencies
 vi.mock("./design-resume", () => ({
   designResumeToProfile: vi.fn(),
+  isLegacyDesignResumeError: vi.fn(),
 }));
 
 vi.mock("./rxresume", () => ({
@@ -20,7 +21,10 @@ vi.mock("./rxresume/baseResumeId", () => ({
   getConfiguredRxResumeBaseResumeId: vi.fn(),
 }));
 
-import { designResumeToProfile } from "./design-resume";
+import {
+  designResumeToProfile,
+  isLegacyDesignResumeError,
+} from "./design-resume";
 import { getResume, RxResumeAuthConfigError } from "./rxresume";
 import { getConfiguredRxResumeBaseResumeId } from "./rxresume/baseResumeId";
 
@@ -29,6 +33,7 @@ describe("getProfile", () => {
     vi.resetAllMocks();
     clearProfileCache();
     vi.mocked(designResumeToProfile).mockResolvedValue(null);
+    vi.mocked(isLegacyDesignResumeError).mockReturnValue(false);
   });
 
   it("should throw an error if rxresumeBaseResumeId is not configured", async () => {
@@ -82,6 +87,24 @@ describe("getProfile", () => {
     expect(getConfiguredRxResumeBaseResumeId).toHaveBeenCalledTimes(1);
     expect(getResume).toHaveBeenCalledWith("test-resume-id");
     expect(profile).toEqual(mockResumeData);
+  });
+
+  it("should fall back to Reactive Resume when the local Design Resume is legacy", async () => {
+    const mockResumeData = { basics: { name: "Fallback User" } };
+    const legacyError = new Error("legacy design resume");
+    vi.mocked(designResumeToProfile).mockRejectedValue(legacyError);
+    vi.mocked(isLegacyDesignResumeError).mockReturnValue(true);
+    vi.mocked(getConfiguredRxResumeBaseResumeId).mockResolvedValue({
+      mode: "v5",
+      resumeId: "test-resume-id",
+    });
+    vi.mocked(getResume).mockResolvedValue({
+      id: "test-resume-id",
+      data: mockResumeData,
+    } as any);
+
+    await expect(getProfile()).resolves.toEqual(mockResumeData);
+    expect(getResume).toHaveBeenCalledWith("test-resume-id");
   });
 
   it("should cache the profile and not refetch on subsequent calls", async () => {

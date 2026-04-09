@@ -89,7 +89,7 @@ function validateStoredDesignResumeDocument(input: unknown): DesignResumeJson {
   throw badRequest(LEGACY_REIMPORT_MESSAGE);
 }
 
-function isLegacyDesignResumeError(error: unknown): boolean {
+export function isLegacyDesignResumeError(error: unknown): boolean {
   return error instanceof AppError && error.message === LEGACY_REIMPORT_MESSAGE;
 }
 
@@ -231,6 +231,9 @@ function readPointerValue(
       throw badRequest(`Patch path not found: ${path}`);
     }
     const index = Number.parseInt(key, 10);
+    if (!Number.isInteger(index) || index < 0 || index >= parent.length) {
+      throw badRequest(`Patch path not found: ${path}`);
+    }
     return parent[index];
   }
   return parent[key];
@@ -376,6 +379,17 @@ export async function getCurrentDesignResume(): Promise<DesignResumeDocument | n
   }
 }
 
+export async function getCurrentDesignResumeOrNullOnLegacy(): Promise<DesignResumeDocument | null> {
+  try {
+    return await getCurrentDesignResume();
+  } catch (error) {
+    if (isLegacyDesignResumeError(error)) {
+      return null;
+    }
+    throw error;
+  }
+}
+
 export async function requireCurrentDesignResume(): Promise<DesignResumeDocument> {
   const document = await getCurrentDesignResume();
   if (!document) {
@@ -488,6 +502,8 @@ export async function updateCurrentDesignResume(
 export async function uploadDesignResumePicture(input: {
   fileName: string;
   dataUrl: string;
+  baseRevision?: number;
+  document?: DesignResumeJson;
 }): Promise<DesignResumeDocument> {
   const current = await requireCurrentDesignResume();
   await ensureStorageDirs();
@@ -526,7 +542,12 @@ export async function uploadDesignResumePicture(input: {
     throw error;
   }
 
-  const nextDocument = structuredClone(current.resumeJson) as DesignResumeJson;
+  const baseDocument = input.document
+    ? validatePatchedDocument(
+        structuredClone(input.document) as Record<string, unknown>,
+      )
+    : current.resumeJson;
+  const nextDocument = structuredClone(baseDocument) as DesignResumeJson;
   const picture = asRecord(nextDocument.picture) ?? {};
   nextDocument.picture = {
     ...picture,
@@ -534,47 +555,75 @@ export async function uploadDesignResumePicture(input: {
     hidden: false,
   } as DesignResumeJson["picture"];
 
+  let updated: DesignResumeDocument;
   try {
-    const updated = await updateCurrentDesignResume({
-      baseRevision: current.revision,
+    updated = await updateCurrentDesignResume({
+      baseRevision: input.baseRevision ?? current.revision,
       document: nextDocument,
     });
-
-    if (existingAsset) {
-      await designResumeRepo.deleteDesignResumeAsset(existingAsset.id);
-      await deleteAssetFile(existingAsset.storagePath);
-    }
-
-    return updated;
   } catch (error) {
     await designResumeRepo.deleteDesignResumeAsset(assetId);
     await deleteAssetFile(storagePath);
     throw error;
   }
+
+  if (existingAsset) {
+    try {
+      await designResumeRepo.deleteDesignResumeAsset(existingAsset.id);
+      await deleteAssetFile(existingAsset.storagePath);
+    } catch (error) {
+      logger.warn("Failed to delete replaced design resume asset", {
+        assetId: existingAsset.id,
+        documentId: current.id,
+        error: sanitizeUnknown(error),
+      });
+    }
+  }
+
+  return updated;
 }
 
-export async function deleteDesignResumePicture(): Promise<DesignResumeDocument> {
+export async function deleteDesignResumePicture(input?: {
+  baseRevision?: number;
+  document?: DesignResumeJson;
+}): Promise<DesignResumeDocument> {
   const current = await requireCurrentDesignResume();
   const asset = await designResumeRepo.findDesignResumeAssetForDocument({
     documentId: current.id,
     kind: "picture",
   });
-  if (asset) {
-    await designResumeRepo.deleteDesignResumeAsset(asset.id);
-    await deleteAssetFile(asset.storagePath);
-  }
 
-  const nextDocument = structuredClone(current.resumeJson) as DesignResumeJson;
+  const baseDocument = input?.document
+    ? validatePatchedDocument(
+        structuredClone(input.document) as Record<string, unknown>,
+      )
+    : current.resumeJson;
+  const nextDocument = structuredClone(baseDocument) as DesignResumeJson;
   const picture = asRecord(nextDocument.picture) ?? {};
   nextDocument.picture = {
     ...picture,
     url: "",
   } as DesignResumeJson["picture"];
 
-  return updateCurrentDesignResume({
-    baseRevision: current.revision,
+  const updated = await updateCurrentDesignResume({
+    baseRevision: input?.baseRevision ?? current.revision,
     document: nextDocument,
   });
+
+  if (asset) {
+    try {
+      await designResumeRepo.deleteDesignResumeAsset(asset.id);
+      await deleteAssetFile(asset.storagePath);
+    } catch (error) {
+      logger.warn("Failed to delete removed design resume asset", {
+        assetId: asset.id,
+        documentId: current.id,
+        error: sanitizeUnknown(error),
+      });
+    }
+  }
+
+  return updated;
 }
 
 export async function readDesignResumeAssetContent(assetId: string): Promise<{

@@ -54,7 +54,9 @@ vi.mock("node:fs/promises", () => ({
 import { getResume } from "@server/services/rxresume";
 import { getConfiguredRxResumeBaseResumeId } from "@server/services/rxresume/baseResumeId";
 import {
+  deleteDesignResumePicture,
   getCurrentDesignResume,
+  getCurrentDesignResumeOrNullOnLegacy,
   importDesignResumeFromReactiveResume,
   readDesignResumeAssetContent,
   updateCurrentDesignResume,
@@ -190,6 +192,21 @@ describe("design resume service", () => {
         ],
       }),
     ).rejects.toThrow("Patch path not found: /sections/projects/items/-");
+  });
+
+  it("rejects invalid final array index tokens in JSON Patch reads", async () => {
+    await expect(
+      updateCurrentDesignResume({
+        baseRevision: 1,
+        operations: [
+          {
+            op: "test",
+            path: "/sections/projects/items/foo",
+            value: undefined,
+          },
+        ],
+      }),
+    ).rejects.toThrow("Patch path not found: /sections/projects/items/foo");
   });
 
   it("accepts upstream v5 resumes without wrapper fields or item options", async () => {
@@ -347,6 +364,20 @@ describe("design resume service", () => {
     );
   });
 
+  it("treats legacy local documents as absent in the safe accessor", async () => {
+    repo.getLatestDesignResumeDocument.mockResolvedValueOnce(
+      makeDocumentRow({
+        resumeJson: {
+          metadata: {
+            layout: [[["summary"], ["skills"]]],
+          },
+        },
+      }),
+    );
+
+    await expect(getCurrentDesignResumeOrNullOnLegacy()).resolves.toBeNull();
+  });
+
   it("cleans up the uploaded file when picture asset insertion fails", async () => {
     repo.insertDesignResumeAsset.mockRejectedValue(
       new Error("db insert failed"),
@@ -361,6 +392,50 @@ describe("design resume service", () => {
 
     expect(fsMocks.unlink).toHaveBeenCalledWith(
       "/tmp/job-ops-test/design-resume/assets/asset-1.png",
+    );
+  });
+
+  it("applies picture uploads to the caller-provided draft document", async () => {
+    const resumeJson = makeValidResumeJson({
+      summary: {
+        ...(buildDefaultReactiveResumeDocument().summary as Record<
+          string,
+          unknown
+        >),
+        content: "Stored summary",
+      },
+    });
+    const editedDraft = makeValidResumeJson({
+      ...resumeJson,
+      summary: {
+        ...(resumeJson.summary as Record<string, unknown>),
+        content: "Unsaved summary edit",
+      },
+    });
+    repo.getLatestDesignResumeDocument.mockResolvedValue(
+      makeDocumentRow({
+        resumeJson,
+      }),
+    );
+
+    await uploadDesignResumePicture({
+      fileName: "photo.png",
+      dataUrl: `data:image/png;base64,${Buffer.from("hello").toString("base64")}`,
+      baseRevision: 1,
+      document: editedDraft,
+    });
+
+    expect(repo.upsertDesignResumeDocument).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resumeJson: expect.objectContaining({
+          summary: expect.objectContaining({
+            content: "Unsaved summary edit",
+          }),
+          picture: expect.objectContaining({
+            url: "/api/design-resume/assets/asset-1/content",
+          }),
+        }),
+      }),
     );
   });
 
@@ -433,6 +508,54 @@ describe("design resume service", () => {
 
     await expect(importDesignResumeFromReactiveResume()).rejects.toThrow(
       "Design Resume only works with Reactive Resume v5",
+    );
+  });
+
+  it("keeps the existing picture asset when removing it hits a revision conflict", async () => {
+    const resumeJson = makeValidResumeJson({
+      picture: {
+        ...(buildDefaultReactiveResumeDocument().picture as Record<
+          string,
+          unknown
+        >),
+        url: "/api/design-resume/assets/asset-1/content",
+      },
+    });
+    repo.getLatestDesignResumeDocument
+      .mockResolvedValueOnce(
+        makeDocumentRow({
+          revision: 1,
+          resumeJson,
+        }),
+      )
+      .mockResolvedValueOnce(
+        makeDocumentRow({
+          revision: 2,
+          resumeJson,
+        }),
+      );
+    repo.findDesignResumeAssetForDocument.mockResolvedValueOnce({
+      id: "asset-1",
+      documentId: "primary",
+      kind: "picture",
+      originalName: "photo.png",
+      mimeType: "image/png",
+      byteSize: 123,
+      storagePath: "/tmp/job-ops-test/design-resume/assets/asset-1.png",
+      createdAt: "2026-04-07T00:00:00.000Z",
+      updatedAt: "2026-04-07T00:00:00.000Z",
+    });
+
+    await expect(
+      deleteDesignResumePicture({
+        baseRevision: 1,
+        document: resumeJson,
+      }),
+    ).rejects.toThrow("Design Resume has changed. Refresh and try again.");
+
+    expect(repo.deleteDesignResumeAsset).not.toHaveBeenCalled();
+    expect(fsMocks.unlink).not.toHaveBeenCalledWith(
+      "/tmp/job-ops-test/design-resume/assets/asset-1.png",
     );
   });
 });

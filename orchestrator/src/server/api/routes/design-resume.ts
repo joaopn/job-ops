@@ -12,7 +12,7 @@ import {
 } from "@server/services/design-resume";
 import { generateDesignResumePdf } from "@server/services/pdf";
 import { clearProfileCache } from "@server/services/profile";
-import type { DesignResumePatchRequest } from "@shared/types";
+import type { DesignResumeJson, DesignResumePatchRequest } from "@shared/types";
 import { type Request, type Response, Router } from "express";
 import { z } from "zod";
 
@@ -152,10 +152,21 @@ export const designResumePatchSchema = z.object({
   operations: z.array(patchOperationSchema).optional(),
 });
 
-const uploadSchema = z.object({
+const pictureMutationSchema = z.object({
+  baseRevision: z.number().int().min(1).optional(),
+  document: z.unknown().optional(),
+});
+
+const uploadSchema = pictureMutationSchema.extend({
   fileName: z.string().trim().min(1).max(255),
   dataUrl: z.string().trim().min(1),
 });
+
+function asDesignResumeJson(value: unknown): DesignResumeJson | undefined {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as DesignResumeJson)
+    : undefined;
+}
 
 designResumeRouter.get(
   "/",
@@ -204,6 +215,8 @@ designResumeRouter.post(
     const document = await uploadDesignResumePicture({
       fileName: input.fileName,
       dataUrl: input.dataUrl,
+      baseRevision: input.baseRevision,
+      document: asDesignResumeJson(input.document),
     });
     clearProfileCache();
     ok(res, document, 201);
@@ -212,8 +225,12 @@ designResumeRouter.post(
 
 designResumeRouter.delete(
   "/assets/picture",
-  asyncRoute(async (_req: Request, res: Response) => {
-    const document = await deleteDesignResumePicture();
+  asyncRoute(async (req: Request, res: Response) => {
+    const input = pictureMutationSchema.parse(req.body ?? {});
+    const document = await deleteDesignResumePicture({
+      baseRevision: input.baseRevision,
+      document: asDesignResumeJson(input.document),
+    });
     clearProfileCache();
     ok(res, document);
   }),

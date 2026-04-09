@@ -56,6 +56,8 @@ export const DesignResumePage: React.FC = () => {
   const [dirty, setDirty] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editVersionRef = useRef(0);
+  const draftRef = useRef<DesignResumeDocument | null>(null);
+  draftRef.current = draft;
 
   const pdfRenderer = settings?.pdfRenderer?.value ?? "rxresume";
   const rxresumeMode = settings?.rxresumeMode?.value ?? "v5";
@@ -143,6 +145,51 @@ export const DesignResumePage: React.FC = () => {
     setDraft(next);
     setDirty(false);
   };
+
+  const ensureLatestPersistedDraft =
+    async (): Promise<DesignResumeDocument | null> => {
+      if (!draft) return null;
+      if (!dirty) return draft;
+      if (saveState === "saving") {
+        throw new Error(
+          "Design Resume is still saving. Try again in a moment.",
+        );
+      }
+
+      const editVersionAtStart = editVersionRef.current;
+      const baseRevision = draft.revision;
+      const documentSnapshot = structuredClone(draft.resumeJson);
+
+      setSaveState("saving");
+      const updated = await api.updateDesignResume({
+        baseRevision,
+        document: documentSnapshot,
+      });
+
+      if (editVersionRef.current === editVersionAtStart) {
+        setDesignResume(updated);
+        setSaveState("saved");
+        return updated;
+      }
+
+      const mergedResumeJson =
+        draftRef.current?.resumeJson ?? updated.resumeJson;
+      const mergedDraft = {
+        ...updated,
+        resumeJson: structuredClone(mergedResumeJson) as DesignResumeJson,
+      };
+      setDraft((current) =>
+        current
+          ? {
+              ...updated,
+              resumeJson: current.resumeJson,
+            }
+          : updated,
+      );
+      setDirty(true);
+      setSaveState("idle");
+      return mergedDraft;
+    };
 
   const updateResumeJson = (
     updater: (resumeJson: DesignResumeJson) => DesignResumeJson,
@@ -238,12 +285,31 @@ export const DesignResumePage: React.FC = () => {
   const handleUploadPicture = async (file: File) => {
     try {
       setPictureUploading(true);
+      const latestDraft = await ensureLatestPersistedDraft();
+      if (!latestDraft) return;
+
       const dataUrl = await fileToDataUrl(file);
+      const editVersionAtStart = editVersionRef.current;
       const updated = await api.uploadDesignResumePicture({
         fileName: file.name,
         dataUrl,
+        baseRevision: latestDraft.revision,
+        document: latestDraft.resumeJson,
       });
-      setDesignResume(updated);
+      if (editVersionRef.current === editVersionAtStart) {
+        setDesignResume(updated);
+      } else {
+        setDraft((current) =>
+          current
+            ? {
+                ...updated,
+                resumeJson: current.resumeJson,
+              }
+            : updated,
+        );
+        setDirty(true);
+        setSaveState("idle");
+      }
       toast.success("Picture uploaded.");
     } catch (uploadError) {
       toast.error(
@@ -261,8 +327,28 @@ export const DesignResumePage: React.FC = () => {
 
   const handleDeletePicture = async () => {
     try {
-      const updated = await api.deleteDesignResumePicture();
-      setDesignResume(updated);
+      const latestDraft = await ensureLatestPersistedDraft();
+      if (!latestDraft) return;
+
+      const editVersionAtStart = editVersionRef.current;
+      const updated = await api.deleteDesignResumePicture({
+        baseRevision: latestDraft.revision,
+        document: latestDraft.resumeJson,
+      });
+      if (editVersionRef.current === editVersionAtStart) {
+        setDesignResume(updated);
+      } else {
+        setDraft((current) =>
+          current
+            ? {
+                ...updated,
+                resumeJson: current.resumeJson,
+              }
+            : updated,
+        );
+        setDirty(true);
+        setSaveState("idle");
+      }
       toast.success("Picture removed.");
     } catch (deleteError) {
       toast.error(

@@ -5,7 +5,10 @@ import {
   settingsRegistry,
 } from "@shared/settings-registry";
 import type { AppSettings, ResumeProfile } from "@shared/types";
-import { designResumeToProfile, getCurrentDesignResume } from "./design-resume";
+import {
+  designResumeToProfile,
+  getCurrentDesignResumeOrNullOnLegacy,
+} from "./design-resume";
 import { getEnvSettingsData } from "./envSettings";
 import { getProfile } from "./profile";
 import {
@@ -97,7 +100,7 @@ export async function getEffectiveSettings(): Promise<AppSettings> {
   let profile: Record<string, unknown> = {};
   let localProfile: ResumeProfile | null = null;
 
-  const localDesignResume = await getCurrentDesignResume();
+  const localDesignResume = await getCurrentDesignResumeOrNullOnLegacy();
   if (localDesignResume?.resumeJson) {
     localProfile = await designResumeToProfile(localDesignResume.resumeJson);
     profile = (localProfile as Record<string, unknown> | null) ?? {};

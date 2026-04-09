@@ -13,6 +13,7 @@ import type {
   DemoInfoResponse,
   DesignResumeDocument,
   DesignResumeExportResponse,
+  DesignResumeJson,
   DesignResumePatchRequest,
   DesignResumePdfResponse,
   DesignResumeStatusResponse,
@@ -1364,6 +1365,8 @@ export async function updateDesignResume(
 export async function uploadDesignResumePicture(input: {
   fileName: string;
   dataUrl: string;
+  baseRevision?: number;
+  document?: DesignResumeJson;
 }): Promise<DesignResumeDocument> {
   return fetchApi<DesignResumeDocument>("/design-resume/assets", {
     method: "POST",
@@ -1371,9 +1374,13 @@ export async function uploadDesignResumePicture(input: {
   });
 }
 
-export async function deleteDesignResumePicture(): Promise<DesignResumeDocument> {
+export async function deleteDesignResumePicture(input?: {
+  baseRevision?: number;
+  document?: DesignResumeJson;
+}): Promise<DesignResumeDocument> {
   return fetchApi<DesignResumeDocument>("/design-resume/assets/picture", {
     method: "DELETE",
+    body: JSON.stringify(input ?? {}),
   });
 }
 
