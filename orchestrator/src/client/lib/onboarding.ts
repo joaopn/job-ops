@@ -18,13 +18,10 @@ export function hasSavedSearchTermsOnboarding(
 }
 
 export function isOnboardingComplete(input: {
-  demoMode: boolean;
   settings: AppSettings | null | undefined;
   llmValid: boolean;
-  baseResumeValid: boolean;
   searchTermsValid?: boolean;
 }): boolean {
-  if (input.demoMode) return true;
   if (!input.settings) return false;
 
   const searchTermsValid =
@@ -32,7 +29,6 @@ export function isOnboardingComplete(input: {
 
   return Boolean(
     input.llmValid &&
-      input.baseResumeValid &&
       searchTermsValid &&
       hasCompletedBasicAuthOnboarding(input.settings),
   );

@@ -9,16 +9,8 @@ import type {
   ApplicationStage,
   ApplicationTask,
   AppSettings,
-  BackupInfo,
   BranchInfo,
   CreateJobNoteInput,
-  DemoInfoResponse,
-  DesignResumeDocument,
-  DesignResumeExportResponse,
-  DesignResumeJson,
-  DesignResumePatchRequest,
-  DesignResumePdfResponse,
-  DesignResumeStatusResponse,
   Job,
   JobActionRequest,
   JobActionResponse,
@@ -32,7 +24,6 @@ import type {
   JobSource,
   JobsListResponse,
   JobsRevisionResponse,
-  JobTracerLinksResponse,
   LocationMatchStrictness,
   LocationSearchScope,
   ManualJobDraft,
@@ -41,13 +32,6 @@ import type {
   PipelineRun,
   PipelineRunInsights,
   PipelineStatusResponse,
-  PostApplicationAction,
-  PostApplicationActionResponse,
-  PostApplicationInboxItem,
-  PostApplicationProvider,
-  PostApplicationProviderActionResponse,
-  PostApplicationRouterStageTarget,
-  PostApplicationSyncRun,
   ProfileStatusResponse,
   ResumeProfile,
   ResumeProjectCatalogItem,
@@ -55,15 +39,9 @@ import type {
   StageEvent,
   StageEventMetadata,
   StageTransitionTarget,
-  TracerAnalyticsResponse,
-  TracerReadinessResponse,
   UpdateJobNoteInput,
   ValidationResult,
-  VisaSponsor,
-  VisaSponsorSearchResponse,
-  VisaSponsorStatusResponse,
 } from "@shared/types";
-import { showDemoBlockedToast, showDemoSimulatedToast } from "@/lib/demo-toast";
 
 const API_BASE = "/api";
 
@@ -372,33 +350,6 @@ function normalizeApiResponse<T>(
   throw new ApiClientError("API request failed: unexpected response shape");
 }
 
-function describeAction(endpoint: string, method?: string): string {
-  const verb = (method || "GET").toUpperCase();
-  const normalized = endpoint.split("?")[0] || endpoint;
-  if (verb === "POST" && normalized === "/pipeline/run") {
-    return "Pipeline run used demo simulation.";
-  }
-  if (verb === "POST" && normalized.endsWith("/process")) {
-    return "Job processing used demo simulation.";
-  }
-  if (verb === "POST" && normalized.endsWith("/summarize")) {
-    return "Summary generation used demo simulation.";
-  }
-  if (verb === "POST" && normalized.endsWith("/generate-pdf")) {
-    return "PDF generation used demo simulation.";
-  }
-  if (verb === "POST" && normalized.endsWith("/rescore")) {
-    return "Suitability rescoring used demo simulation.";
-  }
-  if (verb === "POST" && normalized.endsWith("/apply")) {
-    return "Apply flow used demo simulation and no external sync.";
-  }
-  if (normalized.startsWith("/onboarding/validate")) {
-    return "Credential validation is simulated in demo mode.";
-  }
-  return "This action ran in demo simulation mode.";
-}
-
 function normalizeHeaders(headers?: HeadersInit): Record<string, string> {
   if (!headers) return {};
   if (headers instanceof Headers) {
@@ -523,13 +474,7 @@ async function fetchApi<T>(
           clearAuthSession();
           redirectToSignIn();
         }
-        if (parsed.meta?.blockedReason) {
-          showDemoBlockedToast(parsed.meta.blockedReason);
-        }
         throw toApiError(response, parsed);
-      }
-      if (parsed.meta?.simulated) {
-        showDemoSimulatedToast(describeAction(endpoint, options?.method));
       }
       return parsed.data as T;
     }
@@ -645,69 +590,6 @@ export async function uploadJobPdf(
     method: "POST",
     body: JSON.stringify(input),
   });
-}
-
-export async function getTracerAnalytics(options?: {
-  jobId?: string;
-  from?: number;
-  to?: number;
-  includeBots?: boolean;
-  limit?: number;
-}): Promise<TracerAnalyticsResponse> {
-  const params = new URLSearchParams();
-  if (options?.jobId) params.set("jobId", options.jobId);
-  if (typeof options?.from === "number") {
-    params.set("from", String(options.from));
-  }
-  if (typeof options?.to === "number") {
-    params.set("to", String(options.to));
-  }
-  if (typeof options?.includeBots === "boolean") {
-    params.set("includeBots", options.includeBots ? "1" : "0");
-  }
-  if (typeof options?.limit === "number") {
-    params.set("limit", String(options.limit));
-  }
-
-  const query = params.toString();
-  return fetchApi<TracerAnalyticsResponse>(
-    `/tracer-links/analytics${query ? `?${query}` : ""}`,
-  );
-}
-
-export async function getTracerReadiness(options?: {
-  force?: boolean;
-}): Promise<TracerReadinessResponse> {
-  const params = new URLSearchParams();
-  if (options?.force) params.set("force", "1");
-  const query = params.toString();
-  return fetchApi<TracerReadinessResponse>(
-    `/tracer-links/readiness${query ? `?${query}` : ""}`,
-  );
-}
-
-export async function getJobTracerLinks(
-  jobId: string,
-  options?: {
-    from?: number;
-    to?: number;
-    includeBots?: boolean;
-  },
-): Promise<JobTracerLinksResponse> {
-  const params = new URLSearchParams();
-  if (typeof options?.from === "number") {
-    params.set("from", String(options.from));
-  }
-  if (typeof options?.to === "number") {
-    params.set("to", String(options.to));
-  }
-  if (typeof options?.includeBots === "boolean") {
-    params.set("includeBots", options.includeBots ? "1" : "0");
-  }
-  const query = params.toString();
-  return fetchApi<JobTracerLinksResponse>(
-    `/tracer-links/jobs/${encodeURIComponent(jobId)}${query ? `?${query}` : ""}`,
-  );
 }
 
 async function streamSseEvents<TEvent>(
@@ -1095,12 +977,6 @@ export async function generateJobPdf(id: string): Promise<Job> {
   });
 }
 
-export async function checkSponsor(id: string): Promise<Job> {
-  return fetchApi<Job>(`/jobs/${id}/check-sponsor`, {
-    method: "POST",
-  });
-}
-
 export async function markAsApplied(id: string): Promise<Job> {
   return fetchApi<Job>(`/jobs/${id}/apply`, {
     method: "POST",
@@ -1274,251 +1150,6 @@ export async function cancelPipeline(): Promise<{
   });
 }
 
-// Post-Application Tracking API
-export async function postApplicationProviderConnect(input: {
-  provider?: PostApplicationProvider;
-  accountKey?: string;
-  payload?: Record<string, unknown>;
-}): Promise<PostApplicationProviderActionResponse> {
-  const provider = input.provider ?? "gmail";
-  return fetchApi<PostApplicationProviderActionResponse>(
-    `/post-application/providers/${provider}/actions/connect`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        ...(input.accountKey ? { accountKey: input.accountKey } : {}),
-        ...(input.payload ? { payload: input.payload } : {}),
-      }),
-    },
-  );
-}
-
-export async function postApplicationGmailOauthStart(input?: {
-  accountKey?: string;
-}): Promise<{
-  provider: "gmail";
-  accountKey: string;
-  authorizationUrl: string;
-  state: string;
-}> {
-  const params = new URLSearchParams();
-  if (input?.accountKey) params.set("accountKey", input.accountKey);
-  const query = params.toString();
-  return fetchApi<{
-    provider: "gmail";
-    accountKey: string;
-    authorizationUrl: string;
-    state: string;
-  }>(
-    `/post-application/providers/gmail/oauth/start${query ? `?${query}` : ""}`,
-  );
-}
-
-export async function postApplicationGmailOauthExchange(input: {
-  accountKey?: string;
-  state: string;
-  code: string;
-}): Promise<PostApplicationProviderActionResponse> {
-  return fetchApi<PostApplicationProviderActionResponse>(
-    "/post-application/providers/gmail/oauth/exchange",
-    {
-      method: "POST",
-      body: JSON.stringify({
-        ...(input.accountKey ? { accountKey: input.accountKey } : {}),
-        state: input.state,
-        code: input.code,
-      }),
-    },
-  );
-}
-
-export async function postApplicationProviderStatus(input?: {
-  provider?: PostApplicationProvider;
-  accountKey?: string;
-}): Promise<PostApplicationProviderActionResponse> {
-  const provider = input?.provider ?? "gmail";
-  return fetchApi<PostApplicationProviderActionResponse>(
-    `/post-application/providers/${provider}/actions/status`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        ...(input?.accountKey ? { accountKey: input.accountKey } : {}),
-      }),
-    },
-  );
-}
-
-export async function postApplicationProviderSync(input?: {
-  provider?: PostApplicationProvider;
-  accountKey?: string;
-  maxMessages?: number;
-  searchDays?: number;
-}): Promise<PostApplicationProviderActionResponse> {
-  const provider = input?.provider ?? "gmail";
-  return fetchApi<PostApplicationProviderActionResponse>(
-    `/post-application/providers/${provider}/actions/sync`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        ...(input?.accountKey ? { accountKey: input.accountKey } : {}),
-        ...(typeof input?.maxMessages === "number"
-          ? { maxMessages: input.maxMessages }
-          : {}),
-        ...(typeof input?.searchDays === "number"
-          ? { searchDays: input.searchDays }
-          : {}),
-      }),
-    },
-  );
-}
-
-export async function postApplicationProviderDisconnect(input?: {
-  provider?: PostApplicationProvider;
-  accountKey?: string;
-}): Promise<PostApplicationProviderActionResponse> {
-  const provider = input?.provider ?? "gmail";
-  return fetchApi<PostApplicationProviderActionResponse>(
-    `/post-application/providers/${provider}/actions/disconnect`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        ...(input?.accountKey ? { accountKey: input.accountKey } : {}),
-      }),
-    },
-  );
-}
-
-export async function getPostApplicationInbox(input?: {
-  provider?: PostApplicationProvider;
-  accountKey?: string;
-  limit?: number;
-}): Promise<{ items: PostApplicationInboxItem[]; total: number }> {
-  const params = new URLSearchParams();
-  params.set("provider", input?.provider ?? "gmail");
-  params.set("accountKey", input?.accountKey ?? "default");
-  if (typeof input?.limit === "number")
-    params.set("limit", String(input.limit));
-  const query = params.toString();
-  return fetchApi<{ items: PostApplicationInboxItem[]; total: number }>(
-    `/post-application/inbox?${query}`,
-  );
-}
-
-export async function approvePostApplicationInboxItem(input: {
-  messageId: string;
-  provider?: PostApplicationProvider;
-  accountKey?: string;
-  jobId?: string;
-  stageTarget?: PostApplicationRouterStageTarget;
-  toStage?: ApplicationStage;
-  note?: string;
-  decidedBy?: string;
-}): Promise<{
-  message: PostApplicationInboxItem["message"];
-  stageEventId: string | null;
-}> {
-  return fetchApi<{
-    message: PostApplicationInboxItem["message"];
-    stageEventId: string | null;
-  }>(`/post-application/inbox/${encodeURIComponent(input.messageId)}/approve`, {
-    method: "POST",
-    body: JSON.stringify({
-      provider: input.provider ?? "gmail",
-      accountKey: input.accountKey ?? "default",
-      ...(input.jobId ? { jobId: input.jobId } : {}),
-      ...(input.stageTarget ? { stageTarget: input.stageTarget } : {}),
-      ...(input.toStage ? { toStage: input.toStage } : {}),
-      ...(input.note ? { note: input.note } : {}),
-      ...(input.decidedBy ? { decidedBy: input.decidedBy } : {}),
-    }),
-  });
-}
-
-export async function denyPostApplicationInboxItem(input: {
-  messageId: string;
-  provider?: PostApplicationProvider;
-  accountKey?: string;
-  decidedBy?: string;
-}): Promise<{
-  message: PostApplicationInboxItem["message"];
-}> {
-  return fetchApi<{ message: PostApplicationInboxItem["message"] }>(
-    `/post-application/inbox/${encodeURIComponent(input.messageId)}/deny`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        provider: input.provider ?? "gmail",
-        accountKey: input.accountKey ?? "default",
-        ...(input.decidedBy ? { decidedBy: input.decidedBy } : {}),
-      }),
-    },
-  );
-}
-
-export async function runPostApplicationInboxAction(input: {
-  action: PostApplicationAction;
-  provider?: PostApplicationProvider;
-  accountKey?: string;
-  decidedBy?: string;
-}): Promise<PostApplicationActionResponse> {
-  return fetchApi<PostApplicationActionResponse>(
-    "/post-application/inbox/actions",
-    {
-      method: "POST",
-      body: JSON.stringify({
-        action: input.action,
-        provider: input.provider ?? "gmail",
-        accountKey: input.accountKey ?? "default",
-        ...(input.decidedBy ? { decidedBy: input.decidedBy } : {}),
-      }),
-    },
-  );
-}
-
-export async function getPostApplicationRuns(input?: {
-  provider?: PostApplicationProvider;
-  accountKey?: string;
-  limit?: number;
-}): Promise<{ runs: PostApplicationSyncRun[]; total: number }> {
-  const params = new URLSearchParams();
-  params.set("provider", input?.provider ?? "gmail");
-  params.set("accountKey", input?.accountKey ?? "default");
-  if (typeof input?.limit === "number")
-    params.set("limit", String(input.limit));
-  const query = params.toString();
-  return fetchApi<{ runs: PostApplicationSyncRun[]; total: number }>(
-    `/post-application/runs?${query}`,
-  );
-}
-
-export async function getPostApplicationRunMessages(input: {
-  runId: string;
-  provider?: PostApplicationProvider;
-  accountKey?: string;
-  limit?: number;
-}): Promise<{
-  run: PostApplicationSyncRun;
-  items: PostApplicationInboxItem[];
-  total: number;
-}> {
-  const params = new URLSearchParams();
-  params.set("provider", input.provider ?? "gmail");
-  params.set("accountKey", input.accountKey ?? "default");
-  if (typeof input.limit === "number") params.set("limit", String(input.limit));
-  const query = params.toString();
-  return fetchApi<{
-    run: PostApplicationSyncRun;
-    items: PostApplicationInboxItem[];
-    total: number;
-  }>(
-    `/post-application/runs/${encodeURIComponent(input.runId)}/messages?${query}`,
-  );
-}
-
-export async function getDemoInfo(): Promise<DemoInfoResponse> {
-  return fetchApi<DemoInfoResponse>("/demo/info");
-}
-
 // Manual Job Import API
 export async function fetchJobFromUrl(input: {
   url: string;
@@ -1573,89 +1204,11 @@ export async function getProfileProjects(): Promise<
 export async function getResumeProjectsCatalog(): Promise<
   ResumeProjectCatalogItem[]
 > {
-  try {
-    const settings = await getSettings();
-    if (settings.rxresumeBaseResumeId) {
-      return await getRxResumeProjects(
-        settings.rxresumeBaseResumeId,
-        undefined,
-      );
-    }
-  } catch {
-    // fall through to profile-based projects
-  }
-
   return getProfileProjects();
 }
 
 export async function getProfile(): Promise<ResumeProfile> {
   return fetchApi<ResumeProfile>("/profile");
-}
-
-export async function getDesignResume(): Promise<DesignResumeDocument> {
-  return fetchApi<DesignResumeDocument>("/design-resume");
-}
-
-export async function getDesignResumeStatus(): Promise<DesignResumeStatusResponse> {
-  return fetchApi<DesignResumeStatusResponse>("/design-resume/status");
-}
-
-export async function importDesignResumeFromRxResume(): Promise<DesignResumeDocument> {
-  return fetchApi<DesignResumeDocument>("/design-resume/import/rxresume", {
-    method: "POST",
-  });
-}
-
-export async function importDesignResumeFromFile(input: {
-  fileName: string;
-  mediaType?: string;
-  dataBase64: string;
-}): Promise<DesignResumeDocument> {
-  return fetchApi<DesignResumeDocument>("/design-resume/import/file", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
-}
-
-export async function updateDesignResume(
-  input: DesignResumePatchRequest,
-): Promise<DesignResumeDocument> {
-  return fetchApi<DesignResumeDocument>("/design-resume", {
-    method: "PATCH",
-    body: JSON.stringify(input),
-  });
-}
-
-export async function uploadDesignResumePicture(input: {
-  fileName: string;
-  dataUrl: string;
-  baseRevision?: number;
-  document?: DesignResumeJson;
-}): Promise<DesignResumeDocument> {
-  return fetchApi<DesignResumeDocument>("/design-resume/assets", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
-}
-
-export async function deleteDesignResumePicture(input?: {
-  baseRevision?: number;
-  document?: DesignResumeJson;
-}): Promise<DesignResumeDocument> {
-  return fetchApi<DesignResumeDocument>("/design-resume/assets/picture", {
-    method: "DELETE",
-    body: JSON.stringify(input ?? {}),
-  });
-}
-
-export async function exportDesignResume(): Promise<DesignResumeExportResponse> {
-  return fetchApi<DesignResumeExportResponse>("/design-resume/export");
-}
-
-export async function generateDesignResumePdf(): Promise<DesignResumePdfResponse> {
-  return fetchApi<DesignResumePdfResponse>("/design-resume/generate-pdf", {
-    method: "POST",
-  });
 }
 
 export async function getProfileStatus(): Promise<ProfileStatusResponse> {
@@ -1712,20 +1265,6 @@ export async function disconnectCodexAuth(): Promise<CodexAuthStatusResponse> {
   });
 }
 
-export async function validateRxresume(input?: {
-  apiKey?: string;
-  baseUrl?: string;
-}): Promise<ValidationResult> {
-  return fetchApi<ValidationResult>("/onboarding/validate/rxresume", {
-    method: "POST",
-    body: JSON.stringify(input ?? {}),
-  });
-}
-
-export async function validateResumeConfig(): Promise<ValidationResult> {
-  return fetchApi<ValidationResult>("/onboarding/validate/resume");
-}
-
 export async function suggestOnboardingSearchTerms(): Promise<SearchTermsSuggestionResponse> {
   return fetchApi<SearchTermsSuggestionResponse>(
     "/onboarding/search-terms/suggest",
@@ -1742,24 +1281,6 @@ export async function updateSettings(
     method: "PATCH",
     body: JSON.stringify(update),
   });
-}
-
-export async function getRxResumes(): Promise<{ id: string; name: string }[]> {
-  const data = await fetchApi<{ resumes: { id: string; name: string }[] }>(
-    `/settings/rx-resumes`,
-  );
-  return data.resumes;
-}
-
-export async function getRxResumeProjects(
-  resumeId: string,
-  signal?: AbortSignal,
-): Promise<ResumeProjectCatalogItem[]> {
-  const data = await fetchApi<{ projects: ResumeProjectCatalogItem[] }>(
-    `/settings/rx-resumes/${encodeURIComponent(resumeId)}/projects`,
-    { signal },
-  );
-  return data.projects;
 }
 
 // Database API
@@ -1803,66 +1324,4 @@ export async function deleteJobsBelowScore(threshold: number): Promise<{
   });
 }
 
-// Visa Sponsors API
-export async function getVisaSponsorStatus(): Promise<VisaSponsorStatusResponse> {
-  return fetchApi<VisaSponsorStatusResponse>("/visa-sponsors/status");
-}
-
-export async function searchVisaSponsors(input: {
-  query: string;
-  limit?: number;
-  minScore?: number;
-  country?: string;
-}): Promise<VisaSponsorSearchResponse> {
-  return fetchApi<VisaSponsorSearchResponse>("/visa-sponsors/search", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
-}
-
-export async function getVisaSponsorOrganization(
-  name: string,
-  providerId?: string,
-): Promise<VisaSponsor[]> {
-  const params = new URLSearchParams();
-  if (providerId) params.set("providerId", providerId);
-  return fetchApi<VisaSponsor[]>(
-    `/visa-sponsors/organization/${encodeURIComponent(name)}${params.size ? `?${params.toString()}` : ""}`,
-  );
-}
-
-export async function updateVisaSponsorList(): Promise<{
-  message: string;
-  status: VisaSponsorStatusResponse;
-}> {
-  return fetchApi<{
-    message: string;
-    status: VisaSponsorStatusResponse;
-  }>("/visa-sponsors/update", {
-    method: "POST",
-  });
-}
-
 // Multi-job operations (intentionally none - processing is manual)
-
-// Backup API
-export interface BackupListResponse {
-  backups: BackupInfo[];
-  nextScheduled: string | null;
-}
-
-export async function getBackups(): Promise<BackupListResponse> {
-  return fetchApi<BackupListResponse>("/backups");
-}
-
-export async function createManualBackup(): Promise<BackupInfo> {
-  return fetchApi<BackupInfo>("/backups", {
-    method: "POST",
-  });
-}
-
-export async function deleteBackup(filename: string): Promise<void> {
-  await fetchApi<void>(`/backups/${encodeURIComponent(filename)}`, {
-    method: "DELETE",
-  });
-}

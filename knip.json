@@ -26,19 +26,7 @@
       "project": ["src/**/*.ts"],
       "ignore": ["src/**/*.test.ts"]
     },
-    "extractors/adzuna": {
-      "entry": ["src/main.ts"],
-      "project": ["src/**/*.ts"]
-    },
-    "extractors/gradcracker": {
-      "entry": ["src/main.ts"],
-      "project": ["src/**/*.ts"]
-    },
     "extractors/hiringcafe": {
-      "entry": ["src/main.ts"],
-      "project": ["src/**/*.ts"]
-    },
-    "extractors/ukvisajobs": {
       "entry": ["src/main.ts"],
       "project": ["src/**/*.ts"]
     }

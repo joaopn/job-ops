@@ -1,56 +1,26 @@
 import * as api from "@client/api";
 import { PageHeader } from "@client/components/layout";
 import { useUpdateSettingsMutation } from "@client/hooks/queries/useSettingsMutation";
-import { useRxResumeConfigState } from "@client/hooks/useRxResumeConfigState";
-import { useTracerReadiness } from "@client/hooks/useTracerReadiness";
-import {
-  getRxResumeCredentialDrafts,
-  getRxResumeCredentialPrecheckFailure,
-  isRxResumeAvailabilityValidationFailure,
-  isRxResumeBlockingValidationFailure,
-  RXRESUME_PRECHECK_MESSAGES,
-  toRxResumeValidationPayload,
-  validateAndMaybePersistRxResumeMode,
-} from "@client/lib/rxresume-config";
-import { BackupSettingsSection } from "@client/pages/settings/components/BackupSettingsSection";
 import { ChatSettingsSection } from "@client/pages/settings/components/ChatSettingsSection";
 import { DangerZoneSection } from "@client/pages/settings/components/DangerZoneSection";
 import { DisplaySettingsSection } from "@client/pages/settings/components/DisplaySettingsSection";
 import { EnvironmentSettingsSection } from "@client/pages/settings/components/EnvironmentSettingsSection";
 import { ModelSettingsSection } from "@client/pages/settings/components/ModelSettingsSection";
-import { PromptTemplatesSection } from "@client/pages/settings/components/PromptTemplatesSection";
-import { ReactiveResumeSection } from "@client/pages/settings/components/ReactiveResumeSection";
-import { ScoringSettingsSection } from "@client/pages/settings/components/ScoringSettingsSection";
-import { TracerLinksSettingsSection } from "@client/pages/settings/components/TracerLinksSettingsSection";
-import { WebhooksSection } from "@client/pages/settings/components/WebhooksSection";
 import {
   type LlmProviderId,
   normalizeLlmProvider,
-  resumeProjectsEqual,
 } from "@client/pages/settings/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { normalizeStringArray } from "@shared/normalize-string-array.js";
 import {
   type UpdateSettingsInput,
   updateSettingsSchema,
 } from "@shared/settings-schema.js";
-import type {
-  AppSettings,
-  JobStatus,
-  ResumeProjectCatalogItem,
-  ResumeProjectsSettings,
-  ValidationResult,
-} from "@shared/types.js";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type { AppSettings, JobStatus } from "@shared/types.js";
+import { useQuery } from "@tanstack/react-query";
 import { Search, Settings } from "lucide-react";
 import type React from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  FormProvider,
-  type Resolver,
-  useForm,
-  useWatch,
-} from "react-hook-form";
+import { useEffect, useMemo, useState } from "react";
+import { FormProvider, type Resolver, useForm } from "react-hook-form";
 import { useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { useQueryErrorToast } from "@/client/hooks/useQueryErrorToast";
@@ -73,11 +43,6 @@ const DEFAULT_FORM_VALUES: UpdateSettingsInput = {
   llmProvider: null,
   llmBaseUrl: "",
   llmApiKey: "",
-  pipelineWebhookUrl: "",
-  jobCompleteWebhookUrl: "",
-  resumeProjects: null,
-  pdfRenderer: "rxresume",
-  rxresumeBaseResumeId: null,
   showSponsorInfo: null,
   renderMarkdownInJobDescriptions: null,
   chatStyleTone: "",
@@ -88,64 +53,24 @@ const DEFAULT_FORM_VALUES: UpdateSettingsInput = {
   chatStyleMaxKeywordsPerSkill: null,
   chatStyleLanguageMode: null,
   chatStyleManualLanguage: null,
-  rxresumeUrl: "",
-  rxresumeApiKey: "",
   basicAuthUser: "",
   basicAuthPassword: "",
-  ukvisajobsEmail: "",
-  ukvisajobsPassword: "",
-  adzunaAppId: "",
-  adzunaAppKey: "",
-  webhookSecret: "",
   enableBasicAuth: false,
-  backupEnabled: null,
-  backupHour: null,
-  backupMaxCount: null,
   penalizeMissingSalary: null,
   missingSalaryPenalty: null,
   autoSkipScoreThreshold: null,
-  blockedCompanyKeywords: [],
-  scoringInstructions: "",
-  ghostwriterSystemPromptTemplate: "",
-  tailoringPromptTemplate: "",
-  scoringPromptTemplate: "",
 };
 
 type LlmProviderValue = LlmProviderId | null;
-type RxResumeValidationBadgeState = {
-  checked: boolean;
-  valid: boolean;
-  message: string | null;
-  status: number | null;
-};
-const EMPTY_RXRESUME_VALIDATION_BADGE_STATE: RxResumeValidationBadgeState = {
-  checked: false,
-  valid: false,
-  message: null,
-  status: null,
-};
 
 type SettingsSectionId =
   | "model"
   | "chat"
-  | "prompt-templates"
-  | "scoring"
-  | "reactive-resume"
-  | "webhooks"
-  | "tracer-links"
   | "environment"
   | "display"
-  | "backup"
   | "danger-zone";
 
-type SettingsGroupId =
-  | "ai"
-  | "scoring"
-  | "integrations"
-  | "accounts"
-  | "display"
-  | "backups"
-  | "danger";
+type SettingsGroupId = "ai" | "accounts" | "display" | "danger";
 
 type SettingsSectionDescriptor = {
   id: SettingsSectionId;
@@ -177,50 +102,6 @@ const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         description: "Tone, language, presets, and writing constraints.",
         searchTerms: ["ghostwriter", "language", "tone", "formality"],
       },
-      {
-        id: "prompt-templates",
-        label: "Prompt Templates",
-        description:
-          "Base AI instructions for Ghostwriter, tailoring, and scoring.",
-        searchTerms: ["prompt", "templates", "system prompt", "instructions"],
-      },
-    ],
-  },
-  {
-    id: "scoring",
-    label: "Scoring",
-    items: [
-      {
-        id: "scoring",
-        label: "Rules & Filters",
-        description:
-          "Salary penalties, thresholds, keywords, and scorer hints.",
-        searchTerms: ["threshold", "salary", "keywords", "instructions"],
-      },
-    ],
-  },
-  {
-    id: "integrations",
-    label: "Integrations",
-    items: [
-      {
-        id: "reactive-resume",
-        label: "Reactive Resume",
-        description: "Resume sync, templates, and project selection.",
-        searchTerms: ["rxresume", "resume", "projects", "template"],
-      },
-      {
-        id: "webhooks",
-        label: "Webhooks",
-        description: "Pipeline and job completion event destinations.",
-        searchTerms: ["hooks", "notifications", "pipeline", "applied"],
-      },
-      {
-        id: "tracer-links",
-        label: "Tracer Links",
-        description: "Public URL readiness and verification state.",
-        searchTerms: ["public url", "verify", "readiness", "health"],
-      },
     ],
   },
   {
@@ -231,7 +112,7 @@ const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         id: "environment",
         label: "Accounts & Access",
         description: "Service credentials and authentication protection.",
-        searchTerms: ["security", "auth", "adzuna", "ukvisajobs"],
+        searchTerms: ["security", "auth"],
       },
     ],
   },
@@ -244,18 +125,6 @@ const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         label: "Display Preferences",
         description: "Sponsor badges and markdown rendering behavior.",
         searchTerms: ["markdown", "sponsor", "rendering", "appearance"],
-      },
-    ],
-  },
-  {
-    id: "backups",
-    label: "Backups",
-    items: [
-      {
-        id: "backup",
-        label: "Backups",
-        description: "Automatic schedules, retention, and manual snapshots.",
-        searchTerms: ["recovery", "database", "restore", "schedule"],
       },
     ],
   },
@@ -294,38 +163,12 @@ const SECTION_FIELD_MAP: Record<
     "chatStyleLanguageMode",
     "chatStyleManualLanguage",
   ],
-  "prompt-templates": [
-    "ghostwriterSystemPromptTemplate",
-    "tailoringPromptTemplate",
-    "scoringPromptTemplate",
-  ],
-  scoring: [
-    "penalizeMissingSalary",
-    "missingSalaryPenalty",
-    "autoSkipScoreThreshold",
-    "blockedCompanyKeywords",
-    "scoringInstructions",
-  ],
-  "reactive-resume": [
-    "pdfRenderer",
-    "rxresumeBaseResumeId",
-    "rxresumeApiKey",
-    "rxresumeUrl",
-    "resumeProjects",
-  ],
-  webhooks: ["pipelineWebhookUrl", "jobCompleteWebhookUrl", "webhookSecret"],
-  "tracer-links": [],
   environment: [
-    "ukvisajobsEmail",
-    "ukvisajobsPassword",
-    "adzunaAppId",
-    "adzunaAppKey",
     "enableBasicAuth",
     "basicAuthUser",
     "basicAuthPassword",
   ],
   display: ["showSponsorInfo", "renderMarkdownInJobDescriptions"],
-  backup: ["backupEnabled", "backupHour", "backupMaxCount"],
   "danger-zone": [],
 };
 
@@ -341,19 +184,6 @@ function matchesSettingsSearch(
   return haystack.toLowerCase().includes(normalized);
 }
 
-const getRxResumeValidationFields = (): Array<keyof UpdateSettingsInput> => [
-  "rxresumeApiKey",
-  "rxresumeUrl",
-];
-const toRxResumeValidationBadgeState = (
-  validation: ValidationResult,
-): RxResumeValidationBadgeState => ({
-  checked: true,
-  valid: validation.valid,
-  message: validation.valid ? null : (validation.message ?? null),
-  status: validation.valid ? null : (validation.status ?? null),
-});
-
 const normalizeLlmProviderValue = (
   value: string | null | undefined,
 ): LlmProviderValue => (value ? normalizeLlmProvider(value) : null);
@@ -366,11 +196,6 @@ const NULL_SETTINGS_PAYLOAD: UpdateSettingsInput = {
   llmProvider: null,
   llmBaseUrl: null,
   llmApiKey: null,
-  pipelineWebhookUrl: null,
-  jobCompleteWebhookUrl: null,
-  resumeProjects: null,
-  pdfRenderer: null,
-  rxresumeBaseResumeId: null,
   showSponsorInfo: null,
   renderMarkdownInJobDescriptions: null,
   chatStyleTone: null,
@@ -381,28 +206,12 @@ const NULL_SETTINGS_PAYLOAD: UpdateSettingsInput = {
   chatStyleMaxKeywordsPerSkill: null,
   chatStyleLanguageMode: null,
   chatStyleManualLanguage: null,
-  rxresumeUrl: null,
-  rxresumeApiKey: null,
   basicAuthUser: null,
   basicAuthPassword: null,
-  ukvisajobsEmail: null,
-  ukvisajobsPassword: null,
-  adzunaAppId: null,
-  adzunaAppKey: null,
-  adzunaMaxJobsPerTerm: null,
-  webhookSecret: null,
   enableBasicAuth: undefined,
-  backupEnabled: null,
-  backupHour: null,
-  backupMaxCount: null,
   penalizeMissingSalary: null,
   missingSalaryPenalty: null,
   autoSkipScoreThreshold: null,
-  blockedCompanyKeywords: null,
-  scoringInstructions: null,
-  ghostwriterSystemPromptTemplate: null,
-  tailoringPromptTemplate: null,
-  scoringPromptTemplate: null,
 };
 
 const mapSettingsToForm = (data: AppSettings): UpdateSettingsInput => ({
@@ -415,11 +224,6 @@ const mapSettingsToForm = (data: AppSettings): UpdateSettingsInput => ({
   ),
   llmBaseUrl: data.llmBaseUrl.override ?? "",
   llmApiKey: "",
-  pipelineWebhookUrl: data.pipelineWebhookUrl.override ?? "",
-  jobCompleteWebhookUrl: data.jobCompleteWebhookUrl.override ?? "",
-  resumeProjects: data.resumeProjects.override,
-  pdfRenderer: data.pdfRenderer.override ?? data.pdfRenderer.value,
-  rxresumeBaseResumeId: data.rxresumeBaseResumeId,
   showSponsorInfo: data.showSponsorInfo.override,
   renderMarkdownInJobDescriptions:
     data.renderMarkdownInJobDescriptions.override,
@@ -432,28 +236,12 @@ const mapSettingsToForm = (data: AppSettings): UpdateSettingsInput => ({
     data.chatStyleMaxKeywordsPerSkill.override ?? null,
   chatStyleLanguageMode: data.chatStyleLanguageMode.override ?? null,
   chatStyleManualLanguage: data.chatStyleManualLanguage.override ?? null,
-  rxresumeUrl: data.rxresumeUrl ?? "",
-  rxresumeApiKey: "",
   basicAuthUser: data.basicAuthUser ?? "",
   basicAuthPassword: data.basicAuthPassword ?? "",
-  ukvisajobsEmail: data.ukvisajobsEmail ?? "",
-  ukvisajobsPassword: "",
-  adzunaAppId: data.adzunaAppId ?? "",
-  adzunaAppKey: "",
-  webhookSecret: "",
   enableBasicAuth: data.basicAuthActive,
-  backupEnabled: data.backupEnabled.override,
-  backupHour: data.backupHour.override,
-  backupMaxCount: data.backupMaxCount.override,
   penalizeMissingSalary: data.penalizeMissingSalary.override,
   missingSalaryPenalty: data.missingSalaryPenalty.override,
   autoSkipScoreThreshold: data.autoSkipScoreThreshold.override,
-  blockedCompanyKeywords: data.blockedCompanyKeywords.override ?? [],
-  scoringInstructions: data.scoringInstructions.override ?? "",
-  ghostwriterSystemPromptTemplate:
-    data.ghostwriterSystemPromptTemplate.value ?? "",
-  tailoringPromptTemplate: data.tailoringPromptTemplate.value ?? "",
-  scoringPromptTemplate: data.scoringPromptTemplate.value ?? "",
 });
 
 const normalizeString = (value: string | null | undefined) => {
@@ -467,51 +255,10 @@ const normalizePrivateInput = (value: string | null | undefined) => {
   return trimmed || undefined;
 };
 
-const stringArraysEqual = (left: string[], right: string[]): boolean => {
-  if (left.length !== right.length) return false;
-  return left.every((value, index) => value === right[index]);
-};
-
 const nullIfSame = <T,>(value: T | null | undefined, defaultValue: T) =>
   value === defaultValue ? null : (value ?? null);
 
-const normalizeResumeProjectsForCatalog = (
-  catalog: ResumeProjectCatalogItem[],
-  current: ResumeProjectsSettings | null,
-): ResumeProjectsSettings | null => {
-  const allowed = new Set(catalog.map((project) => project.id));
-
-  const base = current ?? {
-    maxProjects: 0,
-    lockedProjectIds: catalog
-      .filter((project) => project.isVisibleInBase)
-      .map((project) => project.id),
-    aiSelectableProjectIds: [],
-  };
-
-  const lockedProjectIds = base.lockedProjectIds.filter((id) =>
-    allowed.has(id),
-  );
-  const lockedSet = new Set(lockedProjectIds);
-  const aiSelectableProjectIds = (
-    current ? base.aiSelectableProjectIds : catalog.map((project) => project.id)
-  )
-    .filter((id) => allowed.has(id))
-    .filter((id) => !lockedSet.has(id));
-  const maxProjectsRaw = Number.isFinite(base.maxProjects)
-    ? base.maxProjects
-    : 0;
-  const maxProjectsInt = Math.max(0, Math.floor(maxProjectsRaw));
-  const maxProjects = Math.min(
-    catalog.length,
-    Math.max(lockedProjectIds.length, maxProjectsInt, 3),
-  );
-  return { maxProjects, lockedProjectIds, aiSelectableProjectIds };
-};
-
 const getDerivedSettings = (settings: AppSettings | null) => {
-  const profileProjects = settings?.profileProjects ?? [];
-
   return {
     model: {
       effective: settings?.model?.value ?? "",
@@ -522,20 +269,6 @@ const getDerivedSettings = (settings: AppSettings | null) => {
       llmProvider: settings?.llmProvider?.value ?? "",
       llmBaseUrl: settings?.llmBaseUrl?.value ?? "",
       llmApiKeyHint: settings?.llmApiKeyHint ?? null,
-    },
-    pipelineWebhook: {
-      effective: settings?.pipelineWebhookUrl?.value ?? "",
-      default: settings?.pipelineWebhookUrl?.default ?? "",
-    },
-    jobCompleteWebhook: {
-      effective: settings?.jobCompleteWebhookUrl?.value ?? "",
-      default: settings?.jobCompleteWebhookUrl?.default ?? "",
-    },
-    reactiveResume: {
-      pdfRenderer: {
-        effective: settings?.pdfRenderer?.value ?? "rxresume",
-        default: settings?.pdfRenderer?.default ?? "rxresume",
-      },
     },
     display: {
       showSponsorInfo: {
@@ -583,37 +316,13 @@ const getDerivedSettings = (settings: AppSettings | null) => {
     },
     envSettings: {
       readable: {
-        ukvisajobsEmail: settings?.ukvisajobsEmail ?? "",
-        adzunaAppId: settings?.adzunaAppId ?? "",
         basicAuthUser: settings?.basicAuthUser ?? "",
         basicAuthPassword: settings?.basicAuthPassword ?? "",
       },
       private: {
-        ukvisajobsPasswordHint: settings?.ukvisajobsPasswordHint ?? null,
-        adzunaAppKeyHint: settings?.adzunaAppKeyHint ?? null,
         basicAuthPasswordHint: settings?.basicAuthPasswordHint ?? null,
-        webhookSecretHint: settings?.webhookSecretHint ?? null,
       },
       basicAuthActive: settings?.basicAuthActive ?? false,
-    },
-    defaultResumeProjects: settings?.resumeProjects?.default ?? null,
-
-    profileProjects,
-    maxProjectsTotal: profileProjects.length,
-
-    backup: {
-      backupEnabled: {
-        effective: settings?.backupEnabled?.value ?? false,
-        default: settings?.backupEnabled?.default ?? false,
-      },
-      backupHour: {
-        effective: settings?.backupHour?.value ?? 2,
-        default: settings?.backupHour?.default ?? 2,
-      },
-      backupMaxCount: {
-        effective: settings?.backupMaxCount?.value ?? 5,
-        default: settings?.backupMaxCount?.default ?? 5,
-      },
     },
     scoring: {
       penalizeMissingSalary: {
@@ -628,34 +337,11 @@ const getDerivedSettings = (settings: AppSettings | null) => {
         effective: settings?.autoSkipScoreThreshold?.value ?? null,
         default: settings?.autoSkipScoreThreshold?.default ?? null,
       },
-      blockedCompanyKeywords: {
-        effective: settings?.blockedCompanyKeywords?.value ?? [],
-        default: settings?.blockedCompanyKeywords?.default ?? [],
-      },
-      scoringInstructions: {
-        effective: settings?.scoringInstructions?.value ?? "",
-        default: settings?.scoringInstructions?.default ?? "",
-      },
-    },
-    promptTemplates: {
-      ghostwriterSystemPromptTemplate: {
-        effective: settings?.ghostwriterSystemPromptTemplate?.value ?? "",
-        default: settings?.ghostwriterSystemPromptTemplate?.default ?? "",
-      },
-      tailoringPromptTemplate: {
-        effective: settings?.tailoringPromptTemplate?.value ?? "",
-        default: settings?.tailoringPromptTemplate?.default ?? "",
-      },
-      scoringPromptTemplate: {
-        effective: settings?.scoringPromptTemplate?.value ?? "",
-        default: settings?.scoringPromptTemplate?.default ?? "",
-      },
     },
   };
 };
 
 export const SettingsPage: React.FC = () => {
-  const queryClient = useQueryClient();
   const location = useLocation();
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [activeSection, setActiveSection] =
@@ -682,31 +368,9 @@ export const SettingsPage: React.FC = () => {
 
   const [settingsSearch, setSettingsSearch] = useState("");
   const [isSaving, setIsSaving] = useState(false);
-  const [rxresumeValidationStatus, setRxresumeValidationStatus] =
-    useState<RxResumeValidationBadgeState>(
-      EMPTY_RXRESUME_VALIDATION_BADGE_STATE,
-    );
   const [statusesToClear, setStatusesToClear] = useState<JobStatus[]>([
     "discovered",
   ]);
-  const [rxResumeBaseResumeIdDraft, setRxResumeBaseResumeIdDraft] = useState<
-    string | null
-  >(null);
-  const [rxResumeProjectsOverride, setRxResumeProjectsOverride] = useState<
-    ResumeProjectCatalogItem[] | null
-  >(null);
-  const [isFetchingRxResumeProjects, setIsFetchingRxResumeProjects] =
-    useState(false);
-
-  // Backup state
-  const [isCreatingBackup, setIsCreatingBackup] = useState(false);
-  const [isDeletingBackup, setIsDeletingBackup] = useState(false);
-  const {
-    readiness: tracerReadiness,
-    isLoading: isTracerReadinessLoading,
-    isChecking: isTracerReadinessChecking,
-    refreshReadiness,
-  } = useTracerReadiness();
 
   const methods = useForm<UpdateSettingsInput>({
     resolver: zodResolver(
@@ -717,37 +381,18 @@ export const SettingsPage: React.FC = () => {
   });
 
   const {
-    clearErrors,
     handleSubmit,
     reset,
     setError,
-    setValue,
-    getValues,
-    control,
     formState: { isDirty, errors, isValid, dirtyFields },
   } = methods;
-  const { storedRxResume, setBaseResumeId } = useRxResumeConfigState(settings);
 
   const settingsQuery = useQuery({
     queryKey: queryKeys.settings.current(),
     queryFn: api.getSettings,
   });
-  const backupsQuery = useQuery({
-    queryKey: queryKeys.backups.list(),
-    queryFn: api.getBackups,
-  });
   const updateSettingsMutation = useUpdateSettingsMutation();
   const isLoading = settingsQuery.isLoading;
-  const backups = backupsQuery.data?.backups ?? [];
-  const nextScheduled = backupsQuery.data?.nextScheduled ?? null;
-  const isLoadingBackups = backupsQuery.isLoading;
-  useQueryErrorToast(backupsQuery.error, "Failed to load backups");
-
-  const resumeProjectsValue = useWatch({
-    control,
-    name: "resumeProjects",
-  });
-  const hasRxResumeAccess = Boolean(rxresumeValidationStatus.valid);
 
   useEffect(() => {
     if (!settingsQuery.data) return;
@@ -757,217 +402,8 @@ export const SettingsPage: React.FC = () => {
 
   useQueryErrorToast(settingsQuery.error, "Failed to load settings");
 
-  useEffect(() => {
-    if (!settings) return;
-    const storedId = settings?.rxresumeBaseResumeId ?? null;
-    setRxResumeBaseResumeIdDraft(storedId);
-    setValue("rxresumeBaseResumeId", storedId, { shouldDirty: false });
-    setRxResumeProjectsOverride(null);
-  }, [settings, setValue]);
-
-  useEffect(() => {
-    let isMounted = true;
-    const controller = new AbortController();
-
-    if (!rxResumeBaseResumeIdDraft) {
-      setRxResumeProjectsOverride(null);
-      return () => {
-        isMounted = false;
-        controller.abort();
-      };
-    }
-
-    if (!hasRxResumeAccess)
-      return () => {
-        isMounted = false;
-        controller.abort();
-      };
-
-    setIsFetchingRxResumeProjects(true);
-    api
-      .getRxResumeProjects(rxResumeBaseResumeIdDraft, controller.signal)
-      .then((projects) => {
-        if (!isMounted) return;
-        setRxResumeProjectsOverride(projects);
-        const normalized = normalizeResumeProjectsForCatalog(
-          projects,
-          getValues("resumeProjects") ?? null,
-        );
-        if (normalized) {
-          setValue("resumeProjects", normalized, { shouldDirty: false });
-        }
-      })
-      .catch((error) => {
-        if (!isMounted || error.name === "AbortError") return;
-        const message =
-          error instanceof Error
-            ? error.message
-            : "Failed to load RxResume projects";
-        toast.error(message);
-        setRxResumeProjectsOverride(null);
-      })
-      .finally(() => {
-        if (!isMounted) return;
-        setIsFetchingRxResumeProjects(false);
-      });
-
-    return () => {
-      isMounted = false;
-      controller.abort();
-    };
-  }, [rxResumeBaseResumeIdDraft, hasRxResumeAccess, getValues, setValue]);
-
   const derived = getDerivedSettings(settings);
-  const {
-    model,
-    pipelineWebhook,
-    jobCompleteWebhook,
-    reactiveResume,
-    display,
-    chat,
-    envSettings,
-    defaultResumeProjects,
-    profileProjects,
-    backup,
-    scoring,
-    promptTemplates,
-  } = derived;
-
-  const handleCreateBackup = async () => {
-    setIsCreatingBackup(true);
-    try {
-      await api.createManualBackup();
-      toast.success("Backup created successfully");
-      await queryClient.invalidateQueries({ queryKey: queryKeys.backups.all });
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to create backup";
-      toast.error(message);
-    } finally {
-      setIsCreatingBackup(false);
-    }
-  };
-
-  const handleDeleteBackup = async (filename: string) => {
-    const confirmed = window.confirm(
-      `Delete backup "${filename}"? This action cannot be undone.`,
-    );
-    if (!confirmed) {
-      return;
-    }
-    setIsDeletingBackup(true);
-    try {
-      await api.deleteBackup(filename);
-      toast.success("Backup deleted successfully");
-      await queryClient.invalidateQueries({ queryKey: queryKeys.backups.all });
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to delete backup";
-      toast.error(message);
-    } finally {
-      setIsDeletingBackup(false);
-    }
-  };
-
-  const handleVerifyTracerReadiness = useCallback(async () => {
-    try {
-      const readiness = await refreshReadiness(true);
-      if (!readiness) {
-        toast.error("Tracer links are unavailable. Verify your public URL.");
-      } else if (readiness.canEnable) {
-        toast.success("Tracer links are ready");
-      } else {
-        toast.error(
-          readiness.reason ??
-            "Tracer links are unavailable. Verify your public URL.",
-        );
-      }
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Failed to verify tracer-link readiness";
-      toast.error(message);
-    }
-  }, [refreshReadiness]);
-
-  const setRxResumeValidationStatus = useCallback(
-    (validation: ValidationResult) => {
-      setRxresumeValidationStatus(toRxResumeValidationBadgeState(validation));
-    },
-    [],
-  );
-
-  const clearRxResumeValidationFeedback = useCallback(() => {
-    setRxresumeValidationStatus(EMPTY_RXRESUME_VALIDATION_BADGE_STATE);
-    clearErrors(["rxresumeApiKey"]);
-  }, [clearErrors]);
-
-  const validateRxresume = useCallback(
-    async (options?: { silent?: boolean; persistOnSuccess?: boolean }) => {
-      const { silent = false, persistOnSuccess = true } = options ?? {};
-      const notify = !silent;
-      const values = getValues();
-      const draftCredentials = getRxResumeCredentialDrafts(values);
-      const result = await validateAndMaybePersistRxResumeMode({
-        stored: storedRxResume,
-        draft: draftCredentials,
-        validate: api.validateRxresume,
-        persist: api.updateSettings,
-        persistOnSuccess,
-        skipPrecheck: silent,
-        getPrecheckMessage: (failure) => RXRESUME_PRECHECK_MESSAGES[failure],
-        getValidationErrorMessage: (error) =>
-          error instanceof Error ? error.message : "RxResume validation failed",
-        getPersistErrorMessage: (error) =>
-          error instanceof Error ? error.message : "RxResume validation failed",
-      });
-
-      setRxResumeValidationStatus(result.validation);
-
-      if (result.updatedSettings) {
-        setSettings(result.updatedSettings);
-        queryClient.setQueryData(
-          queryKeys.settings.current(),
-          result.updatedSettings,
-        );
-        if (notify) {
-          toast.success(`Reactive Resume validation passed`);
-        }
-        return;
-      }
-
-      if (!notify || result.validation.valid) {
-        return;
-      }
-
-      if (result.precheckFailure) {
-        toast.info(
-          result.validation.message ??
-            RXRESUME_PRECHECK_MESSAGES[result.precheckFailure],
-        );
-        return;
-      }
-
-      toast.error(
-        result.validation.message || `Reactive Resume validation failed`,
-      );
-    },
-    [getValues, queryClient, setRxResumeValidationStatus, storedRxResume],
-  );
-
-  useEffect(() => {
-    if (!settings) return;
-
-    if (!rxresumeValidationStatus.checked) {
-      void validateRxresume({ silent: true, persistOnSuccess: false });
-    }
-  }, [rxresumeValidationStatus, settings, validateRxresume]);
-
-  const effectiveProfileProjects = rxResumeProjectsOverride ?? profileProjects;
-  const effectiveMaxProjectsTotal = effectiveProfileProjects.length;
-
-  const lockedCount = resumeProjectsValue?.lockedProjectIds.length ?? 0;
+  const { model, display, chat, envSettings, scoring } = derived;
 
   const canSave = isDirty && isValid;
 
@@ -986,28 +422,7 @@ export const SettingsPage: React.FC = () => {
     try {
       setIsSaving(true);
 
-      // Prepare payload: nullify if equal to default
-      const resumeProjectsData = data.resumeProjects;
-      const resumeProjectsOverride =
-        resumeProjectsData &&
-        defaultResumeProjects &&
-        resumeProjectsEqual(resumeProjectsData, defaultResumeProjects)
-          ? null
-          : resumeProjectsData;
-
       const envPayload: Partial<UpdateSettingsInput> = {};
-
-      if (dirtyFields.rxresumeUrl) {
-        envPayload.rxresumeUrl = normalizeString(data.rxresumeUrl);
-      }
-
-      if (dirtyFields.ukvisajobsEmail || dirtyFields.ukvisajobsPassword) {
-        envPayload.ukvisajobsEmail = normalizeString(data.ukvisajobsEmail);
-      }
-
-      if (dirtyFields.adzunaAppId || dirtyFields.adzunaAppKey) {
-        envPayload.adzunaAppId = normalizeString(data.adzunaAppId);
-      }
 
       if (data.enableBasicAuth === false) {
         envPayload.basicAuthUser = null;
@@ -1017,8 +432,6 @@ export const SettingsPage: React.FC = () => {
         dirtyFields.basicAuthUser ||
         dirtyFields.basicAuthPassword
       ) {
-        // If enabling authentication or changing either field, ensure we send at least the username
-        // to keep the pair consistent in the backend.
         envPayload.basicAuthUser = normalizeString(data.basicAuthUser);
 
         if (dirtyFields.basicAuthPassword) {
@@ -1038,26 +451,6 @@ export const SettingsPage: React.FC = () => {
       if (dirtyFields.llmApiKey) {
         const value = normalizePrivateInput(data.llmApiKey);
         if (value !== undefined) envPayload.llmApiKey = value;
-      }
-
-      if (dirtyFields.rxresumeApiKey) {
-        const value = normalizePrivateInput(data.rxresumeApiKey);
-        if (value !== undefined) envPayload.rxresumeApiKey = value;
-      }
-
-      if (dirtyFields.ukvisajobsPassword) {
-        const value = normalizePrivateInput(data.ukvisajobsPassword);
-        if (value !== undefined) envPayload.ukvisajobsPassword = value;
-      }
-
-      if (dirtyFields.adzunaAppKey) {
-        const value = normalizePrivateInput(data.adzunaAppKey);
-        if (value !== undefined) envPayload.adzunaAppKey = value;
-      }
-
-      if (dirtyFields.webhookSecret) {
-        const value = normalizePrivateInput(data.webhookSecret);
-        if (value !== undefined) envPayload.webhookSecret = value;
       }
 
       const payload: Partial<UpdateSettingsInput> = {
@@ -1081,16 +474,6 @@ export const SettingsPage: React.FC = () => {
             ? normalizeString(data.modelProjectSelection)
             : null
           : normalizeString(data.modelProjectSelection),
-        pipelineWebhookUrl: normalizeString(data.pipelineWebhookUrl),
-        jobCompleteWebhookUrl: normalizeString(data.jobCompleteWebhookUrl),
-        resumeProjects: resumeProjectsOverride,
-        pdfRenderer: nullIfSame(
-          data.pdfRenderer,
-          reactiveResume.pdfRenderer.default,
-        ),
-        ...(dirtyFields.rxresumeBaseResumeId
-          ? { rxresumeBaseResumeId: normalizeString(data.rxresumeBaseResumeId) }
-          : {}),
         showSponsorInfo: nullIfSame(
           data.showSponsorInfo,
           display.showSponsorInfo.default,
@@ -1113,15 +496,6 @@ export const SettingsPage: React.FC = () => {
           : (data.chatStyleMaxKeywordsPerSkill ?? null),
         chatStyleLanguageMode: data.chatStyleLanguageMode ?? null,
         chatStyleManualLanguage: data.chatStyleManualLanguage ?? null,
-        backupEnabled: nullIfSame(
-          data.backupEnabled,
-          backup.backupEnabled.default,
-        ),
-        backupHour: nullIfSame(data.backupHour, backup.backupHour.default),
-        backupMaxCount: nullIfSame(
-          data.backupMaxCount,
-          backup.backupMaxCount.default,
-        ),
         penalizeMissingSalary: nullIfSame(
           data.penalizeMissingSalary,
           scoring.penalizeMissingSalary.default,
@@ -1134,86 +508,13 @@ export const SettingsPage: React.FC = () => {
           data.autoSkipScoreThreshold,
           scoring.autoSkipScoreThreshold.default,
         ),
-        blockedCompanyKeywords: (() => {
-          const normalized = normalizeStringArray(data.blockedCompanyKeywords);
-          const normalizedDefault = normalizeStringArray(
-            scoring.blockedCompanyKeywords.default,
-          );
-          return stringArraysEqual(normalized, normalizedDefault)
-            ? null
-            : normalized;
-        })(),
-        scoringInstructions: nullIfSame(
-          normalizeString(data.scoringInstructions),
-          scoring.scoringInstructions.default,
-        ),
-        ghostwriterSystemPromptTemplate: nullIfSame(
-          normalizeString(data.ghostwriterSystemPromptTemplate),
-          promptTemplates.ghostwriterSystemPromptTemplate.default,
-        ),
-        tailoringPromptTemplate: nullIfSame(
-          normalizeString(data.tailoringPromptTemplate),
-          promptTemplates.tailoringPromptTemplate.default,
-        ),
-        scoringPromptTemplate: nullIfSame(
-          normalizeString(data.scoringPromptTemplate),
-          promptTemplates.scoringPromptTemplate.default,
-        ),
         ...envPayload,
       };
-
-      const shouldValidateRxResumeBeforeSave = Boolean(
-        dirtyFields.rxresumeUrl || dirtyFields.rxresumeApiKey,
-      );
-      let rxResumeSaveWarningMessage: string | null = null;
-
-      if (shouldValidateRxResumeBeforeSave) {
-        const validationDraft = getRxResumeCredentialDrafts(data);
-        const precheckFailure = getRxResumeCredentialPrecheckFailure({
-          stored: storedRxResume,
-          draft: validationDraft,
-        });
-
-        if (!precheckFailure) {
-          const preserveBlankFields = [
-            ...(dirtyFields.rxresumeApiKey ? (["apiKey"] as const) : []),
-            ...(dirtyFields.rxresumeUrl ? (["baseUrl"] as const) : []),
-          ];
-          const validation = await api.validateRxresume({
-            ...toRxResumeValidationPayload(validationDraft, {
-              preserveBlankFields: preserveBlankFields as Array<
-                keyof ReturnType<typeof getRxResumeCredentialDrafts>
-              >,
-            }),
-          });
-
-          setRxResumeValidationStatus(validation);
-
-          if (isRxResumeBlockingValidationFailure(validation)) {
-            clearErrors(getRxResumeValidationFields());
-            setError("rxresumeApiKey", {
-              type: "manual",
-              message:
-                validation.message ?? "Reactive Resume API key is invalid.",
-            });
-            return;
-          }
-
-          clearErrors(getRxResumeValidationFields());
-          if (isRxResumeAvailabilityValidationFailure(validation)) {
-            rxResumeSaveWarningMessage =
-              "Settings saved, but JobOps could not verify Reactive Resume because the instance is unavailable.";
-          }
-        }
-      }
 
       const updated = await updateSettingsMutation.mutateAsync(payload);
       setSettings(updated);
       reset(mapSettingsToForm(updated));
       toast.success("Settings saved");
-      if (rxResumeSaveWarningMessage) {
-        toast.info(rxResumeSaveWarningMessage);
-      }
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to save settings";
@@ -1307,6 +608,7 @@ export const SettingsPage: React.FC = () => {
         : [...prev, status],
     );
   };
+
   const handleReset = async () => {
     try {
       setIsSaving(true);
@@ -1389,47 +691,12 @@ export const SettingsPage: React.FC = () => {
         return chat.tone.effective || chat.constraints.effective
           ? { label: "Ready", variant: "outline" as const }
           : { label: "Using defaults", variant: "secondary" as const };
-      case "prompt-templates":
-        return promptTemplates.ghostwriterSystemPromptTemplate.effective !==
-          promptTemplates.ghostwriterSystemPromptTemplate.default ||
-          promptTemplates.tailoringPromptTemplate.effective !==
-            promptTemplates.tailoringPromptTemplate.default ||
-          promptTemplates.scoringPromptTemplate.effective !==
-            promptTemplates.scoringPromptTemplate.default
-          ? { label: "Customized", variant: "outline" as const }
-          : { label: "Using defaults", variant: "secondary" as const };
-      case "scoring":
-        return scoring.autoSkipScoreThreshold.effective != null ||
-          scoring.blockedCompanyKeywords.effective.length > 0 ||
-          scoring.scoringInstructions.effective
-          ? { label: "Customized", variant: "outline" as const }
-          : { label: "Default rules", variant: "secondary" as const };
-      case "reactive-resume":
-        return hasRxResumeAccess
-          ? { label: "Connected", variant: "outline" as const }
-          : null;
-      case "webhooks":
-        return pipelineWebhook.effective || jobCompleteWebhook.effective
-          ? { label: "Configured", variant: "outline" as const }
-          : { label: "Optional", variant: "secondary" as const };
-      case "tracer-links":
-        return tracerReadiness?.status === "ready"
-          ? { label: "Ready", variant: "outline" as const }
-          : tracerReadiness
-            ? { label: "Check required", variant: "secondary" as const }
-            : { label: "Not configured", variant: "secondary" as const };
       case "environment":
-        return envSettings.readable.ukvisajobsEmail ||
-          envSettings.readable.adzunaAppId ||
-          envSettings.basicAuthActive
+        return envSettings.basicAuthActive
           ? { label: "Configured", variant: "outline" as const }
           : null;
       case "display":
         return { label: "Active", variant: "secondary" as const };
-      case "backup":
-        return backup.backupEnabled.effective
-          ? { label: "Scheduled", variant: "outline" as const }
-          : { label: "Manual only", variant: "secondary" as const };
       default:
         return { label: "Ready", variant: "outline" as const };
     }
@@ -1463,71 +730,6 @@ export const SettingsPage: React.FC = () => {
         />
       );
       break;
-    case "prompt-templates":
-      activeSectionContent = (
-        <PromptTemplatesSection
-          values={promptTemplates}
-          isLoading={isLoading}
-          isSaving={isSaving}
-          layoutMode="panel"
-        />
-      );
-      break;
-    case "scoring":
-      activeSectionContent = (
-        <ScoringSettingsSection
-          values={scoring}
-          isLoading={isLoading}
-          isSaving={isSaving}
-          layoutMode="panel"
-        />
-      );
-      break;
-    case "reactive-resume":
-      activeSectionContent = (
-        <ReactiveResumeSection
-          rxResumeBaseResumeIdDraft={rxResumeBaseResumeIdDraft}
-          setRxResumeBaseResumeIdDraft={(value) => {
-            setBaseResumeId(value);
-            setRxResumeBaseResumeIdDraft(value);
-            setValue("rxresumeBaseResumeId", value, { shouldDirty: true });
-          }}
-          hasRxResumeAccess={hasRxResumeAccess}
-          onCredentialFieldEdit={clearRxResumeValidationFeedback}
-          validationStatus={rxresumeValidationStatus}
-          profileProjects={effectiveProfileProjects}
-          lockedCount={lockedCount}
-          maxProjectsTotal={effectiveMaxProjectsTotal}
-          isProjectsLoading={isFetchingRxResumeProjects}
-          isLoading={isLoading}
-          isSaving={isSaving}
-          layoutMode="panel"
-        />
-      );
-      break;
-    case "webhooks":
-      activeSectionContent = (
-        <WebhooksSection
-          pipelineWebhook={pipelineWebhook}
-          jobCompleteWebhook={jobCompleteWebhook}
-          webhookSecretHint={envSettings.private.webhookSecretHint}
-          isLoading={isLoading}
-          isSaving={isSaving}
-          layoutMode="panel"
-        />
-      );
-      break;
-    case "tracer-links":
-      activeSectionContent = (
-        <TracerLinksSettingsSection
-          readiness={tracerReadiness}
-          isLoading={isLoading || isTracerReadinessLoading}
-          isChecking={isTracerReadinessChecking}
-          onVerifyNow={handleVerifyTracerReadiness}
-          layoutMode="panel"
-        />
-      );
-      break;
     case "environment":
       activeSectionContent = (
         <EnvironmentSettingsSection
@@ -1544,22 +746,6 @@ export const SettingsPage: React.FC = () => {
           values={display}
           isLoading={isLoading}
           isSaving={isSaving}
-          layoutMode="panel"
-        />
-      );
-      break;
-    case "backup":
-      activeSectionContent = (
-        <BackupSettingsSection
-          values={backup}
-          backups={backups}
-          nextScheduled={nextScheduled}
-          isLoading={isLoading || isLoadingBackups}
-          isSaving={isSaving}
-          onCreateBackup={handleCreateBackup}
-          onDeleteBackup={handleDeleteBackup}
-          isCreatingBackup={isCreatingBackup}
-          isDeletingBackup={isDeletingBackup}
           layoutMode="panel"
         />
       );

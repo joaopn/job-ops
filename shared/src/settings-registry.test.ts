@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { getDefaultPromptTemplate } from "./prompt-template-definitions";
 import {
   getDefaultModelForProvider,
   settingsRegistry,
@@ -94,41 +93,19 @@ describe("settingsRegistry helpers", () => {
     it("returns the string for non-empty string", () => {
       expect(settingsRegistry.searchCities.parse("London")).toBe("London");
     });
-
-    it("uses shared default prompt templates for prompt settings", () => {
-      expect(settingsRegistry.ghostwriterSystemPromptTemplate.default()).toBe(
-        getDefaultPromptTemplate("ghostwriterSystemPromptTemplate"),
-      );
-      expect(settingsRegistry.tailoringPromptTemplate.default()).toBe(
-        getDefaultPromptTemplate("tailoringPromptTemplate"),
-      );
-      expect(settingsRegistry.scoringPromptTemplate.default()).toBe(
-        getDefaultPromptTemplate("scoringPromptTemplate"),
-      );
-    });
   });
 
   describe("number parsing and clamping", () => {
     it("returns null for empty/invalid values", () => {
-      expect(settingsRegistry.ukvisajobsMaxJobs.parse("")).toBeNull();
-      expect(settingsRegistry.ukvisajobsMaxJobs.parse("abc")).toBeNull();
-      expect(settingsRegistry.ukvisajobsMaxJobs.parse(undefined)).toBeNull();
+      expect(settingsRegistry.startupjobsMaxJobsPerTerm.parse("")).toBeNull();
+      expect(settingsRegistry.startupjobsMaxJobsPerTerm.parse("abc")).toBeNull();
+      expect(
+        settingsRegistry.startupjobsMaxJobsPerTerm.parse(undefined),
+      ).toBeNull();
     });
 
     it("parses valid numbers", () => {
-      expect(settingsRegistry.ukvisajobsMaxJobs.parse("42")).toBe(42);
-    });
-
-    it("clamps backupHour to 0-23", () => {
-      expect(settingsRegistry.backupHour.parse("25")).toBe(23);
-      expect(settingsRegistry.backupHour.parse("-1")).toBe(0);
-      expect(settingsRegistry.backupHour.parse("12")).toBe(12);
-    });
-
-    it("clamps backupMaxCount to 1-5", () => {
-      expect(settingsRegistry.backupMaxCount.parse("10")).toBe(5);
-      expect(settingsRegistry.backupMaxCount.parse("0")).toBe(1);
-      expect(settingsRegistry.backupMaxCount.parse("3")).toBe(3);
+      expect(settingsRegistry.startupjobsMaxJobsPerTerm.parse("42")).toBe(42);
     });
 
     it("clamps missingSalaryPenalty to 0-100", () => {
@@ -217,16 +194,6 @@ describe("settingsRegistry helpers", () => {
 
       expect(settingsRegistry.resumeProjects.serialize(obj)).toBe(json);
       expect(settingsRegistry.resumeProjects.serialize(null)).toBeNull();
-    });
-  });
-
-  describe("RxResume settings", () => {
-    it("has env-backed v5 api key secret setting", () => {
-      expect(settingsRegistry.rxresumeApiKey.envKey).toBe("RXRESUME_API_KEY");
-    });
-
-    it("has env-backed rxresumeUrl string setting", () => {
-      expect(settingsRegistry.rxresumeUrl.envKey).toBe("RXRESUME_URL");
     });
   });
 

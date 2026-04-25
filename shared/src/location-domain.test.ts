@@ -93,31 +93,15 @@ describe("location-domain", () => {
         searchScope: "selected_plus_remote_worldwide",
         matchStrictness: "exact_only",
       },
-      sources: [
-        "gradcracker",
-        "indeed",
-        "glassdoor",
-        "ukvisajobs",
-        "adzuna",
-        "startupjobs",
-      ],
+      sources: ["indeed", "glassdoor", "startupjobs"],
     });
 
     expect(result.compatibleSources).toEqual([
       "indeed",
       "glassdoor",
-      "adzuna",
       "startupjobs",
     ]);
-    expect(result.incompatibleSources).toEqual(["gradcracker", "ukvisajobs"]);
-    expect(result.plans[0]).toMatchObject({
-      source: "gradcracker",
-      isCompatible: false,
-      canRun: false,
-    });
-    expect(result.plans[0]?.warnings).toEqual(
-      expect.arrayContaining([expect.stringContaining("Selected country")]),
-    );
+    expect(result.incompatibleSources).toEqual([]);
   });
 
   it("marks glassdoor incompatible until at least one city is provided", () => {
@@ -218,23 +202,17 @@ describe("location-domain", () => {
 
   it("exposes normalized source capabilities for known sources", () => {
     expect(
-      normalizeLocationSourceCapabilities({ source: "gradcracker" }),
-    ).toEqual({
-      requiresCityLocations: false,
-      source: "gradcracker",
-      supportedCountryKeys: ["united kingdom"],
-    });
-    expect(normalizeLocationSourceCapabilities({ source: "seek" })).toEqual({
-      requiresCityLocations: false,
-      source: "seek",
-      supportedCountryKeys: ["australia", "new zealand"],
-    });
-    expect(
       normalizeLocationSourceCapabilities({ source: "startupjobs" }),
     ).toEqual({
       requiresCityLocations: false,
       source: "startupjobs",
       supportedCountryKeys: null,
+    });
+    expect(
+      normalizeLocationSourceCapabilities({ source: "glassdoor" }),
+    ).toMatchObject({
+      requiresCityLocations: true,
+      source: "glassdoor",
     });
   });
 
@@ -275,13 +253,13 @@ describe("location-domain", () => {
         searchScope: "selected_plus_remote_worldwide",
         matchStrictness: "exact_only",
       },
-      sources: ["adzuna", "startupjobs"],
+      sources: ["glassdoor", "startupjobs"],
     });
 
     expect(result.compatibleSources).toEqual(["startupjobs"]);
-    expect(result.incompatibleSources).toEqual(["adzuna"]);
+    expect(result.incompatibleSources).toEqual(["glassdoor"]);
     expect(result.plans[0]).toMatchObject({
-      source: "adzuna",
+      source: "glassdoor",
       isCompatible: false,
       canRun: false,
     });

@@ -1,23 +1,13 @@
-import {
-  Columns3,
-  FilePenLine,
-  Home,
-  Inbox,
-  LayoutDashboard,
-  Link2,
-  Settings,
-  Shield,
-} from "lucide-react";
+import { LayoutDashboard, Settings } from "lucide-react";
 
 export type NavLink = {
   to: string;
   label: string;
-  icon: typeof Home;
+  icon: typeof LayoutDashboard;
   activePaths?: string[];
 };
 
 export const NAV_LINKS: NavLink[] = [
-  { to: "/overview", label: "Overview", icon: Home },
   {
     to: "/jobs/ready",
     label: "Jobs",
@@ -29,26 +19,6 @@ export const NAV_LINKS: NavLink[] = [
       "/jobs/all",
     ],
   },
-  {
-    to: "/applications/in-progress",
-    label: "In Progress",
-    icon: Columns3,
-    activePaths: ["/applications/in-progress"],
-  },
-  {
-    to: "/design-resume",
-    label: "Design Resume",
-    icon: FilePenLine,
-    activePaths: ["/design-resume"],
-  },
-  { to: "/tracking-inbox", label: "Tracking Inbox", icon: Inbox },
-  {
-    to: "/tracer-links",
-    label: "Tracer Links",
-    icon: Link2,
-    activePaths: ["/tracer-links"],
-  },
-  { to: "/visa-sponsors", label: "Visa Sponsors", icon: Shield },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 

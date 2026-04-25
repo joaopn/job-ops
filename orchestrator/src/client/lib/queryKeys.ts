@@ -1,11 +1,6 @@
-import type { JobStatus, PostApplicationProvider } from "@shared/types";
+import type { JobStatus } from "@shared/types";
 
 export const queryKeys = {
-  designResume: {
-    all: ["design-resume"] as const,
-    current: () => [...queryKeys.designResume.all, "current"] as const,
-    status: () => [...queryKeys.designResume.all, "status"] as const,
-  },
   settings: {
     all: ["settings"] as const,
     current: () => [...queryKeys.settings.all, "current"] as const,
@@ -14,29 +9,8 @@ export const queryKeys = {
     all: ["profile"] as const,
     current: () => [...queryKeys.profile.all, "current"] as const,
   },
-  tracer: {
-    all: ["tracer"] as const,
-    readiness: (force = false) =>
-      [...queryKeys.tracer.all, "readiness", { force }] as const,
-    analytics: (options?: {
-      from?: number;
-      to?: number;
-      includeBots?: boolean;
-      limit?: number;
-    }) => [...queryKeys.tracer.all, "analytics", options ?? {}] as const,
-    jobLinks: (
-      jobId: string,
-      options?: { from?: number; to?: number; includeBots?: boolean },
-    ) => [...queryKeys.tracer.all, "job-links", jobId, options ?? {}] as const,
-  },
-  demo: {
-    all: ["demo"] as const,
-    info: () => [...queryKeys.demo.all, "info"] as const,
-  },
   jobs: {
     all: ["jobs"] as const,
-    inProgressBoard: () =>
-      [...queryKeys.jobs.all, "in-progress-board"] as const,
     list: (options?: { statuses?: JobStatus[]; view?: "list" | "full" }) =>
       [...queryKeys.jobs.all, "list", options ?? {}] as const,
     revision: (options?: { statuses?: JobStatus[] }) =>
@@ -53,69 +27,5 @@ export const queryKeys = {
     runs: () => [...queryKeys.pipeline.all, "runs"] as const,
     runInsights: (id: string) =>
       [...queryKeys.pipeline.all, "run-insights", id] as const,
-  },
-  visaSponsors: {
-    all: ["visa-sponsors"] as const,
-    status: () => [...queryKeys.visaSponsors.all, "status"] as const,
-    search: (
-      query: string,
-      limit: number,
-      minScore: number,
-      country?: string,
-    ) =>
-      [
-        ...queryKeys.visaSponsors.all,
-        "search",
-        { query, limit, minScore, country: country ?? null },
-      ] as const,
-    organization: (name: string, providerId?: string) =>
-      [
-        ...queryKeys.visaSponsors.all,
-        "organization",
-        { name, providerId: providerId ?? null },
-      ] as const,
-  },
-  postApplication: {
-    all: ["post-application"] as const,
-    providerStatus: (provider: PostApplicationProvider, accountKey: string) =>
-      [
-        ...queryKeys.postApplication.all,
-        "provider-status",
-        { provider, accountKey },
-      ] as const,
-    inbox: (
-      provider: PostApplicationProvider,
-      accountKey: string,
-      limit: number,
-    ) =>
-      [
-        ...queryKeys.postApplication.all,
-        "inbox",
-        { provider, accountKey, limit },
-      ] as const,
-    runs: (
-      provider: PostApplicationProvider,
-      accountKey: string,
-      limit: number,
-    ) =>
-      [
-        ...queryKeys.postApplication.all,
-        "runs",
-        { provider, accountKey, limit },
-      ] as const,
-    runMessages: (
-      runId: string,
-      provider: PostApplicationProvider,
-      accountKey: string,
-    ) =>
-      [
-        ...queryKeys.postApplication.all,
-        "run-messages",
-        { runId, provider, accountKey },
-      ] as const,
-  },
-  backups: {
-    all: ["backups"] as const,
-    list: () => [...queryKeys.backups.all, "list"] as const,
   },
 } as const;

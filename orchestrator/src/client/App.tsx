@@ -14,35 +14,22 @@ import { CSSTransition, SwitchTransition } from "react-transition-group";
 
 import { Toaster } from "@/components/ui/sonner";
 import { OnboardingGate } from "./components/OnboardingGate";
-import { useDemoInfo } from "./hooks/useDemoInfo";
 import { setAuthNavigator } from "./lib/auth-navigation";
-import { DesignResumePage } from "./pages/DesignResumePage";
-import { GmailOauthCallbackPage } from "./pages/GmailOauthCallbackPage";
-import { HomePage } from "./pages/HomePage";
-import { InProgressBoardPage } from "./pages/InProgressBoardPage";
 import { JobPage } from "./pages/JobPage";
 import { OnboardingPage } from "./pages/OnboardingPage";
 import { OrchestratorPage } from "./pages/OrchestratorPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SignInPage } from "./pages/SignInPage";
-import { TracerLinksPage } from "./pages/TracerLinksPage";
-import { TrackingInboxPage } from "./pages/TrackingInboxPage";
-import { VisaSponsorsPage } from "./pages/VisaSponsorsPage";
 
 /** Backwards-compatibility redirects: old URL paths -> new URL paths */
 const REDIRECTS: Array<{ from: string; to: string }> = [
   { from: "/", to: "/jobs/ready" },
-  { from: "/home", to: "/overview" },
   { from: "/ready", to: "/jobs/ready" },
   { from: "/ready/:jobId", to: "/jobs/ready/:jobId" },
   { from: "/discovered", to: "/jobs/discovered" },
   { from: "/discovered/:jobId", to: "/jobs/discovered/:jobId" },
   { from: "/applied", to: "/jobs/applied" },
   { from: "/applied/:jobId", to: "/jobs/applied/:jobId" },
-  { from: "/in-progress", to: "/applications/in-progress" },
-  { from: "/in-progress/:jobId", to: "/applications/in-progress" },
-  { from: "/jobs/in_progress", to: "/applications/in-progress" },
-  { from: "/jobs/in_progress/:jobId", to: "/applications/in-progress" },
   { from: "/all", to: "/jobs/all" },
   { from: "/all/:jobId", to: "/jobs/all/:jobId" },
 ];
@@ -51,7 +38,6 @@ export const App: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const nodeRef = useRef<HTMLDivElement>(null);
-  const demoInfo = useDemoInfo();
 
   // Determine a stable key for transitions to avoid unnecessary unmounts when switching sub-tabs
   const pageKey = React.useMemo(() => {
@@ -85,12 +71,6 @@ export const App: React.FC = () => {
   return (
     <>
       <OnboardingGate />
-      {demoInfo?.demoMode && (
-        <div className="w-full border-b border-amber-400/50 bg-amber-500/20 px-4 py-2 text-center text-xs text-amber-100 backdrop-blur">
-          Demo mode: integrations are simulated and data resets every{" "}
-          {demoInfo.resetCadenceHours} hours.
-        </div>
-      )}
       <div>
         <SwitchTransition mode="out-in">
           <CSSTransition
@@ -112,23 +92,10 @@ export const App: React.FC = () => {
                 ))}
 
                 {/* Application routes */}
-                <Route path="/overview" element={<HomePage />} />
-                <Route
-                  path="/oauth/gmail/callback"
-                  element={<GmailOauthCallbackPage />}
-                />
                 <Route path="/job/:id" element={<JobPage />} />
-                <Route
-                  path="/applications/in-progress"
-                  element={<InProgressBoardPage />}
-                />
-                <Route path="/design-resume" element={<DesignResumePage />} />
                 <Route path="/onboarding" element={<OnboardingPage />} />
                 <Route path="/sign-in" element={<SignInPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
-                <Route path="/tracer-links" element={<TracerLinksPage />} />
-                <Route path="/visa-sponsors" element={<VisaSponsorsPage />} />
-                <Route path="/tracking-inbox" element={<TrackingInboxPage />} />
                 <Route path="/jobs/:tab" element={<OrchestratorPage />} />
                 <Route
                   path="/jobs/:tab/:jobId"

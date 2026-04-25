@@ -7,11 +7,10 @@ import {
   notFound,
   toAppError,
 } from "@infra/errors";
-import { fail, ok, okWithMeta } from "@infra/http";
+import { fail, ok } from "@infra/http";
 import { logger } from "@infra/logger";
 import { sanitizeWebhookPayload } from "@infra/sanitize";
 import { setupSse, startSseHeartbeat, writeSseData } from "@infra/sse";
-import { isDemoMode, sendDemoBlocked } from "@server/config/demo";
 import {
   generateFinalPdf,
   processJob,
@@ -19,31 +18,11 @@ import {
 } from "@server/pipeline/index";
 import * as jobsRepo from "@server/repositories/jobs";
 import * as settingsRepo from "@server/repositories/settings";
-import {
-  deleteStageEvent,
-  getStageEvents,
-  getTasks,
-  stageEventMetadataSchema,
-  transitionStage,
-  updateStageEvent,
-} from "@server/services/applicationTracking";
-import { attachAppliedDuplicateMatches } from "@server/services/applied-duplicate-matching";
-import {
-  simulateApplyJob,
-  simulateGeneratePdf,
-  simulateProcessJob,
-  simulateRescoreJob,
-  simulateSummarizeJob,
-} from "@server/services/demo-simulator";
-import { uploadJobPdf } from "@server/services/job-pdf-upload";
 import { getProfile } from "@server/services/profile";
 import { scoreJobSuitability } from "@server/services/scorer";
-import { getTracerReadiness } from "@server/services/tracer-links";
-import * as visaSponsors from "@server/services/visa-sponsors/index";
 import { asyncPool } from "@server/utils/async-pool";
 import {
   APPLICATION_OUTCOMES,
-  APPLICATION_STAGES,
   type Job,
   type JobAction,
   type JobActionResponse,
@@ -100,7 +79,6 @@ async function notifyJobCompleteWebhook(job: Job) {
         employer: job.employer,
         status: job.status,
         suitabilityScore: job.suitabilityScore,
-        sponsorMatchScore: job.sponsorMatchScore,
       },
     });
 
@@ -181,29 +159,12 @@ const updateJobSchema = z.object({
     }),
   selectedProjectIds: z.string().optional(),
   pdfPath: z.string().optional(),
-  tracerLinksEnabled: z.boolean().optional(),
-  sponsorMatchScore: z.number().min(0).max(100).optional(),
-  sponsorMatchNames: z.string().optional(),
 });
 
 function isJobUrlConflictError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
   return /UNIQUE constraint failed: jobs\.job_url/i.test(error.message);
 }
-
-const transitionStageSchema = z.object({
-  toStage: z.enum([...APPLICATION_STAGES, "no_change"]),
-  occurredAt: z.number().int().nullable().optional(),
-  metadata: stageEventMetadataSchema.nullable().optional(),
-  outcome: z.enum(APPLICATION_OUTCOMES).nullable().optional(),
-});
-
-const updateStageEventSchema = z.object({
-  toStage: z.enum(APPLICATION_STAGES).optional(),
-  occurredAt: z.number().int().optional(),
-  metadata: stageEventMetadataSchema.nullable().optional(),
-  outcome: z.enum(APPLICATION_OUTCOMES).nullable().optional(),
-});
 
 const updateOutcomeSchema = z.object({
   outcome: z.enum(APPLICATION_OUTCOMES).nullable(),
@@ -1325,33 +1286,6 @@ jobsRouter.patch("/:id", async (req: Request, res: Response) => {
       return;
     }
 
-    const isTurningTracerLinksOn =
-      input.tracerLinksEnabled === true && !currentJob.tracerLinksEnabled;
-
-    if (isTurningTracerLinksOn) {
-      const readiness = await getTracerReadiness({
-        requestOrigin: resolveRequestOrigin(req),
-        force: true,
-      });
-
-      if (!readiness.canEnable) {
-        throw new AppError({
-          status: 409,
-          code: "CONFLICT",
-          message:
-            readiness.reason ??
-            "Tracer links are unavailable right now. Verify Tracer Links in Settings.",
-          details: {
-            tracerReadiness: {
-              status: readiness.status,
-              checkedAt: readiness.checkedAt,
-              publicBaseUrl: readiness.publicBaseUrl,
-            },
-          },
-        });
-      }
-    }
-
     const job = await jobsRepo.updateJob(req.params.id, input);
 
     if (!job) {
@@ -1548,52 +1482,6 @@ jobsRouter.post("/:id/summarize", async (req: Request, res: Response) => {
       return fail(res, notFound("Job not found"));
     }
     ok(res, job);
-  } catch (error) {
-    fail(res, toAppError(error));
-  }
-});
-
-/**
- * POST /api/jobs/:id/check-sponsor - Check if employer is a visa sponsor
- */
-jobsRouter.post("/:id/check-sponsor", async (req: Request, res: Response) => {
-  try {
-    const job = await jobsRepo.getJobById(req.params.id);
-
-    if (!job) {
-      return fail(res, notFound("Job not found"));
-    }
-
-    if (!job.employer) {
-      return fail(res, badRequest("Job has no employer name"));
-    }
-
-    // Search for sponsor matches
-    const sponsorResults = await visaSponsors.searchSponsors(job.employer, {
-      limit: 10,
-      minScore: 50,
-    });
-
-    const { sponsorMatchScore, sponsorMatchNames } =
-      visaSponsors.calculateSponsorMatchSummary(sponsorResults);
-
-    // Update job with sponsor match info
-    const updatedJob = await jobsRepo.updateJob(job.id, {
-      sponsorMatchScore: sponsorMatchScore,
-      sponsorMatchNames: sponsorMatchNames ?? undefined,
-    });
-
-    if (!updatedJob) {
-      return fail(res, notFound("Job not found"));
-    }
-
-    ok(res, {
-      ...updatedJob,
-      matchResults: sponsorResults.slice(0, 5).map((r) => ({
-        name: r.sponsor.organisationName,
-        score: r.score,
-      })),
-    });
   } catch (error) {
     fail(res, toAppError(error));
   }

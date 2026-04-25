@@ -3,14 +3,11 @@ import {
   LOCATION_MATCH_STRICTNESS_VALUES,
   LOCATION_SEARCH_SCOPE_VALUES,
 } from "./location-preferences";
-import { getDefaultPromptTemplate } from "./prompt-template-definitions";
 import {
   CHAT_STYLE_LANGUAGE_MODE_VALUES,
   CHAT_STYLE_MANUAL_LANGUAGE_VALUES,
   type ChatStyleLanguageMode,
   type ChatStyleManualLanguage,
-  PDF_RENDERER_VALUES,
-  type PdfRenderer,
   type ResumeProjectsSettings,
 } from "./types/settings";
 
@@ -138,7 +135,6 @@ const parseChatStyleLanguageModeOrNull = createEnumParser(
 const parseChatStyleManualLanguageOrNull = createEnumParser(
   CHAT_STYLE_MANUAL_LANGUAGE_VALUES,
 );
-const parsePdfRendererOrNull = createEnumParser(PDF_RENDERER_VALUES);
 
 const WORKPLACE_TYPE_VALUES = ["remote", "hybrid", "onsite"] as const;
 const parseWorkplaceTypesOrNull = createEnumArrayParser(WORKPLACE_TYPE_VALUES);
@@ -209,28 +205,6 @@ export const settingsRegistry = {
     serialize: (value: string | null | undefined): string | null =>
       value ?? null,
   },
-  pipelineWebhookUrl: {
-    kind: "typed" as const,
-    schema: z.string().trim().max(2000),
-    default: (): string =>
-      typeof process !== "undefined"
-        ? process.env.PIPELINE_WEBHOOK_URL || process.env.WEBHOOK_URL || ""
-        : "",
-    parse: parseNonEmptyStringOrNull,
-    serialize: (value: string | null | undefined): string | null =>
-      value ?? null,
-  },
-  jobCompleteWebhookUrl: {
-    kind: "typed" as const,
-    schema: z.string().trim().max(2000),
-    default: (): string =>
-      typeof process !== "undefined"
-        ? process.env.JOB_COMPLETE_WEBHOOK_URL || ""
-        : "",
-    parse: parseNonEmptyStringOrNull,
-    serialize: (value: string | null | undefined): string | null =>
-      value ?? null,
-  },
   resumeProjects: {
     kind: "typed" as const,
     schema: resumeProjectsSchema,
@@ -252,14 +226,6 @@ export const settingsRegistry = {
     ): string | null => {
       return value ? JSON.stringify(value) : null;
     },
-  },
-  pdfRenderer: {
-    kind: "typed" as const,
-    schema: z.enum(PDF_RENDERER_VALUES),
-    default: (): PdfRenderer => "rxresume",
-    parse: parsePdfRendererOrNull,
-    serialize: (value: PdfRenderer | null | undefined): string | null =>
-      value ?? null,
   },
   startupjobsMaxJobsPerTerm: {
     kind: "typed" as const,
@@ -467,35 +433,6 @@ export const settingsRegistry = {
       value: ChatStyleManualLanguage | null | undefined,
     ): string | null => value ?? null,
   },
-  backupEnabled: {
-    kind: "typed" as const,
-    schema: z.boolean(),
-    default: (): boolean => false,
-    parse: parseBitBoolOrNull,
-    serialize: serializeBitBool,
-  },
-  backupHour: {
-    kind: "typed" as const,
-    schema: z.number().int().min(0).max(23),
-    default: (): number => 2,
-    parse: (raw: string | undefined): number | null => {
-      const parsed = raw ? parseInt(raw, 10) : NaN;
-      if (Number.isNaN(parsed)) return null;
-      return Math.min(23, Math.max(0, parsed));
-    },
-    serialize: serializeNullableNumber,
-  },
-  backupMaxCount: {
-    kind: "typed" as const,
-    schema: z.number().int().min(1).max(5),
-    default: (): number => 5,
-    parse: (raw: string | undefined): number | null => {
-      const parsed = raw ? parseInt(raw, 10) : NaN;
-      if (Number.isNaN(parsed)) return null;
-      return Math.min(5, Math.max(1, parsed));
-    },
-    serialize: serializeNullableNumber,
-  },
   penalizeMissingSalary: {
     kind: "typed" as const,
     schema: z.boolean(),
@@ -552,31 +489,9 @@ export const settingsRegistry = {
   },
 
   // --- Simple Strings ---
-  rxresumeBaseResumeId: {
-    kind: "string" as const,
-    schema: z.string().trim().max(200),
-  },
   onboardingBasicAuthDecision: {
     kind: "string" as const,
     schema: z.enum(["enabled", "skipped"]),
-  },
-  rxresumeUrl: {
-    kind: "string" as const,
-    envKey: "RXRESUME_URL",
-    schema: z.preprocess(
-      (value) => (value === "" ? null : value),
-      z.string().trim().url().max(2000).nullable(),
-    ),
-  },
-  ukvisajobsEmail: {
-    kind: "string" as const,
-    envKey: "UKVISAJOBS_EMAIL",
-    schema: z.string().trim().max(200),
-  },
-  adzunaAppId: {
-    kind: "string" as const,
-    envKey: "ADZUNA_APP_ID",
-    schema: z.string().trim().max(200),
   },
   basicAuthUser: {
     kind: "string" as const,
@@ -590,34 +505,9 @@ export const settingsRegistry = {
     envKey: "LLM_API_KEY",
     schema: z.string().trim().max(2000),
   },
-  rxresumeApiKey: {
-    kind: "secret" as const,
-    envKey: "RXRESUME_API_KEY",
-    schema: z.string().trim().max(2000),
-  },
-  ukvisajobsPassword: {
-    kind: "secret" as const,
-    envKey: "UKVISAJOBS_PASSWORD",
-    schema: z.string().trim().max(2000),
-  },
-  adzunaAppKey: {
-    kind: "secret" as const,
-    envKey: "ADZUNA_APP_KEY",
-    schema: z.string().trim().max(2000),
-  },
-  apifyToken: {
-    kind: "secret" as const,
-    envKey: "APIFY_TOKEN",
-    schema: z.string().trim().max(2000),
-  },
   basicAuthPassword: {
     kind: "secret" as const,
     envKey: "BASIC_AUTH_PASSWORD",
-    schema: z.string().trim().max(2000),
-  },
-  webhookSecret: {
-    kind: "secret" as const,
-    envKey: "WEBHOOK_SECRET",
     schema: z.string().trim().max(2000),
   },
 

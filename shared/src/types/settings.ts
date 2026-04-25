@@ -17,13 +17,6 @@ export interface ResumeProjectsSettings {
   aiSelectableProjectIds: string[];
 }
 
-export const PDF_RENDERER_VALUES = ["rxresume", "latex"] as const;
-export type PdfRenderer = (typeof PDF_RENDERER_VALUES)[number];
-export const PDF_RENDERER_LABELS: Record<PdfRenderer, string> = {
-  rxresume: "RxResume export",
-  latex: "Local LaTeX (Jake template)",
-};
-
 export const CHAT_STYLE_LANGUAGE_MODE_VALUES = [
   "manual",
   "match-resume",
@@ -162,22 +155,12 @@ export interface AppSettings {
   model: Resolved<string>;
   llmProvider: Resolved<string>;
   llmBaseUrl: Resolved<string>;
-  pipelineWebhookUrl: Resolved<string>;
-  jobCompleteWebhookUrl: Resolved<string>;
   resumeProjects: Resolved<ResumeProjectsSettings>;
-  pdfRenderer: Resolved<PdfRenderer>;
-  ukvisajobsMaxJobs: Resolved<number>;
-  adzunaMaxJobsPerTerm: Resolved<number>;
-  gradcrackerMaxJobsPerTerm: Resolved<number>;
   startupjobsMaxJobsPerTerm: Resolved<number>;
-  seekMaxJobsPerTerm: Resolved<number>;
   searchTerms: Resolved<string[]>;
   workplaceTypes: Resolved<Array<"remote" | "hybrid" | "onsite">>;
   blockedCompanyKeywords: Resolved<string[]>;
   scoringInstructions: Resolved<string>;
-  ghostwriterSystemPromptTemplate: Resolved<string>;
-  tailoringPromptTemplate: Resolved<string>;
-  scoringPromptTemplate: Resolved<string>;
   searchCities: Resolved<string>;
   locationSearchScope: Resolved<LocationSearchScope>;
   locationMatchStrictness: Resolved<LocationMatchStrictness>;
@@ -193,9 +176,6 @@ export interface AppSettings {
   chatStyleManualLanguage: Resolved<ChatStyleManualLanguage>;
   chatStyleSummaryMaxWords: Resolved<number | null>;
   chatStyleMaxKeywordsPerSkill: Resolved<number | null>;
-  backupEnabled: Resolved<boolean>;
-  backupHour: Resolved<number>;
-  backupMaxCount: Resolved<number>;
   penalizeMissingSalary: Resolved<boolean>;
   missingSalaryPenalty: Resolved<number>;
   autoSkipScoreThreshold: Resolved<number | null>;
@@ -206,22 +186,13 @@ export interface AppSettings {
   modelProjectSelection: ModelResolved;
 
   // Simple strings:
-  rxresumeBaseResumeId: string | null;
   onboardingBasicAuthDecision: "enabled" | "skipped" | null;
-  rxresumeUrl: string | null;
-  ukvisajobsEmail: string | null;
-  adzunaAppId: string | null;
   basicAuthUser: string | null;
   basicAuthPassword: string | null;
 
   // Secret hints:
   llmApiKeyHint: string | null;
-  rxresumeApiKeyHint: string | null;
-  ukvisajobsPasswordHint: string | null;
-  adzunaAppKeyHint: string | null;
-  apifyTokenHint: string | null;
   basicAuthPasswordHint: string | null;
-  webhookSecretHint: string | null;
 
   // Computed:
   basicAuthActive: boolean;
