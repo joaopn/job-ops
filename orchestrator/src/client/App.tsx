@@ -2,8 +2,7 @@
  * Main App component.
  */
 
-import { X } from "lucide-react";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef } from "react";
 import {
   Navigate,
   Route,
@@ -13,7 +12,6 @@ import {
 } from "react-router-dom";
 import { CSSTransition, SwitchTransition } from "react-transition-group";
 
-import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
 import { OnboardingGate } from "./components/OnboardingGate";
 import { useDemoInfo } from "./hooks/useDemoInfo";
@@ -49,21 +47,11 @@ const REDIRECTS: Array<{ from: string; to: string }> = [
   { from: "/all/:jobId", to: "/jobs/all/:jobId" },
 ];
 
-const DEMO_WAITLIST_BANNER_DISMISSED_KEY = "jobops.demoWaitlistBannerDismissed";
-
 export const App: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const nodeRef = useRef<HTMLDivElement>(null);
   const demoInfo = useDemoInfo();
-  const [demoWaitlistBannerDismissed, setDemoWaitlistBannerDismissed] =
-    useState(() => {
-      try {
-        return localStorage.getItem(DEMO_WAITLIST_BANNER_DISMISSED_KEY) === "1";
-      } catch {
-        return false;
-      }
-    });
 
   // Determine a stable key for transitions to avoid unnecessary unmounts when switching sub-tabs
   const pageKey = React.useMemo(() => {
@@ -97,41 +85,6 @@ export const App: React.FC = () => {
   return (
     <>
       <OnboardingGate />
-      {demoInfo?.demoMode && !demoWaitlistBannerDismissed && (
-        <div className="sticky top-0 z-50 w-full border-b border-orange-400/60 bg-orange-500 px-4 py-2 text-xs text-orange-950 shadow-sm">
-          <div className="mx-auto flex items-center justify-center gap-3">
-            <p className="flex-1 text-center font-medium">
-              This is a read-only demo. Want JobOps without the Docker setup? ☁️{" "}
-              Cloud version coming soon — join the waitlist at{" "}
-              <a
-                className="font-semibold underline underline-offset-2 hover:text-orange-900"
-                href="https://try.jobops.app?utm_source=demo&utm_medium=banner&utm_campaign=waitlist"
-                target="_blank"
-                rel="noreferrer"
-              >
-                try.jobops.app
-              </a>
-            </p>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 shrink-0 rounded-full text-orange-950 hover:bg-orange-400/30 hover:text-orange-950"
-              onClick={() => {
-                setDemoWaitlistBannerDismissed(true);
-                try {
-                  localStorage.setItem(DEMO_WAITLIST_BANNER_DISMISSED_KEY, "1");
-                } catch {
-                  // Ignore storage errors in restricted browser contexts.
-                }
-              }}
-            >
-              <X className="h-4 w-4" />
-              <span className="sr-only">Dismiss demo waitlist banner</span>
-            </Button>
-          </div>
-        </div>
-      )}
       {demoInfo?.demoMode && (
         <div className="w-full border-b border-amber-400/50 bg-amber-500/20 px-4 py-2 text-center text-xs text-amber-100 backdrop-blur">
           Demo mode: integrations are simulated and data resets every{" "}

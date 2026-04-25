@@ -11,7 +11,6 @@ import {
 } from "react";
 import { CommandDialog, CommandInput } from "@/components/ui/command";
 import { DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { bucketQueryLength, trackProductEvent } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
 import type { FilterTab } from "./constants";
 import {
@@ -340,18 +339,10 @@ export const JobCommandBar: React.FC<JobCommandBarProps> = ({
 
       if (!row.job) return;
 
-      trackProductEvent("jobs_command_bar_job_selected", {
-        had_status_lock: Boolean(activeLock),
-        status_lock: activeLock ?? "none",
-        result_group: row.groupId,
-        query_length_bucket: bucketQueryLength(
-          stripLeadingAtToken(query).trim(),
-        ),
-      });
       closeDialog();
       onSelectJob(getFilterTab(row.job.status), row.job.id);
     },
-    [activeLock, applyLock, closeDialog, onSelectJob, query],
+    [applyLock, closeDialog, onSelectJob],
   );
 
   const handleInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {

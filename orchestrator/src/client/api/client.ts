@@ -63,7 +63,6 @@ import type {
   VisaSponsorSearchResponse,
   VisaSponsorStatusResponse,
 } from "@shared/types";
-import { bucketQueryLength, trackProductEvent } from "@/lib/analytics";
 import { showDemoBlockedToast, showDemoSimulatedToast } from "@/lib/demo-toast";
 
 const API_BASE = "/api";
@@ -1815,14 +1814,6 @@ export async function searchVisaSponsors(input: {
   minScore?: number;
   country?: string;
 }): Promise<VisaSponsorSearchResponse> {
-  if (input.query?.trim()) {
-    trackProductEvent("visa_sponsor_search", {
-      query_length_bucket: bucketQueryLength(input.query.trim()),
-      limit: input.limit,
-      min_score: input.minScore,
-      country: input.country ?? "all",
-    });
-  }
   return fetchApi<VisaSponsorSearchResponse>("/visa-sponsors/search", {
     method: "POST",
     body: JSON.stringify(input),

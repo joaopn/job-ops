@@ -1,8 +1,4 @@
-# Contributing to JobOps
-
-Thanks for helping improve JobOps.
-
-This guide is intentionally short and GitHub-friendly. It focuses on contributor workflow and links to the existing docs for setup, style, and troubleshooting so we do not duplicate documentation.
+# Contributing
 
 ## What You Can Contribute
 
@@ -14,17 +10,15 @@ This guide is intentionally short and GitHub-friendly. It focuses on contributor
 
 ## Before You Start (Pick a Path)
 
-Use the path that matches your change:
+| Path | Main folders | Start command(s) |
+| --- | --- | --- |
+| Docs/content | `docs-site/docs` | `npm run docs:dev` |
+| App/UI/API | `orchestrator`, `shared` | `npm --workspace orchestrator run dev` |
+| Extractors | `extractors/*`, sometimes `shared` | Relevant type checks + tests |
 
-| Path | Main folders | Start command(s) | Canonical docs |
-| --- | --- | --- | --- |
-| Docs/content | `docs-site/docs` | `npm run docs:dev` | [Docs style guide](https://jobops.dakheera47.com/docs/next/reference/documentation-style-guide), [FAQ](https://jobops.dakheera47.com/docs/next/reference/faq) |
-| App/UI/API | `orchestrator`, `shared` | `npm --workspace orchestrator run dev` | [Self-hosting](https://jobops.dakheera47.com/docs/getting-started/self-hosting), [Troubleshooting](https://jobops.dakheera47.com/docs/next/troubleshooting/common-problems) |
-| Extractors | `extractors/*`, sometimes `shared` | Relevant type checks + tests | [Add an extractor](https://jobops.dakheera47.com/docs/next/workflows/add-an-extractor), [Extractors overview](https://jobops.dakheera47.com/docs/extractors/overview) |
+Self-hosting / OAuth / env-var docs live in [`docs-site/docs/getting-started/`](docs-site/docs/getting-started/).
 
 ## Local Setup (Minimal)
-
-For full end-user setup, environment variables, OAuth, and deployment details, use the [Self-Hosting Guide](https://jobops.dakheera47.com/docs/getting-started/self-hosting) and [Gmail OAuth Setup](https://jobops.dakheera47.com/docs/getting-started/gmail-oauth-setup).
 
 Contributor baseline from repo root:
 
@@ -63,27 +57,6 @@ Local URLs:
 4. Include screenshots or short clips for UI changes when helpful.
 5. Mention any tradeoffs or follow-up work in the PR description.
 
-## Releases
-
-Releases are driven from GitHub Actions.
-
-1. Open the `release` workflow in GitHub Actions.
-2. Enter the next version as `x.y.z` (for example `0.1.30`).
-3. Optionally enter a separate release title for GitHub (for example `Google Dorks!`).
-4. Run the workflow.
-
-The workflow will:
-
-- bump `orchestrator/package.json`
-- update `package-lock.json`
-- cut the matching Docusaurus docs version
-- commit the version bump to `main`
-- create and push tag `vX.Y.Z`
-- publish the `ghcr.io/.../job-ops` image for that release
-- create the GitHub release using either the custom title or `vX.Y.Z`
-
-The app version shown in the UI is sourced from `orchestrator/package.json`, so the release version, tag, and displayed app version stay aligned even when the GitHub release title is customized separately.
-
 ## Validation Before PR (CI-Parity Checks)
 
 Run from the repository root:
@@ -104,9 +77,9 @@ If tests fail due to a `better-sqlite3` Node ABI mismatch, rebuild it and rerun 
 npm --workspace orchestrator rebuild better-sqlite3
 ```
 
-CI runs on Node 22. If local behavior differs, verify with Node 22 before concluding a change is valid.
+CI runs on Node 22.
 
-## Project-Specific Standards (Link-First)
+## Project-Specific Standards
 
 Before editing server routes/services, read [`AGENTS.md`](./AGENTS.md) for repository standards, especially:
 
@@ -116,13 +89,3 @@ Before editing server routes/services, read [`AGENTS.md`](./AGENTS.md) for repos
 - SSE helper usage
 - Redaction/sanitization defaults for logs and error details
 - Minimal webhook and LLM payload defaults
-
-## Where to Find Deeper Docs
-
-- [Documentation Home](https://jobops.dakheera47.com/docs/)
-- [Self-Hosting Guide](https://jobops.dakheera47.com/docs/getting-started/self-hosting)
-- [Gmail OAuth Setup](https://jobops.dakheera47.com/docs/getting-started/gmail-oauth-setup)
-- [Documentation Style Guide](https://jobops.dakheera47.com/docs/next/reference/documentation-style-guide)
-- [FAQ (includes where to edit docs)](https://jobops.dakheera47.com/docs/next/reference/faq)
-- [Add an Extractor Workflow](https://jobops.dakheera47.com/docs/next/workflows/add-an-extractor)
-- [Troubleshooting](https://jobops.dakheera47.com/docs/next/troubleshooting/common-problems)

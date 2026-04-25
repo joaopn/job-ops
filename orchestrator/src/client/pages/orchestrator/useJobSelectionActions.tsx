@@ -6,7 +6,6 @@ import type {
 } from "@shared/types.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { trackProductEvent } from "@/lib/analytics";
 import type { FilterTab } from "./constants";
 import { JobActionProgressToast } from "./JobActionProgressToast";
 import {
@@ -164,11 +163,6 @@ export function useJobSelectionActions({
 
       try {
         setJobActionInFlight(action);
-        trackProductEvent("jobs_bulk_action_started", {
-          action,
-          selected_count: selectedAtStart.length,
-          tab: activeTab,
-        });
         upsertProgressToast();
         await api.streamJobAction(
           {
@@ -233,13 +227,6 @@ export function useJobSelectionActions({
         const result = finalResult as JobActionResponse;
         const failedIds = getFailedJobIds(result);
         const successLabel = jobActionSuccessLabel[action];
-        trackProductEvent("jobs_bulk_action_completed", {
-          action: result.action,
-          requested: result.requested,
-          succeeded: result.succeeded,
-          failed: result.failed,
-          tab: activeTab,
-        });
 
         if (result.failed === 0) {
           toast.success(`${result.succeeded} ${successLabel}`);
@@ -275,7 +262,7 @@ export function useJobSelectionActions({
         setJobActionInFlight(null);
       }
     },
-    [activeTab, selectedJobIds, loadJobs],
+    [selectedJobIds, loadJobs],
   );
 
   return {

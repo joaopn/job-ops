@@ -16,14 +16,8 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { useVersionCheck } from "../hooks/useVersionCheck";
+import { getAppVersion } from "../lib/version";
 import { isNavActive, NAV_LINKS } from "./navigation";
 import { StatusBadgeIndicator } from "./StatusIndicator";
 
@@ -59,7 +53,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   const [internalNavOpen, setInternalNavOpen] = useState(false);
   const navOpen = controlledNavOpen ?? internalNavOpen;
   const setNavOpen = onNavOpenChange ?? setInternalNavOpen;
-  const { version, updateAvailable } = useVersionCheck();
+  const version = getAppVersion();
 
   const handleNavClick = (to: string, activePaths?: string[]) => {
     if (isNavActive(location.pathname, to, activePaths)) {
@@ -105,41 +99,24 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
               </nav>
               {showVersionFooter && (
                 <div className="mt-auto pt-6 pb-2">
-                  <TooltipProvider>
-                    <div className="flex flex-col items-start gap-2">
-                      <a
-                        href="https://github.com/DaKheera47/job-ops/releases"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
-                      >
-                        <span className="truncate">Version {version}</span>
-                        {updateAvailable && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="h-2 w-2 shrink-0 cursor-pointer rounded-full bg-emerald-500" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Update available</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        )}
-                      </a>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setNavOpen(false);
-                          window.open("/docs", "_blank", "noopener,noreferrer");
-                        }}
-                        className="h-7 gap-1.5 px-2 text-xs"
-                      >
-                        <span>Documentation</span>
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </TooltipProvider>
+                  <div className="flex flex-col items-start gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      Version {version}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setNavOpen(false);
+                        window.open("/docs", "_blank", "noopener,noreferrer");
+                      }}
+                      className="h-7 gap-1.5 px-2 text-xs"
+                    >
+                      <span>Documentation</span>
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </div>
               )}
             </SheetContent>

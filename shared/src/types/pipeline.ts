@@ -58,9 +58,6 @@ export interface PipelineRunRequestedConfig {
 }
 
 export interface PipelineRunSourceLimitSnapshot {
-  ukvisajobsMaxJobs: number;
-  adzunaMaxJobsPerTerm: number;
-  gradcrackerMaxJobsPerTerm: number;
   startupjobsMaxJobsPerTerm: number;
   jobspyResultsWanted: number;
 }
@@ -231,9 +228,3 @@ export type JobActionStreamEvent =
       requestId: string;
     };
 
-export interface BackupInfo {
-  filename: string;
-  type: "auto" | "manual";
-  size: number;
-  createdAt: string;
-}

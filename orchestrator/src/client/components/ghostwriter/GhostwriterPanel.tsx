@@ -21,7 +21,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { bucketQueryLength, trackProductEvent } from "@/lib/analytics";
 import { Composer } from "./Composer";
 import { MessageList } from "./MessageList";
 
@@ -43,9 +42,6 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
 
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const streamAbortRef = useRef<AbortController | null>(null);
-  const runTriggerRef = useRef<"new_prompt" | "regenerate" | "edit">(
-    "new_prompt",
-  );
 
   useEffect(() => {
     const container = messageListRef.current;
@@ -135,12 +131,6 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
       }
 
       if (event.type === "completed" || event.type === "cancelled") {
-        if (event.type === "completed") {
-          trackProductEvent("ghostwriter_response_completed", {
-            trigger: runTriggerRef.current,
-            message_length_bucket: bucketQueryLength(event.message.content),
-          });
-        }
         setMessages((current) => {
           const next = current.filter(
             (message) => message.id !== event.message.id,
@@ -188,7 +178,6 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
 
       setMessages((current) => [...current, optimisticUser]);
       setIsStreaming(true);
-      runTriggerRef.current = "new_prompt";
 
       const controller = new AbortController();
       streamAbortRef.current = controller;
@@ -248,7 +237,6 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
       });
 
       setIsStreaming(true);
-      runTriggerRef.current = "regenerate";
       const controller = new AbortController();
       streamAbortRef.current = controller;
 
@@ -309,7 +297,6 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
       });
 
       setIsStreaming(true);
-      runTriggerRef.current = "edit";
       const controller = new AbortController();
       streamAbortRef.current = controller;
 

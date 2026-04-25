@@ -261,33 +261,6 @@ export const settingsRegistry = {
     serialize: (value: PdfRenderer | null | undefined): string | null =>
       value ?? null,
   },
-  ukvisajobsMaxJobs: {
-    kind: "typed" as const,
-    schema: z.number().int().min(1).max(1000),
-    default: (): number => 50,
-    parse: parseIntOrNull,
-    serialize: serializeNullableNumber,
-  },
-  adzunaMaxJobsPerTerm: {
-    kind: "typed" as const,
-    schema: z.number().int().min(1).max(1000),
-    default: (): number =>
-      parseInt(
-        typeof process !== "undefined"
-          ? process.env.ADZUNA_MAX_JOBS_PER_TERM || "50"
-          : "50",
-        10,
-      ),
-    parse: parseIntOrNull,
-    serialize: serializeNullableNumber,
-  },
-  gradcrackerMaxJobsPerTerm: {
-    kind: "typed" as const,
-    schema: z.number().int().min(1).max(1000),
-    default: (): number => 50,
-    parse: parseIntOrNull,
-    serialize: serializeNullableNumber,
-  },
   startupjobsMaxJobsPerTerm: {
     kind: "typed" as const,
     schema: z.number().int().min(1).max(1000),
@@ -295,19 +268,6 @@ export const settingsRegistry = {
       parseInt(
         typeof process !== "undefined"
           ? process.env.STARTUPJOBS_MAX_RESULTS || "50"
-          : "50",
-        10,
-      ),
-    parse: parseIntOrNull,
-    serialize: serializeNullableNumber,
-  },
-  seekMaxJobsPerTerm: {
-    kind: "typed" as const,
-    schema: z.number().int().min(1).max(1000),
-    default: (): number =>
-      parseInt(
-        typeof process !== "undefined"
-          ? process.env.SEEK_MAX_JOBS_PER_TERM || "50"
           : "50",
         10,
       ),
@@ -354,31 +314,8 @@ export const settingsRegistry = {
     serialize: (value: string | null | undefined): string | null =>
       value ?? null,
   },
-  ghostwriterSystemPromptTemplate: {
-    kind: "typed" as const,
-    schema: z.string().trim().max(12000),
-    default: (): string =>
-      getDefaultPromptTemplate("ghostwriterSystemPromptTemplate"),
-    parse: parseNonEmptyStringOrNull,
-    serialize: (value: string | null | undefined): string | null =>
-      value ?? null,
-  },
-  tailoringPromptTemplate: {
-    kind: "typed" as const,
-    schema: z.string().trim().max(12000),
-    default: (): string => getDefaultPromptTemplate("tailoringPromptTemplate"),
-    parse: parseNonEmptyStringOrNull,
-    serialize: (value: string | null | undefined): string | null =>
-      value ?? null,
-  },
-  scoringPromptTemplate: {
-    kind: "typed" as const,
-    schema: z.string().trim().max(12000),
-    default: (): string => getDefaultPromptTemplate("scoringPromptTemplate"),
-    parse: parseNonEmptyStringOrNull,
-    serialize: (value: string | null | undefined): string | null =>
-      value ?? null,
-  },
+  // ghostwriterSystemPromptTemplate, tailoringPromptTemplate, scoringPromptTemplate
+  // were removed — all LLM prompts now live in user-editable YAML under prompts/.
   searchCities: {
     kind: "typed" as const,
     schema: z.string().trim().max(100),

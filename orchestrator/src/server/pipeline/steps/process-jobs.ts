@@ -5,7 +5,7 @@ import type { ScoredJob } from "./types";
 
 type ProcessJobFn = (
   jobId: string,
-  options?: { force?: boolean; analyticsOrigin?: "pipeline" },
+  options?: { force?: boolean },
 ) => Promise<{ success: boolean; error?: string }>;
 const PROCESSING_CONCURRENCY = 3;
 
@@ -42,7 +42,6 @@ export async function processJobsStep(args: {
       task: async (job) => {
         const result = await args.processJob(job.id, {
           force: false,
-          analyticsOrigin: "pipeline",
         });
         if (result.success) {
           processedCount += 1;

@@ -8,15 +8,7 @@ import { sanitizeUnknown } from "@infra/sanitize";
 import { createApp } from "./app";
 import { initializeExtractorRegistry } from "./extractors/registry";
 import { deleteExpiredOrRevokedAuthSessions } from "./repositories/auth-sessions";
-import * as settingsRepo from "./repositories/settings";
-import {
-  getBackupSettings,
-  setBackupSettings,
-  startBackupScheduler,
-} from "./services/backup/index";
-import { initializeDemoModeServices } from "./services/demo-mode";
 import { applyStoredEnvOverrides } from "./services/envSettings";
-import { initialize as initializeVisaSponsors } from "./services/visa-sponsors/index";
 
 const AUTH_SESSION_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 
@@ -57,7 +49,6 @@ async function startServer() {
   const app = createApp();
   const PORT = process.env.PORT || 3001;
 
-  // Start server
   app.listen(PORT, async () => {
     console.log(`
 ╔═══════════════════════════════════════════════════════════╗
@@ -73,62 +64,6 @@ async function startServer() {
 ╚═══════════════════════════════════════════════════════════╝
   `);
 
-    // Initialize visa sponsors service (downloads data if needed, starts scheduler)
-    try {
-      if (process.env.DEMO_MODE === "true") {
-        console.log(
-          "ℹ️ Demo mode enabled. Skipping visa sponsors initialization.",
-        );
-      } else {
-        await initializeVisaSponsors();
-      }
-    } catch (error) {
-      logger.warn("Failed to initialize visa sponsors service", {
-        error: sanitizeUnknown(error),
-      });
-    }
-
-    // Initialize backup service (load settings and start scheduler if enabled)
-    try {
-      const backupEnabled = await settingsRepo.getSetting("backupEnabled");
-      const backupHour = await settingsRepo.getSetting("backupHour");
-      const backupMaxCount = await settingsRepo.getSetting("backupMaxCount");
-
-      const parsedHour = backupHour ? parseInt(backupHour, 10) : NaN;
-      const parsedMaxCount = backupMaxCount
-        ? parseInt(backupMaxCount, 10)
-        : NaN;
-      const safeHour = Number.isNaN(parsedHour)
-        ? 2
-        : Math.min(23, Math.max(0, parsedHour));
-      const safeMaxCount = Number.isNaN(parsedMaxCount)
-        ? 5
-        : Math.min(5, Math.max(1, parsedMaxCount));
-
-      setBackupSettings({
-        enabled: backupEnabled === "true" || backupEnabled === "1",
-        hour: safeHour,
-        maxCount: safeMaxCount,
-      });
-
-      startBackupScheduler();
-
-      const settings = getBackupSettings();
-      if (settings.enabled) {
-        console.log(
-          `✅ Backup scheduler started (hour: ${settings.hour}, max: ${settings.maxCount})`,
-        );
-      } else {
-        console.log(
-          "ℹ️ Backups disabled. Enable in settings to schedule automatic backups.",
-        );
-      }
-    } catch (error) {
-      logger.warn("Failed to initialize backup service", {
-        error: sanitizeUnknown(error),
-      });
-    }
-
     try {
       await cleanupAuthSessions("startup");
       setInterval(() => {
@@ -136,14 +71,6 @@ async function startServer() {
       }, AUTH_SESSION_CLEANUP_INTERVAL_MS);
     } catch (error) {
       logger.warn("Failed to initialize auth session cleanup", {
-        error: sanitizeUnknown(error),
-      });
-    }
-
-    try {
-      await initializeDemoModeServices();
-    } catch (error) {
-      logger.warn("Failed to initialize demo mode services", {
         error: sanitizeUnknown(error),
       });
     }

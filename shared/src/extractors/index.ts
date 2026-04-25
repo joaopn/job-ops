@@ -1,17 +1,13 @@
 import { z } from "zod";
 
 export const EXTRACTOR_SOURCE_IDS = [
-  "gradcracker",
   "indeed",
   "linkedin",
   "glassdoor",
-  "ukvisajobs",
-  "adzuna",
   "hiringcafe",
   "startupjobs",
   "workingnomads",
   "golangjobs",
-  "seek",
   "manual",
 ] as const;
 
@@ -29,28 +25,9 @@ export const EXTRACTOR_SOURCE_METADATA: Record<
   ExtractorSourceId,
   ExtractorSourceMetadata
 > = {
-  gradcracker: {
-    label: "Gradcracker",
-    order: 10,
-    category: "pipeline",
-    ukOnly: true,
-  },
   indeed: { label: "Indeed", order: 20, category: "pipeline" },
   linkedin: { label: "LinkedIn", order: 30, category: "pipeline" },
   glassdoor: { label: "Glassdoor", order: 40, category: "pipeline" },
-  ukvisajobs: {
-    label: "UK Visa Jobs",
-    order: 50,
-    category: "pipeline",
-    requiresCredentials: true,
-    ukOnly: true,
-  },
-  adzuna: {
-    label: "Adzuna",
-    order: 60,
-    category: "pipeline",
-    requiresCredentials: true,
-  },
   hiringcafe: { label: "Hiring Cafe", order: 70, category: "pipeline" },
   startupjobs: { label: "startup.jobs", order: 80, category: "pipeline" },
   workingnomads: {
@@ -62,12 +39,6 @@ export const EXTRACTOR_SOURCE_METADATA: Record<
     label: "Golang Jobs",
     order: 100,
     category: "pipeline",
-  },
-  seek: {
-    label: "Seek",
-    order: 105,
-    category: "pipeline",
-    requiresCredentials: true,
   },
   manual: { label: "Manual", order: 110, category: "manual" },
 };

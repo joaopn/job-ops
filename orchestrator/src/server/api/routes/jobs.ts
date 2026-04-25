@@ -9,7 +9,6 @@ import {
 } from "@infra/errors";
 import { fail, ok, okWithMeta } from "@infra/http";
 import { logger } from "@infra/logger";
-import { trackServerProductEvent } from "@infra/product-analytics";
 import { sanitizeWebhookPayload } from "@infra/sanitize";
 import { setupSse, startSseHeartbeat, writeSseData } from "@infra/sse";
 import { isDemoMode, sendDemoBlocked } from "@server/config/demo";
@@ -321,11 +320,6 @@ type JobActionExecutionOptions = {
   getProfileForRescore?: () => Promise<Record<string, unknown>>;
   forceMoveToReady?: boolean;
   requestOrigin?: string | null;
-  analyticsOrigin?:
-    | "move_to_ready"
-    | "generate_pdf"
-    | "pipeline"
-    | "manual_job_create";
 };
 
 function createSharedRescoreProfileLoader(): () => Promise<
@@ -414,7 +408,6 @@ async function executeJobActionForJob(
         const processed = await processJob(jobId, {
           force: options?.forceMoveToReady ?? false,
           requestOrigin: options?.requestOrigin ?? null,
-          analyticsOrigin: options?.analyticsOrigin ?? "move_to_ready",
         });
         if (!processed.success) {
           throw new AppError({
@@ -1594,20 +1587,6 @@ jobsRouter.post("/:id/check-sponsor", async (req: Request, res: Response) => {
       return fail(res, notFound("Job not found"));
     }
 
-    if (sponsorMatchScore >= 50 && sponsorResults.length > 0) {
-      void trackServerProductEvent(
-        "sponsor_match_found",
-        {
-          match_score: sponsorMatchScore,
-          match_count: sponsorResults.length,
-        },
-        {
-          requestOrigin: resolveRequestOrigin(req),
-          urlPath: "/visa-sponsors",
-        },
-      );
-    }
-
     ok(res, {
       ...updatedJob,
       matchResults: sponsorResults.slice(0, 5).map((r) => ({
@@ -1642,7 +1621,6 @@ jobsRouter.post("/:id/generate-pdf", async (req: Request, res: Response) => {
 
     const result = await generateFinalPdf(req.params.id, {
       requestOrigin: resolveRequestOrigin(req),
-      analyticsOrigin: "generate_pdf",
     });
 
     if (!result.success) {
@@ -1698,21 +1676,6 @@ jobsRouter.post("/:id/apply", async (req: Request, res: Response) => {
     });
 
     if (updatedJob) {
-      void trackServerProductEvent(
-        "application_marked_applied",
-        {
-          source: "jobs_apply_route",
-          had_pdf: Boolean(updatedJob.pdfPath),
-          tracer_links_enabled: Boolean(updatedJob.tracerLinksEnabled),
-          sponsor_match_found:
-            typeof updatedJob.sponsorMatchScore === "number" &&
-            updatedJob.sponsorMatchScore >= 50,
-        },
-        {
-          requestOrigin: resolveRequestOrigin(req),
-          urlPath: "/jobs",
-        },
-      );
       notifyJobCompleteWebhook(updatedJob).catch((error) => {
         logger.warn("Job complete webhook dispatch failed", error);
       });
