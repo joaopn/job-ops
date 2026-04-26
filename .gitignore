@@ -25,4 +25,6 @@ tmp/
 
 # Virtual environment for Python
 .venv
+
 plan/
+.claude/
