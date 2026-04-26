@@ -4,7 +4,6 @@ import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
   Sheet,
@@ -15,7 +14,6 @@ import {
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import * as api from "../api";
-import { useTracerReadiness } from "../hooks/useTracerReadiness";
 
 interface JobDetailsEditDrawerProps {
   open: boolean;
@@ -33,7 +31,6 @@ type JobDetailsDraft = {
   salary: string;
   deadline: string;
   jobDescription: string;
-  tracerLinksEnabled: boolean;
 };
 
 const emptyDraft: JobDetailsDraft = {
@@ -45,7 +42,6 @@ const emptyDraft: JobDetailsDraft = {
   salary: "",
   deadline: "",
   jobDescription: "",
-  tracerLinksEnabled: false,
 };
 
 const normalizeOptional = (value: string): string | null => {
@@ -64,7 +60,6 @@ const normalizeFromJob = (job: Job | null): JobDetailsDraft => {
     salary: job.salary ?? "",
     deadline: job.deadline ?? "",
     jobDescription: job.jobDescription ?? "",
-    tracerLinksEnabled: Boolean(job.tracerLinksEnabled),
   };
 };
 
@@ -86,8 +81,6 @@ export const JobDetailsEditDrawer: React.FC<JobDetailsEditDrawerProps> = ({
   const [draft, setDraft] = useState<JobDetailsDraft>(emptyDraft);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const { readiness: tracerReadiness, isChecking: isTracerReadinessChecking } =
-    useTracerReadiness();
 
   useEffect(() => {
     if (!open) return;
@@ -97,13 +90,6 @@ export const JobDetailsEditDrawer: React.FC<JobDetailsEditDrawerProps> = ({
   }, [job, open]);
 
   const hasJob = !!job;
-  const tracerCanEnable = Boolean(tracerReadiness?.canEnable);
-  const tracerEnableBlocked = !draft.tracerLinksEnabled && !tracerCanEnable;
-  const tracerEnableBlockedReason =
-    tracerReadiness?.canEnable === false
-      ? (tracerReadiness.reason ??
-        "Tracer links are unavailable right now. Verify Tracer Links in Settings.")
-      : null;
 
   const isDirty = useMemo(() => {
     if (!job) return false;
@@ -116,8 +102,7 @@ export const JobDetailsEditDrawer: React.FC<JobDetailsEditDrawerProps> = ({
       draft.location !== current.location ||
       draft.salary !== current.salary ||
       draft.deadline !== current.deadline ||
-      draft.jobDescription !== current.jobDescription ||
-      draft.tracerLinksEnabled !== current.tracerLinksEnabled
+      draft.jobDescription !== current.jobDescription
     );
   }, [draft, job]);
 
@@ -149,24 +134,10 @@ export const JobDetailsEditDrawer: React.FC<JobDetailsEditDrawerProps> = ({
       setValidationError("Application URL must be a valid URL.");
       return;
     }
-    if (
-      draft.tracerLinksEnabled &&
-      !job.tracerLinksEnabled &&
-      !tracerCanEnable
-    ) {
-      setValidationError(
-        tracerEnableBlockedReason ??
-          "Tracer links are unavailable right now. Verify Tracer Links in Settings.",
-      );
-      return;
-    }
 
     try {
       setValidationError(null);
       setIsSaving(true);
-
-      const employerChanged =
-        employer.toLowerCase() !== job.employer.trim().toLowerCase();
 
       await api.updateJob(job.id, {
         title,
@@ -177,20 +148,7 @@ export const JobDetailsEditDrawer: React.FC<JobDetailsEditDrawerProps> = ({
         salary: normalizeOptional(draft.salary),
         deadline: normalizeOptional(draft.deadline),
         jobDescription: normalizeOptional(draft.jobDescription),
-        tracerLinksEnabled: draft.tracerLinksEnabled,
       });
-
-      if (employerChanged) {
-        try {
-          await api.checkSponsor(job.id);
-        } catch (error) {
-          const message =
-            error instanceof Error
-              ? error.message
-              : "Job updated, but sponsor check failed";
-          toast.error(message);
-        }
-      }
 
       await onJobUpdated();
 
@@ -307,42 +265,6 @@ export const JobDetailsEditDrawer: React.FC<JobDetailsEditDrawerProps> = ({
                     }
                     placeholder="e.g. 31 Mar 2026"
                   />
-                </div>
-
-                <div className="mt-3 rounded-lg border border-border/60 bg-muted/10 px-3 py-3">
-                  <label
-                    htmlFor="edit-tracer-links-enabled"
-                    className="flex cursor-pointer items-center gap-3"
-                  >
-                    <Checkbox
-                      id="edit-tracer-links-enabled"
-                      checked={draft.tracerLinksEnabled}
-                      onCheckedChange={(checked) =>
-                        setDraft((prev) => ({
-                          ...prev,
-                          tracerLinksEnabled: Boolean(checked),
-                        }))
-                      }
-                      disabled={isSaving || tracerEnableBlocked}
-                    />
-                    <span className="text-sm font-medium">
-                      Enable tracer links for this job
-                    </span>
-                  </label>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    {isTracerReadinessChecking
-                      ? "Checking tracer-link readiness..."
-                      : "Applies on the next PDF generation. Existing PDFs are not modified."}
-                  </p>
-                  {tracerEnableBlockedReason && !draft.tracerLinksEnabled ? (
-                    <p className="mt-2 text-xs text-destructive">
-                      Tracer links are unavailable: {tracerEnableBlockedReason}
-                    </p>
-                  ) : null}
-                  <p className="mt-2 text-xs text-muted-foreground/80">
-                    No raw IP is stored. Analytics are privacy-safe and
-                    anonymous.
-                  </p>
                 </div>
 
                 <div className="mt-3 space-y-1">

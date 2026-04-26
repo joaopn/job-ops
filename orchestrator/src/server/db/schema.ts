@@ -4,19 +4,12 @@
 
 import {
   APPLICATION_OUTCOMES,
-  APPLICATION_STAGES,
   APPLICATION_TASK_TYPES,
   INTERVIEW_OUTCOMES,
   INTERVIEW_TYPES,
   JOB_CHAT_MESSAGE_ROLES,
   JOB_CHAT_MESSAGE_STATUSES,
   JOB_CHAT_RUN_STATUSES,
-  POST_APPLICATION_INTEGRATION_STATUSES,
-  POST_APPLICATION_MESSAGE_TYPES,
-  POST_APPLICATION_PROCESSING_STATUSES,
-  POST_APPLICATION_PROVIDERS,
-  POST_APPLICATION_RELEVANCE_DECISIONS,
-  POST_APPLICATION_SYNC_RUN_STATUSES,
 } from "@shared/types";
 import { sql } from "drizzle-orm";
 import {
@@ -25,7 +18,6 @@ import {
   real,
   sqliteTable,
   text,
-  uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
 export const jobs = sqliteTable("jobs", {
@@ -99,11 +91,6 @@ export const jobs = sqliteTable("jobs", {
   tailoredSkills: text("tailored_skills"),
   selectedProjectIds: text("selected_project_ids"),
   pdfPath: text("pdf_path"),
-  tracerLinksEnabled: integer("tracer_links_enabled", { mode: "boolean" })
-    .notNull()
-    .default(false),
-  sponsorMatchScore: real("sponsor_match_score"),
-  sponsorMatchNames: text("sponsor_match_names"),
 
   // Timestamps
   discoveredAt: text("discovered_at").notNull().default(sql`(datetime('now'))`),
@@ -112,20 +99,6 @@ export const jobs = sqliteTable("jobs", {
   appliedAt: text("applied_at"),
   createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
   updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
-});
-
-export const stageEvents = sqliteTable("stage_events", {
-  id: text("id").primaryKey(),
-  applicationId: text("application_id")
-    .notNull()
-    .references(() => jobs.id, { onDelete: "cascade" }),
-  title: text("title").notNull(),
-  groupId: text("group_id"),
-  fromStage: text("from_stage", { enum: APPLICATION_STAGES }),
-  toStage: text("to_stage", { enum: APPLICATION_STAGES }).notNull(),
-  occurredAt: integer("occurred_at", { mode: "number" }).notNull(),
-  metadata: text("metadata", { mode: "json" }),
-  outcome: text("outcome", { enum: APPLICATION_OUTCOMES }),
 });
 
 export const tasks = sqliteTable("tasks", {
@@ -298,228 +271,8 @@ export const authSessions = sqliteTable(
   }),
 );
 
-export const designResumeDocuments = sqliteTable("design_resume_documents", {
-  id: text("id").primaryKey(),
-  title: text("title").notNull(),
-  resumeJson: text("resume_json", { mode: "json" }).notNull(),
-  revision: integer("revision").notNull().default(1),
-  sourceResumeId: text("source_resume_id"),
-  sourceMode: text("source_mode"),
-  importedAt: text("imported_at"),
-  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
-  updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
-});
-
-export const designResumeAssets = sqliteTable(
-  "design_resume_assets",
-  {
-    id: text("id").primaryKey(),
-    documentId: text("document_id")
-      .notNull()
-      .references(() => designResumeDocuments.id, { onDelete: "cascade" }),
-    kind: text("kind", { enum: ["picture"] })
-      .notNull()
-      .default("picture"),
-    originalName: text("original_name").notNull(),
-    mimeType: text("mime_type").notNull(),
-    byteSize: integer("byte_size").notNull(),
-    storagePath: text("storage_path").notNull(),
-    createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
-    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
-  },
-  (table) => ({
-    documentIndex: index("idx_design_resume_assets_document_id").on(
-      table.documentId,
-    ),
-  }),
-);
-
-export const postApplicationIntegrations = sqliteTable(
-  "post_application_integrations",
-  {
-    id: text("id").primaryKey(),
-    provider: text("provider", { enum: POST_APPLICATION_PROVIDERS }).notNull(),
-    accountKey: text("account_key").notNull().default("default"),
-    displayName: text("display_name"),
-    status: text("status", { enum: POST_APPLICATION_INTEGRATION_STATUSES })
-      .notNull()
-      .default("disconnected"),
-    credentials: text("credentials", { mode: "json" }),
-    lastConnectedAt: integer("last_connected_at", { mode: "number" }),
-    lastSyncedAt: integer("last_synced_at", { mode: "number" }),
-    lastError: text("last_error"),
-    createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
-    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
-  },
-  (table) => ({
-    providerAccountUnique: uniqueIndex(
-      "idx_post_app_integrations_provider_account_unique",
-    ).on(table.provider, table.accountKey),
-  }),
-);
-
-export const postApplicationSyncRuns = sqliteTable(
-  "post_application_sync_runs",
-  {
-    id: text("id").primaryKey(),
-    provider: text("provider", { enum: POST_APPLICATION_PROVIDERS }).notNull(),
-    accountKey: text("account_key").notNull().default("default"),
-    integrationId: text("integration_id").references(
-      () => postApplicationIntegrations.id,
-      { onDelete: "set null" },
-    ),
-    status: text("status", { enum: POST_APPLICATION_SYNC_RUN_STATUSES })
-      .notNull()
-      .default("running"),
-    startedAt: integer("started_at", { mode: "number" }).notNull(),
-    completedAt: integer("completed_at", { mode: "number" }),
-    messagesDiscovered: integer("messages_discovered").notNull().default(0),
-    messagesRelevant: integer("messages_relevant").notNull().default(0),
-    messagesClassified: integer("messages_classified").notNull().default(0),
-    messagesMatched: integer("messages_matched").notNull().default(0),
-    messagesApproved: integer("messages_approved").notNull().default(0),
-    messagesDenied: integer("messages_denied").notNull().default(0),
-    messagesErrored: integer("messages_errored").notNull().default(0),
-    errorCode: text("error_code"),
-    errorMessage: text("error_message"),
-    createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
-    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
-  },
-  (table) => ({
-    providerAccountStartedAtIndex: index(
-      "idx_post_app_sync_runs_provider_account_started_at",
-    ).on(table.provider, table.accountKey, table.startedAt),
-  }),
-);
-
-export const postApplicationMessages = sqliteTable(
-  "post_application_messages",
-  {
-    id: text("id").primaryKey(),
-    provider: text("provider", { enum: POST_APPLICATION_PROVIDERS }).notNull(),
-    accountKey: text("account_key").notNull().default("default"),
-    integrationId: text("integration_id").references(
-      () => postApplicationIntegrations.id,
-      { onDelete: "set null" },
-    ),
-    syncRunId: text("sync_run_id").references(
-      () => postApplicationSyncRuns.id,
-      {
-        onDelete: "set null",
-      },
-    ),
-    externalMessageId: text("external_message_id").notNull(),
-    externalThreadId: text("external_thread_id"),
-    fromAddress: text("from_address").notNull().default(""),
-    fromDomain: text("from_domain"),
-    senderName: text("sender_name"),
-    subject: text("subject").notNull().default(""),
-    receivedAt: integer("received_at", { mode: "number" }).notNull(),
-    snippet: text("snippet").notNull().default(""),
-    classificationLabel: text("classification_label"),
-    classificationConfidence: real("classification_confidence"),
-    classificationPayload: text("classification_payload", { mode: "json" }),
-    relevanceLlmScore: real("relevance_llm_score"),
-    relevanceDecision: text("relevance_decision", {
-      enum: POST_APPLICATION_RELEVANCE_DECISIONS,
-    })
-      .notNull()
-      .default("needs_llm"),
-    matchConfidence: integer("match_confidence"),
-    messageType: text("message_type", {
-      enum: POST_APPLICATION_MESSAGE_TYPES,
-    })
-      .notNull()
-      .default("other"),
-    stageEventPayload: text("stage_event_payload", { mode: "json" }),
-    processingStatus: text("processing_status", {
-      enum: POST_APPLICATION_PROCESSING_STATUSES,
-    })
-      .notNull()
-      .default("pending_user"),
-    matchedJobId: text("matched_job_id").references(() => jobs.id, {
-      onDelete: "set null",
-    }),
-    decidedAt: integer("decided_at", { mode: "number" }),
-    decidedBy: text("decided_by"),
-    errorCode: text("error_code"),
-    errorMessage: text("error_message"),
-    createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
-    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
-  },
-  (table) => ({
-    providerAccountExternalMessageUnique: uniqueIndex(
-      "idx_post_app_messages_provider_account_external_unique",
-    ).on(table.provider, table.accountKey, table.externalMessageId),
-    providerAccountReviewStatusIndex: index(
-      "idx_post_app_messages_provider_account_processing_status",
-    ).on(table.provider, table.accountKey, table.processingStatus),
-  }),
-);
-
-export const tracerLinks = sqliteTable(
-  "tracer_links",
-  {
-    id: text("id").primaryKey(),
-    token: text("token").notNull().unique(),
-    jobId: text("job_id")
-      .notNull()
-      .references(() => jobs.id, { onDelete: "cascade" }),
-    sourcePath: text("source_path").notNull(),
-    sourceLabel: text("source_label").notNull(),
-    destinationUrl: text("destination_url").notNull(),
-    destinationUrlHash: text("destination_url_hash").notNull(),
-    isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
-    createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
-    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
-  },
-  (table) => ({
-    jobPathDestinationUnique: uniqueIndex(
-      "idx_tracer_links_job_source_destination_unique",
-    ).on(table.jobId, table.sourcePath, table.destinationUrlHash),
-    jobIndex: index("idx_tracer_links_job_id").on(table.jobId),
-  }),
-);
-
-export const tracerClickEvents = sqliteTable(
-  "tracer_click_events",
-  {
-    id: text("id").primaryKey(),
-    tracerLinkId: text("tracer_link_id")
-      .notNull()
-      .references(() => tracerLinks.id, { onDelete: "cascade" }),
-    clickedAt: integer("clicked_at", { mode: "number" }).notNull(),
-    requestId: text("request_id"),
-    isLikelyBot: integer("is_likely_bot", { mode: "boolean" })
-      .notNull()
-      .default(false),
-    deviceType: text("device_type").notNull().default("unknown"),
-    uaFamily: text("ua_family").notNull().default("unknown"),
-    osFamily: text("os_family").notNull().default("unknown"),
-    referrerHost: text("referrer_host"),
-    ipHash: text("ip_hash"),
-    uniqueFingerprintHash: text("unique_fingerprint_hash"),
-  },
-  (table) => ({
-    tracerLinkIndex: index("idx_tracer_click_events_tracer_link_id").on(
-      table.tracerLinkId,
-    ),
-    clickedAtIndex: index("idx_tracer_click_events_clicked_at").on(
-      table.clickedAt,
-    ),
-    botIndex: index("idx_tracer_click_events_is_likely_bot").on(
-      table.isLikelyBot,
-    ),
-    uniqueFingerprintIndex: index(
-      "idx_tracer_click_events_unique_fingerprint_hash",
-    ).on(table.uniqueFingerprintHash),
-  }),
-);
-
 export type JobRow = typeof jobs.$inferSelect;
 export type NewJobRow = typeof jobs.$inferInsert;
-export type StageEventRow = typeof stageEvents.$inferSelect;
-export type NewStageEventRow = typeof stageEvents.$inferInsert;
 export type TaskRow = typeof tasks.$inferSelect;
 export type NewTaskRow = typeof tasks.$inferInsert;
 export type JobNoteRow = typeof jobNotes.$inferSelect;
@@ -536,24 +289,3 @@ export type JobChatRunRow = typeof jobChatRuns.$inferSelect;
 export type NewJobChatRunRow = typeof jobChatRuns.$inferInsert;
 export type SettingsRow = typeof settings.$inferSelect;
 export type NewSettingsRow = typeof settings.$inferInsert;
-export type DesignResumeDocumentRow = typeof designResumeDocuments.$inferSelect;
-export type NewDesignResumeDocumentRow =
-  typeof designResumeDocuments.$inferInsert;
-export type DesignResumeAssetRow = typeof designResumeAssets.$inferSelect;
-export type NewDesignResumeAssetRow = typeof designResumeAssets.$inferInsert;
-export type PostApplicationIntegrationRow =
-  typeof postApplicationIntegrations.$inferSelect;
-export type NewPostApplicationIntegrationRow =
-  typeof postApplicationIntegrations.$inferInsert;
-export type PostApplicationSyncRunRow =
-  typeof postApplicationSyncRuns.$inferSelect;
-export type NewPostApplicationSyncRunRow =
-  typeof postApplicationSyncRuns.$inferInsert;
-export type PostApplicationMessageRow =
-  typeof postApplicationMessages.$inferSelect;
-export type NewPostApplicationMessageRow =
-  typeof postApplicationMessages.$inferInsert;
-export type TracerLinkRow = typeof tracerLinks.$inferSelect;
-export type NewTracerLinkRow = typeof tracerLinks.$inferInsert;
-export type TracerClickEventRow = typeof tracerClickEvents.$inferSelect;
-export type NewTracerClickEventRow = typeof tracerClickEvents.$inferInsert;

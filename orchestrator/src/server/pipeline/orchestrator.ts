@@ -450,9 +450,7 @@ export async function generateFinalPdf(
         undefined, // deprecated baseResumePath parameter
         job.selectedProjectIds,
         {
-          tracerLinksEnabled: job.tracerLinksEnabled,
           requestOrigin: options?.requestOrigin ?? null,
-          tracerCompanyName: job.employer ?? null,
         },
       );
 

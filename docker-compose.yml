@@ -22,6 +22,9 @@ services:
       # Server config
       - NODE_ENV=production
       - PORT=3001
+      # Host-facing port that the browser hits (matches the published mapping
+      # above). Used only to print a correct URL in the startup banner.
+      - HOST_PORT=3005
 
       # Python path (uses system python in container)
       - PYTHON_PATH=/usr/bin/python3
@@ -42,27 +45,18 @@ services:
         - path: ./orchestrator/src
           target: /app/orchestrator/src
           action: sync+restart
-        - path: ./visa-sponsor-providers
-          target: /app/visa-sponsor-providers
-          action: sync+restart
         # Sync extractor changes
-        - path: ./extractors/gradcracker/src
-          target: /app/extractors/gradcracker/src
-          action: sync+restart
         - path: ./extractors/hiringcafe/src
           target: /app/extractors/hiringcafe/src
           action: sync+restart
-        - path: ./extractors/ukvisajobs/src
-          target: /app/extractors/ukvisajobs/src
+        - path: ./extractors/startupjobs/src
+          target: /app/extractors/startupjobs/src
           action: sync+restart
         - path: ./extractors/workingnomads/src
           target: /app/extractors/workingnomads/src
           action: sync+restart
         - path: ./extractors/golangjobs/src
           target: /app/extractors/golangjobs/src
-          action: sync+restart
-        - path: ./extractors/seek/src
-          target: /app/extractors/seek/src
           action: sync+restart
         - path: ./extractors/jobspy
           target: /app/extractors/jobspy

@@ -48,6 +48,10 @@ async function startServer() {
 
   const app = createApp();
   const PORT = process.env.PORT || 3001;
+  const HOST_PORT = process.env.HOST_PORT;
+  const accessUrl = HOST_PORT
+    ? `http://localhost:${HOST_PORT}`
+    : `http://localhost:${PORT}`;
 
   app.listen(PORT, async () => {
     console.log(`
@@ -55,11 +59,12 @@ async function startServer() {
 ║                                                           ║
 ║   🚀 Job Ops Orchestrator                                 ║
 ║                                                           ║
-║   Server running at: http://localhost:${PORT}               ║
+║   Open in browser: ${accessUrl}
+║   (container listening on :${PORT})
 ║                                                           ║
-║   API:     http://localhost:${PORT}/api                     ║
-║   Health:  http://localhost:${PORT}/health                  ║
-║   PDFs:    http://localhost:${PORT}/pdfs                    ║
+║   API:     ${accessUrl}/api
+║   Health:  ${accessUrl}/health
+║   PDFs:    ${accessUrl}/pdfs
 ║                                                           ║
 ╚═══════════════════════════════════════════════════════════╝
   `);

@@ -2,9 +2,8 @@
  * Express app factory (useful for tests).
  */
 
-import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { dirname, extname, join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { unauthorized } from "@infra/errors";
 import {
@@ -19,8 +18,6 @@ import cors from "cors";
 import express from "express";
 import { apiRouter } from "./api/index";
 import { getDataDir } from "./config/dataDir";
-import { isDemoMode } from "./config/demo";
-import { resolveTracerRedirect } from "./services/tracer-links";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -51,15 +48,8 @@ export function createAuthGuard() {
     const normalizedMethod = method.toUpperCase();
     const normalizedPath = path.split("?")[0] || path;
 
-    // Explicitly allowed public API routes
     if (normalizedPath === "/api/profile/status") return true;
-    if (
-      normalizedMethod === "POST" &&
-      normalizedPath === "/api/visa-sponsors/search"
-    )
-      return true;
 
-    // Auth endpoints must be accessible without existing auth.
     if (
       normalizedMethod === "POST" &&
       (normalizedPath === "/api/auth/login" ||
@@ -72,21 +62,10 @@ export function createAuthGuard() {
 
   function requiresAuth(method: string, path: string): boolean {
     if (isPublicReadOnlyRoute(method, path)) return false;
-    // OPTIONS is always exempt for CORS preflight.
     if (method.toUpperCase() === "OPTIONS") return false;
 
-    // Analytics contains PII (IPs, click tracking) — always require auth.
-    if (path.startsWith("/api/tracer-links/analytics")) return true;
-
-    // Allow public read access to other tracer link routes.
-    if (path.startsWith("/api/tracer-links")) {
-      return !["GET", "HEAD"].includes(method.toUpperCase());
-    }
-
-    // All other /api/* paths require auth regardless of HTTP method.
     if (path.startsWith("/api/")) return true;
 
-    // Non-API routes (SPA, /health, /pdfs, static) remain publicly readable via GET/HEAD.
     return !["GET", "HEAD"].includes(method.toUpperCase());
   }
 
@@ -121,55 +100,8 @@ export function createApp() {
   const authGuard = createAuthGuard();
   const corsMiddleware = cors();
 
-  const handleTracerRedirect = async (
-    req: express.Request,
-    res: express.Response,
-    slug: string,
-    route: string,
-  ) => {
-    try {
-      const redirect = await resolveTracerRedirect({
-        token: slug,
-        requestId:
-          (res.getHeader("x-request-id") as string | undefined) ?? null,
-        ip: req.ip ?? null,
-        userAgent: req.header("user-agent") ?? null,
-        referrer: req.header("referer") ?? null,
-      });
-
-      if (!redirect) {
-        logger.warn("Tracer link not found", {
-          route,
-          token: slug,
-        });
-        res.status(404).type("text/plain; charset=utf-8").send("Not found");
-        return;
-      }
-
-      logger.info("Tracer link redirected", {
-        route,
-        token: slug,
-        jobId: redirect.jobId,
-      });
-      res.set("Cache-Control", "no-store");
-      res.set("Pragma", "no-cache");
-      res.set("Expires", "0");
-      res.redirect(302, redirect.destinationUrl);
-    } catch (error) {
-      logger.error("Tracer redirect failed", {
-        route,
-        token: slug,
-        error,
-      });
-      res.status(500).type("text/plain; charset=utf-8").send("Internal error");
-    }
-  };
-
   app.use(corsMiddleware);
   app.use(requestContextMiddleware());
-  // Resume file import sends base64 JSON payloads, which expand beyond the raw
-  // file size. Scope the larger JSON limit to that endpoint only.
-  app.use("/api/design-resume/import/file", express.json({ limit: "15mb" }));
   app.use(express.json());
 
   // Logging middleware
@@ -194,25 +126,8 @@ export function createApp() {
   app.use("/api", apiRouter);
   app.use(notFoundApiHandler());
 
-  app.get("/cv/:slug", async (req, res) => {
-    const slug = req.params.slug?.trim();
-    if (!slug) {
-      res.status(404).type("text/plain; charset=utf-8").send("Not found");
-      return;
-    }
-    await handleTracerRedirect(req, res, slug, "GET /cv/:slug");
-  });
-
   // Serve static files for generated PDFs
   const pdfDir = join(getDataDir(), "pdfs");
-  if (isDemoMode()) {
-    const demoPdfPath = join(pdfDir, "demo.pdf");
-    app.get("/pdfs/*", (_req, res) => {
-      res.sendFile(demoPdfPath, (error) => {
-        if (error) res.status(404).end();
-      });
-    });
-  }
   app.use("/pdfs", express.static(pdfDir));
 
   // Health check
@@ -222,33 +137,6 @@ export function createApp() {
 
   // Serve client app in production
   if (process.env.NODE_ENV === "production") {
-    const packagedDocsDir = join(__dirname, "../../dist/docs");
-    const workspaceDocsDir = join(__dirname, "../../../docs-site/build");
-    const docsDir = existsSync(packagedDocsDir)
-      ? packagedDocsDir
-      : workspaceDocsDir;
-    const docsIndexPath = join(docsDir, "index.html");
-    let cachedDocsIndexHtml: string | null = null;
-
-    if (existsSync(docsIndexPath)) {
-      app.use("/docs", express.static(docsDir));
-      app.get("/docs/*", async (req, res, next) => {
-        if (!req.accepts("html")) {
-          next();
-          return;
-        }
-        if (extname(req.path)) {
-          next();
-          return;
-        }
-        if (!cachedDocsIndexHtml) {
-          cachedDocsIndexHtml = await readFile(docsIndexPath, "utf-8");
-        }
-        res.setHeader("Content-Type", "text/html; charset=utf-8");
-        res.send(cachedDocsIndexHtml);
-      });
-    }
-
     const clientDir = join(__dirname, "../../dist/client");
     app.use(express.static(clientDir));
 

@@ -1,6 +1,5 @@
 export { DiscoveredPanel } from "./discovered-panel/DiscoveredPanel";
 export { FitAssessment } from "./FitAssessment";
-export { JobHeader } from "./JobHeader";
 export * from "./layout";
 export { ManualImportSheet } from "./ManualImportSheet";
 export { OpenJobListingButton } from "./OpenJobListingButton";
@@ -10,4 +9,3 @@ export { ScoreIndicator } from "./ScoreIndicator";
 export { Stats } from "./Stats";
 export { StatusBadge } from "./StatusBadge";
 export { TailoredSummary } from "./TailoredSummary";
-export { TailoringEditor } from "./TailoringEditor";

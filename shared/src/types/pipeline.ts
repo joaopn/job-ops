@@ -5,7 +5,6 @@ import type {
 } from "../location-preferences";
 import type { Job, JobStatus } from "./jobs";
 import type { LocationIntent } from "./location";
-import type { PdfRenderer } from "./settings";
 
 export interface PipelineConfig {
   topN: number; // Number of top jobs to process
@@ -92,7 +91,6 @@ export interface PipelineRunEffectiveConfig {
   blockedCompanyKeywordsCount: number;
   sourceLimits: PipelineRunSourceLimitSnapshot;
   autoSkipScoreThreshold: number | null;
-  pdfRenderer: PdfRenderer;
   models: PipelineRunModelSnapshot;
   resumeProjects: PipelineRunResumeProjectsSnapshot;
 }

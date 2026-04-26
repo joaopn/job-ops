@@ -83,14 +83,10 @@ function buildEffectiveConfigSnapshot(args: {
     blockedCompanyKeywordsCount:
       args.settings.blockedCompanyKeywords.value.length,
     sourceLimits: {
-      ukvisajobsMaxJobs: args.settings.ukvisajobsMaxJobs.value,
-      adzunaMaxJobsPerTerm: args.settings.adzunaMaxJobsPerTerm.value,
-      gradcrackerMaxJobsPerTerm: args.settings.gradcrackerMaxJobsPerTerm.value,
       startupjobsMaxJobsPerTerm: args.settings.startupjobsMaxJobsPerTerm.value,
       jobspyResultsWanted: args.settings.jobspyResultsWanted.value,
     },
     autoSkipScoreThreshold: args.settings.autoSkipScoreThreshold.value,
-    pdfRenderer: args.settings.pdfRenderer.value,
     models: {
       scorer: args.settings.modelScorer.value,
       tailoring: args.settings.modelTailoring.value,

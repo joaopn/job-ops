@@ -19,7 +19,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
-import { FitAssessment, JobHeader, TailoredSummary } from "..";
+import { FitAssessment, TailoredSummary } from "..";
+import { ScoreIndicator } from "../ScoreIndicator";
 import { KbdHint } from "../KbdHint";
 import { OpenJobListingButton } from "../OpenJobListingButton";
 import { CollapsibleSection } from "./CollapsibleSection";
@@ -33,7 +34,6 @@ interface DecideModeProps {
   onRescore: () => void;
   isRescoring: boolean;
   onEditDetails: () => void;
-  onCheckSponsor?: () => Promise<void>;
 }
 
 export const DecideMode: React.FC<DecideModeProps> = ({
@@ -44,7 +44,6 @@ export const DecideMode: React.FC<DecideModeProps> = ({
   onRescore,
   isRescoring,
   onEditDetails,
-  onCheckSponsor,
 }) => {
   const [showDescription, setShowDescription] = useState(false);
   const jobLink = job.applicationLink || job.jobUrl;
@@ -61,7 +60,22 @@ export const DecideMode: React.FC<DecideModeProps> = ({
   return (
     <div className="flex flex-col h-full">
       <div className="space-y-4 pb-4">
-        <JobHeader job={job} onCheckSponsor={onCheckSponsor} />
+        <div className="space-y-2">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold leading-tight">
+                {job.title}
+              </h2>
+              <p className="text-sm text-muted-foreground">{job.employer}</p>
+              {job.location ? (
+                <p className="text-xs text-muted-foreground">{job.location}</p>
+              ) : null}
+            </div>
+            {typeof job.suitabilityScore === "number" ? (
+              <ScoreIndicator score={job.suitabilityScore} />
+            ) : null}
+          </div>
+        </div>
 
         <div className="flex flex-col gap-2.5 pt-2 sm:flex-row">
           {jobLink ? (

@@ -4,23 +4,10 @@ import {
   getDefaultModelForProvider,
   settingsRegistry,
 } from "@shared/settings-registry";
-import type { AppSettings, ResumeProfile } from "@shared/types";
-import {
-  designResumeToProfile,
-  getCurrentDesignResumeOrNullOnLegacy,
-} from "./design-resume";
+import type { AppSettings } from "@shared/types";
 import { getEnvSettingsData } from "./envSettings";
 import { getProfile } from "./profile";
-import {
-  extractProjectsFromProfile,
-  resolveResumeProjectsSettings,
-} from "./resumeProjects";
-import {
-  extractProjectsFromResume,
-  getResume,
-  RxResumeAuthConfigError,
-} from "./rxresume";
-import { resolveRxResumeBaseResumeId } from "./rxresume/baseResumeId";
+import { resolveResumeProjectsSettings } from "./resumeProjects";
 
 function resolveDefaultLlmBaseUrl(provider: string): string {
   const normalized = provider.trim().toLowerCase().replace(/-/g, "_");
@@ -94,48 +81,10 @@ export async function getEffectiveSettings(): Promise<AppSettings> {
       getDefaultModelForProvider(effectiveLlmProvider, process.env.MODEL),
     ) ?? getDefaultModelForProvider(effectiveLlmProvider);
 
-  const rxresumeBaseResumeId = resolveRxResumeBaseResumeId({
-    rxresumeBaseResumeId: overrides.rxresumeBaseResumeId ?? null,
+  await getProfile().catch((error) => {
+    logger.warn("Failed to load base resume profile for settings", { error });
+    return {};
   });
-  let profile: Record<string, unknown> = {};
-  let localProfile: ResumeProfile | null = null;
-
-  const localDesignResume = await getCurrentDesignResumeOrNullOnLegacy();
-  if (localDesignResume?.resumeJson) {
-    localProfile = await designResumeToProfile(localDesignResume.resumeJson);
-    profile = (localProfile as Record<string, unknown> | null) ?? {};
-  }
-
-  if (Object.keys(profile).length === 0 && rxresumeBaseResumeId) {
-    try {
-      const resume = await getResume(rxresumeBaseResumeId);
-      if (resume.data && typeof resume.data === "object") {
-        profile = resume.data as Record<string, unknown>;
-      }
-    } catch (error) {
-      if (error instanceof RxResumeAuthConfigError) {
-        logger.warn(
-          "Reactive Resume credentials missing during settings load",
-          {
-            resumeId: rxresumeBaseResumeId,
-            error,
-          },
-        );
-      } else {
-        logger.warn("Failed to load Reactive Resume base resume for settings", {
-          resumeId: rxresumeBaseResumeId,
-          error,
-        });
-      }
-    }
-  }
-
-  if (Object.keys(profile).length === 0) {
-    profile = await getProfile().catch((error) => {
-      logger.warn("Failed to load base resume profile for settings", { error });
-      return {};
-    });
-  }
 
   const envSettings = await getEnvSettingsData(overrides);
 
@@ -174,24 +123,11 @@ export async function getEffectiveSettings(): Promise<AppSettings> {
       }
 
       if (key === "resumeProjects") {
-        let catalog: AppSettings["profileProjects"] = [];
-        if (Object.keys(profile).length > 0) {
-          try {
-            catalog = localProfile
-              ? extractProjectsFromProfile(localProfile).catalog
-              : extractProjectsFromResume(profile).catalog;
-          } catch (error) {
-            logger.warn("Failed to extract projects from resume data", {
-              error,
-            });
-          }
-        }
         const resolved = resolveResumeProjectsSettings({
-          catalog,
+          catalog: [],
           overrideRaw: rawOverride ?? null,
         });
         result.profileProjects = resolved.profileProjects;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         // biome-ignore lint/suspicious/noExplicitAny: dynamic assignment for settings building
         (result as any).resumeProjects = {
           value: resolved.resumeProjects,
@@ -226,9 +162,6 @@ export async function getEffectiveSettings(): Promise<AppSettings> {
       }
     }
   }
-
-  // Always expose the effective base resume id for the active RxResume mode.
-  result.rxresumeBaseResumeId = rxresumeBaseResumeId;
 
   return result as AppSettings;
 }

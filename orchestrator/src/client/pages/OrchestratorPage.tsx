@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Drawer, DrawerClose, DrawerContent } from "@/components/ui/drawer";
 import { KeyboardShortcutBar } from "../components/KeyboardShortcutBar";
 import { KeyboardShortcutDialog } from "../components/KeyboardShortcutDialog";
-import { useDemoInfo } from "../hooks/useDemoInfo";
 import { type FilterTab, tabs } from "./orchestrator/constants";
 import { FloatingJobActionsBar } from "./orchestrator/FloatingJobActionsBar";
 import { JobCommandBar } from "./orchestrator/JobCommandBar";
@@ -107,7 +106,6 @@ export const OrchestratorPage: React.FC = () => {
   );
 
   const { settings } = useSettings();
-  const demoInfo = useDemoInfo();
   const {
     jobs,
     selectedJob,
@@ -150,7 +148,6 @@ export const OrchestratorPage: React.FC = () => {
     activeTab,
     dateFilter,
     sourceFilter,
-    sponsorFilter,
     salaryFilter,
     sort,
   );
@@ -342,13 +339,12 @@ export const OrchestratorPage: React.FC = () => {
   }, [isDesktop, isDetailDrawerOpen]);
 
   useEffect(() => {
-    if (demoInfo?.demoMode) return;
     if (!hasKeyboard) return;
     const hasSeen = localStorage.getItem("has-seen-keyboard-shortcuts");
     if (!hasSeen) {
       setIsHelpDialogOpen(true);
     }
-  }, [demoInfo?.demoMode, hasKeyboard]);
+  }, [hasKeyboard]);
 
   const onDrawerOpenChange = (open: boolean) => {
     setIsDetailDrawerOpen(open);

@@ -1,4 +1,3 @@
-import { rm } from "node:fs/promises";
 import {
   AppError,
   type AppErrorCode,
@@ -200,12 +199,6 @@ const jobsRevisionQuerySchema = z.object({
   status: z.string().optional(),
 });
 
-const uploadJobPdfSchema = z.object({
-  fileName: z.string().trim().min(1).max(255),
-  mediaType: z.string().trim().min(1).max(200).optional(),
-  dataBase64: z.string().trim().min(1),
-});
-
 const SKIPPABLE_STATUSES: ReadonlySet<JobStatus> = new Set([
   "discovered",
   "ready",
@@ -354,29 +347,16 @@ async function executeJobActionForJob(
         );
       }
 
-      if (isDemoMode()) {
-        const simulated = await simulateProcessJob(jobId, {
-          force: options?.forceMoveToReady ?? false,
+      const processed = await processJob(jobId, {
+        force: options?.forceMoveToReady ?? false,
+        requestOrigin: options?.requestOrigin ?? null,
+      });
+      if (!processed.success) {
+        throw new AppError({
+          status: 500,
+          code: "INTERNAL_ERROR",
+          message: processed.error || "Failed to process job",
         });
-        if (!simulated.success) {
-          throw new AppError({
-            status: 500,
-            code: "INTERNAL_ERROR",
-            message: simulated.error || "Failed to process job",
-          });
-        }
-      } else {
-        const processed = await processJob(jobId, {
-          force: options?.forceMoveToReady ?? false,
-          requestOrigin: options?.requestOrigin ?? null,
-        });
-        if (!processed.success) {
-          throw new AppError({
-            status: 500,
-            code: "INTERNAL_ERROR",
-            message: processed.error || "Failed to process job",
-          });
-        }
       }
 
       const updated = await jobsRepo.getJobById(jobId);
@@ -397,11 +377,6 @@ async function executeJobActionForJob(
         status: job.status,
         disallowedStatus: "processing",
       });
-    }
-
-    if (isDemoMode()) {
-      const simulated = await simulateRescoreJob(job.id);
-      return { jobId, ok: true, job: simulated };
     }
 
     const profile = options?.getProfileForRescore
@@ -631,7 +606,7 @@ jobsRouter.post("/actions", async (req: Request, res: Response) => {
     const dedupedJobIds = Array.from(new Set(parsed.jobIds));
     const requestOrigin = resolveRequestOrigin(req);
     const executionOptions: JobActionExecutionOptions = {
-      ...(parsed.action === "rescore" && !isDemoMode()
+      ...(parsed.action === "rescore"
         ? { getProfileForRescore: createSharedRescoreProfileLoader() }
         : {}),
       ...(parsed.action === "move_to_ready" &&
@@ -708,7 +683,7 @@ jobsRouter.post("/actions/stream", async (req: Request, res: Response) => {
   const requestId = String(res.getHeader("x-request-id") || "unknown");
   const action = parsed.data.action;
   const executionOptions: JobActionExecutionOptions = {
-    ...(action === "rescore" && !isDemoMode()
+    ...(action === "rescore"
       ? { getProfileForRescore: createSharedRescoreProfileLoader() }
       : {}),
     ...(action === "move_to_ready" && parsed.data.options?.force !== undefined
@@ -894,9 +869,7 @@ jobsRouter.post("/:id/skip", async (req: Request, res: Response) => {
 
 jobsRouter.post("/:id/rescore", async (req: Request, res: Response) => {
   const result = await executeJobActionForJob("rescore", req.params.id, {
-    ...(isDemoMode()
-      ? {}
-      : { getProfileForRescore: createSharedRescoreProfileLoader() }),
+    getProfileForRescore: createSharedRescoreProfileLoader(),
   });
   if (!result.ok) return fail(res, mapJobActionFailure(result));
   ok(res, result.job);
@@ -911,23 +884,7 @@ jobsRouter.get("/:id", async (req: Request, res: Response) => {
     if (!job) {
       return fail(res, notFound("Job not found"));
     }
-    const [jobWithAppliedDuplicateMatch] = attachAppliedDuplicateMatches(
-      [job],
-      await jobsRepo.getAppliedDuplicateMatchCandidates(),
-    );
-    ok(res, jobWithAppliedDuplicateMatch);
-  } catch (error) {
-    fail(res, toAppError(error));
-  }
-});
-
-/**
- * GET /api/jobs/:id/events - Get stage event timeline
- */
-jobsRouter.get("/:id/events", async (req: Request, res: Response) => {
-  try {
-    const events = await getStageEvents(req.params.id);
-    ok(res, events);
+    ok(res, job);
   } catch (error) {
     fail(res, toAppError(error));
   }
@@ -1168,77 +1125,6 @@ jobsRouter.delete("/:id/notes/:noteId", async (req: Request, res: Response) => {
 });
 
 /**
- * GET /api/jobs/:id/tasks - Get tasks for an application
- */
-jobsRouter.get("/:id/tasks", async (req: Request, res: Response) => {
-  try {
-    const includeCompleted =
-      req.query.includeCompleted === "1" ||
-      req.query.includeCompleted === "true";
-    const tasks = await getTasks(req.params.id, includeCompleted);
-    ok(res, tasks);
-  } catch (error) {
-    fail(res, toAppError(error));
-  }
-});
-
-/**
- * POST /api/jobs/:id/stages - Transition stage
- */
-jobsRouter.post("/:id/stages", async (req: Request, res: Response) => {
-  try {
-    const input = transitionStageSchema.parse(req.body);
-    const event = transitionStage(
-      req.params.id,
-      input.toStage,
-      input.occurredAt ?? undefined,
-      input.metadata ?? null,
-      input.outcome ?? null,
-    );
-    ok(res, event);
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return fail(res, badRequest(error.message, error.flatten()));
-    }
-    fail(res, toAppError(error));
-  }
-});
-
-/**
- * PATCH /api/jobs/:id/events/:eventId - Update an event
- */
-jobsRouter.patch(
-  "/:id/events/:eventId",
-  async (req: Request, res: Response) => {
-    try {
-      const input = updateStageEventSchema.parse(req.body);
-      updateStageEvent(req.params.eventId, input);
-      ok(res, null);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return fail(res, badRequest(error.message, error.flatten()));
-      }
-      fail(res, toAppError(error));
-    }
-  },
-);
-
-/**
- * DELETE /api/jobs/:id/events/:eventId - Delete an event
- */
-jobsRouter.delete(
-  "/:id/events/:eventId",
-  async (req: Request, res: Response) => {
-    try {
-      deleteStageEvent(req.params.eventId);
-      ok(res, null);
-    } catch (error) {
-      fail(res, toAppError(error));
-    }
-  },
-);
-
-/**
  * PATCH /api/jobs/:id/outcome - Close out application
  */
 jobsRouter.patch("/:id/outcome", async (req: Request, res: Response) => {
@@ -1340,111 +1226,6 @@ jobsRouter.patch("/:id", async (req: Request, res: Response) => {
   }
 });
 
-jobsRouter.post("/:id/pdf", async (req: Request, res: Response) => {
-  let uploadedPath: string | null = null;
-
-  try {
-    const input = uploadJobPdfSchema.parse(req.body);
-    const currentJob = await jobsRepo.getJobById(req.params.id);
-
-    if (!currentJob) {
-      const err = new AppError({
-        status: 404,
-        code: "NOT_FOUND",
-        message: "Job not found",
-      });
-      logger.warn("Job PDF upload failed", {
-        route: "POST /api/jobs/:id/pdf",
-        jobId: req.params.id,
-        status: err.status,
-        code: err.code,
-      });
-      fail(res, err);
-      return;
-    }
-
-    const uploaded = await uploadJobPdf({
-      jobId: req.params.id,
-      fileName: input.fileName,
-      mediaType: input.mediaType,
-      dataBase64: input.dataBase64,
-    });
-    uploadedPath = uploaded.outputPath;
-
-    const job = await jobsRepo.updateJob(req.params.id, {
-      pdfPath: uploaded.outputPath,
-    });
-
-    if (!job) {
-      await rm(uploaded.outputPath, { force: true }).catch((cleanupError) => {
-        logger.warn("Failed to clean up uploaded PDF after missing job", {
-          route: "POST /api/jobs/:id/pdf",
-          jobId: req.params.id,
-          cleanupError,
-        });
-      });
-
-      const err = new AppError({
-        status: 404,
-        code: "NOT_FOUND",
-        message: "Job not found",
-      });
-      logger.warn("Job PDF upload failed", {
-        route: "POST /api/jobs/:id/pdf",
-        jobId: req.params.id,
-        status: err.status,
-        code: err.code,
-      });
-      fail(res, err);
-      return;
-    }
-
-    logger.info("Job PDF uploaded", {
-      route: "POST /api/jobs/:id/pdf",
-      jobId: req.params.id,
-      fileName: input.fileName,
-      byteLength: uploaded.byteLength,
-    });
-
-    ok(res, job, 201);
-  } catch (error) {
-    const err =
-      error instanceof z.ZodError
-        ? badRequest(
-            error.issues[0]?.message ?? "Invalid job PDF upload request",
-            error.flatten(),
-          )
-        : error instanceof AppError
-          ? error
-          : new AppError({
-              status: 500,
-              code: "INTERNAL_ERROR",
-              message: error instanceof Error ? error.message : "Unknown error",
-            });
-
-    if (uploadedPath) {
-      await rm(uploadedPath, { force: true }).catch((cleanupError) => {
-        logger.warn("Failed to clean up uploaded PDF after route error", {
-          route: "POST /api/jobs/:id/pdf",
-          jobId: req.params.id,
-          cleanupError,
-        });
-      });
-    }
-
-    logger.error("Job PDF upload failed", {
-      route: "POST /api/jobs/:id/pdf",
-      jobId: req.params.id,
-      status: err.status,
-      code: err.code,
-      details: err.details,
-      uploadedPath,
-    });
-
-    fail(res, err);
-  }
-});
-
 /**
  * POST /api/jobs/:id/summarize - Generate AI summary and suggest projects
  */
@@ -1452,21 +1233,6 @@ jobsRouter.post("/:id/summarize", async (req: Request, res: Response) => {
   try {
     const forceRaw = req.query.force as string | undefined;
     const force = forceRaw === "1" || forceRaw === "true";
-
-    if (isDemoMode()) {
-      const result = await simulateSummarizeJob(req.params.id, { force });
-      if (!result.success) {
-        return fail(
-          res,
-          badRequest(result.error ?? "Failed to summarize the job"),
-        );
-      }
-      const job = await jobsRepo.getJobById(req.params.id);
-      if (!job) {
-        return fail(res, notFound("Job not found"));
-      }
-      return okWithMeta(res, job, { simulated: true });
-    }
 
     const result = await summarizeJob(req.params.id, { force });
 
@@ -1492,21 +1258,6 @@ jobsRouter.post("/:id/summarize", async (req: Request, res: Response) => {
  */
 jobsRouter.post("/:id/generate-pdf", async (req: Request, res: Response) => {
   try {
-    if (isDemoMode()) {
-      const result = await simulateGeneratePdf(req.params.id);
-      if (!result.success) {
-        return fail(
-          res,
-          badRequest(result.error ?? "Failed to generate a resume PDF"),
-        );
-      }
-      const job = await jobsRepo.getJobById(req.params.id);
-      if (!job) {
-        return fail(res, notFound("Job not found"));
-      }
-      return okWithMeta(res, job, { simulated: true });
-    }
-
     const result = await generateFinalPdf(req.params.id, {
       requestOrigin: resolveRequestOrigin(req),
     });
@@ -1533,30 +1284,13 @@ jobsRouter.post("/:id/generate-pdf", async (req: Request, res: Response) => {
  */
 jobsRouter.post("/:id/apply", async (req: Request, res: Response) => {
   try {
-    if (isDemoMode()) {
-      const updatedJob = await simulateApplyJob(req.params.id);
-      return okWithMeta(res, updatedJob, { simulated: true });
-    }
-
     const job = await jobsRepo.getJobById(req.params.id);
 
     if (!job) {
       return fail(res, notFound("Job not found"));
     }
 
-    const appliedAtDate = new Date();
-    const appliedAt = appliedAtDate.toISOString();
-
-    transitionStage(
-      job.id,
-      "applied",
-      Math.floor(appliedAtDate.getTime() / 1000),
-      {
-        eventLabel: "Applied",
-        actor: "system",
-      },
-      null,
-    );
+    const appliedAt = new Date().toISOString();
 
     const updatedJob = await jobsRepo.updateJob(job.id, {
       status: "applied",
@@ -1584,14 +1318,6 @@ jobsRouter.post("/:id/apply", async (req: Request, res: Response) => {
  */
 jobsRouter.delete("/status/:status", async (req: Request, res: Response) => {
   try {
-    if (isDemoMode()) {
-      return sendDemoBlocked(
-        res,
-        "Clearing jobs by status is disabled to keep the demo stable.",
-        { route: "DELETE /api/jobs/status/:status", status: req.params.status },
-      );
-    }
-
     const status = req.params.status as JobStatus;
     const count = await jobsRepo.deleteJobsByStatus(status);
 
@@ -1609,17 +1335,6 @@ jobsRouter.delete("/status/:status", async (req: Request, res: Response) => {
  */
 jobsRouter.delete("/score/:threshold", async (req: Request, res: Response) => {
   try {
-    if (isDemoMode()) {
-      return sendDemoBlocked(
-        res,
-        "Clearing jobs by score is disabled to keep the demo stable.",
-        {
-          route: "DELETE /api/jobs/score/:threshold",
-          threshold: req.params.threshold,
-        },
-      );
-    }
-
     const threshold = parseInt(req.params.threshold, 10);
     if (Number.isNaN(threshold) || threshold < 0 || threshold > 100) {
       return fail(

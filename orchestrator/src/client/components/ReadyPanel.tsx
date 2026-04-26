@@ -20,13 +20,11 @@ import {
   Loader2,
   RefreshCcw,
   Undo2,
-  Upload,
   XCircle,
 } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { uploadJobPdfFromFile } from "@/client/lib/job-pdf-upload";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -48,16 +46,14 @@ import {
 } from "../hooks/queries/useJobMutations";
 import { useProfile } from "../hooks/useProfile";
 import { useRescoreJob } from "../hooks/useRescoreJob";
-import { FitAssessment, JobHeader, TailoredSummary } from ".";
-import { TailorMode } from "./discovered-panel/TailorMode";
+import { FitAssessment, TailoredSummary } from ".";
 import { GhostwriterDrawer } from "./ghostwriter/GhostwriterDrawer";
 import { JobDetailsEditDrawer } from "./JobDetailsEditDrawer";
 import { KbdHint } from "./KbdHint";
 import { OpenJobListingButton } from "./OpenJobListingButton";
 import { ReadySummaryAccordion } from "./ReadySummaryAccordion";
+import { ScoreIndicator } from "./ScoreIndicator";
 import { buildReadyPanelGoogleDorks } from "./ready-panel-google-dorks";
-
-type PanelMode = "ready" | "tailor";
 
 interface ReadyPanelProps {
   job: Job | null;
@@ -72,10 +68,8 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
   onJobMoved,
   onTailoringDirtyChange,
 }) => {
-  const [mode, setMode] = useState<PanelMode>("ready");
   const [isMarkingApplied, setIsMarkingApplied] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
-  const [isUploadingPdf, setIsUploadingPdf] = useState(false);
   const [isEditDetailsOpen, setIsEditDetailsOpen] = useState(false);
   const { isRescoring, rescoreJob } = useRescoreJob(onJobUpdated);
   const [catalog, setCatalog] = useState<ResumeProjectCatalogItem[]>([]);
@@ -86,7 +80,6 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
     timeoutId: ReturnType<typeof setTimeout>;
   } | null>(null);
   const previousJobIdRef = useRef<string | null>(null);
-  const uploadPdfInputRef = useRef<HTMLInputElement | null>(null);
   const markAsAppliedMutation = useMarkAsAppliedMutation();
   const skipJobMutation = useSkipJobMutation();
 
@@ -95,30 +88,17 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
     window.setTimeout(() => setIsEditDetailsOpen(true), 0);
   }, []);
 
-  // Load project catalog once
   useEffect(() => {
     api.getResumeProjectsCatalog().then(setCatalog).catch(console.error);
   }, []);
 
-  // Reset mode when job changes
   useEffect(() => {
     const currentJobId = job?.id ?? null;
     if (previousJobIdRef.current === currentJobId) return;
     previousJobIdRef.current = currentJobId;
-    setMode("ready");
     setIsEditDetailsOpen(false);
     onTailoringDirtyChange?.(false);
   }, [job?.id, onTailoringDirtyChange]);
-
-  useEffect(() => {
-    if (mode !== "tailor") {
-      onTailoringDirtyChange?.(false);
-    }
-  }, [mode, onTailoringDirtyChange]);
-
-  useEffect(() => {
-    return () => onTailoringDirtyChange?.(false);
-  }, [onTailoringDirtyChange]);
 
   // Compute derived values
   const pdfHref = job
@@ -246,47 +226,6 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
     }
   }, [job]);
 
-  const handleUploadPdf = useCallback(
-    async (file: File) => {
-      if (!job) return;
-
-      try {
-        setIsUploadingPdf(true);
-        await uploadJobPdfFromFile(job.id, file);
-        toast.success(job.pdfPath ? "PDF replaced" : "PDF attached");
-        await onJobUpdated();
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Failed to upload PDF";
-        toast.error(message);
-      } finally {
-        setIsUploadingPdf(false);
-        if (uploadPdfInputRef.current) {
-          uploadPdfInputRef.current.value = "";
-        }
-      }
-    },
-    [job, onJobUpdated],
-  );
-
-  // Handler for regenerating PDF after tailoring edits
-  const handleTailorFinalize = useCallback(async () => {
-    if (!job) return;
-    try {
-      setIsRegenerating(true);
-      await api.generateJobPdf(job.id);
-      toast.success("PDF regenerated");
-      await onJobUpdated();
-      setMode("ready");
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to regenerate PDF";
-      toast.error(message);
-    } finally {
-      setIsRegenerating(false);
-    }
-  }, [job, onJobUpdated]);
-
   // Empty state
   if (!job) {
     return (
@@ -304,30 +243,22 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
     );
   }
 
-  // Tailor mode - reuse the same TailorMode component with 'ready' variant
-  if (mode === "tailor") {
-    return (
-      <TailorMode
-        job={job}
-        onBack={() => setMode("ready")}
-        onFinalize={handleTailorFinalize}
-        isFinalizing={isRegenerating}
-        variant="ready"
-        onDirtyChange={onTailoringDirtyChange}
-      />
-    );
-  }
-
   return (
     <div className="flex flex-col h-full">
-      <JobHeader
-        job={job}
-        className="pb-4 border-b border-border/40"
-        onCheckSponsor={async () => {
-          await api.checkSponsor(job.id);
-          await onJobUpdated();
-        }}
-      />
+      <div className="pb-4 border-b border-border/40">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold leading-tight">{job.title}</h2>
+            <p className="text-sm text-muted-foreground">{job.employer}</p>
+            {job.location ? (
+              <p className="text-xs text-muted-foreground">{job.location}</p>
+            ) : null}
+          </div>
+          {typeof job.suitabilityScore === "number" ? (
+            <ScoreIndicator score={job.suitabilityScore} />
+          ) : null}
+        </div>
+      </div>
 
       {/* ─────────────────────────────────────────────────────────────────────
           PRIMARY ACTION CLUSTER
@@ -461,25 +392,9 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="center" className="w-56">
-            {/* Fix/Edit actions */}
-            <DropdownMenuItem onSelect={() => setMode("tailor")}>
-              <Edit2 className="mr-2 h-4 w-4" />
-              Edit tailoring
-            </DropdownMenuItem>
             <DropdownMenuItem onSelect={openEditDetails}>
               <Edit2 className="mr-2 h-4 w-4" />
               Edit details
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onSelect={() => uploadPdfInputRef.current?.click()}
-              disabled={isUploadingPdf}
-            >
-              <Upload className="mr-2 h-4 w-4" />
-              {isUploadingPdf
-                ? "Uploading PDF..."
-                : job.pdfPath
-                  ? "Replace PDF"
-                  : "Upload PDF"}
             </DropdownMenuItem>
 
             <DropdownMenuItem
@@ -535,19 +450,6 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
         onOpenChange={setIsEditDetailsOpen}
         job={job}
         onJobUpdated={onJobUpdated}
-      />
-
-      <input
-        ref={uploadPdfInputRef}
-        type="file"
-        accept="application/pdf,.pdf"
-        className="hidden"
-        onChange={(event) => {
-          const file = event.currentTarget.files?.[0];
-          if (file) {
-            void handleUploadPdf(file);
-          }
-        }}
       />
 
       {/* ─────────────────────────────────────────────────────────────────────

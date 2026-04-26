@@ -70,30 +70,8 @@ vi.mock("@server/services/profile", () => ({
   clearProfileCache: vi.fn(),
 }));
 
-vi.mock("@server/services/visa-sponsors/index", () => ({
-  getStatus: vi.fn(),
-  searchSponsors: vi.fn(),
-  getOrganizationDetails: vi.fn(),
-  downloadLatestCsv: vi.fn(),
-  calculateSponsorMatchSummary: vi.fn((results) => {
-    if (!results || results.length === 0)
-      return { sponsorMatchScore: 0, sponsorMatchNames: null };
-    return {
-      sponsorMatchScore: results[0].score,
-      sponsorMatchNames: JSON.stringify(
-        results.map((r: any) => r.sponsor.organisationName),
-      ),
-    };
-  }),
-}));
-
 const originalEnv = { ...process.env };
 const isolatedEnvKeys = [
-  "RXRESUME_API_KEY",
-  "RXRESUME_EMAIL",
-  "RXRESUME_PASSWORD",
-  "RXRESUME_URL",
-  "RXRESUME_MODE",
   "LLM_API_KEY",
   "LLM_PROVIDER",
   "LLM_BASE_URL",
@@ -101,11 +79,6 @@ const isolatedEnvKeys = [
   "BASIC_AUTH_PASSWORD",
   "JWT_SECRET",
   "JWT_EXPIRY_SECONDS",
-  "WEBHOOK_SECRET",
-  "UKVISAJOBS_EMAIL",
-  "UKVISAJOBS_PASSWORD",
-  "ADZUNA_APP_ID",
-  "ADZUNA_APP_KEY",
 ] as const;
 
 const nativeFetch = globalThis.fetch;

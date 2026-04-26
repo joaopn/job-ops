@@ -9,9 +9,6 @@ import { JobDetailsEditDrawer } from "../JobDetailsEditDrawer";
 import { DecideMode } from "./DecideMode";
 import { EmptyState } from "./EmptyState";
 import { ProcessingState } from "./ProcessingState";
-import { TailorMode } from "./TailorMode";
-
-type PanelMode = "decide" | "tailor";
 
 interface DiscoveredPanelProps {
   job: Job | null;
@@ -26,7 +23,6 @@ export const DiscoveredPanel: React.FC<DiscoveredPanelProps> = ({
   onJobMoved,
   onTailoringDirtyChange,
 }) => {
-  const [mode, setMode] = useState<PanelMode>("decide");
   const [isSkipping, setIsSkipping] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [isEditDetailsOpen, setIsEditDetailsOpen] = useState(false);
@@ -38,22 +34,11 @@ export const DiscoveredPanel: React.FC<DiscoveredPanelProps> = ({
     const currentJobId = job?.id ?? null;
     if (previousJobIdRef.current === currentJobId) return;
     previousJobIdRef.current = currentJobId;
-    setMode("decide");
     setIsSkipping(false);
     setIsFinalizing(false);
     setIsEditDetailsOpen(false);
     onTailoringDirtyChange?.(false);
   }, [job?.id, onTailoringDirtyChange]);
-
-  useEffect(() => {
-    if (mode !== "tailor") {
-      onTailoringDirtyChange?.(false);
-    }
-  }, [mode, onTailoringDirtyChange]);
-
-  useEffect(() => {
-    return () => onTailoringDirtyChange?.(false);
-  }, [onTailoringDirtyChange]);
 
   const handleSkip = async () => {
     if (!job) return;
@@ -73,14 +58,12 @@ export const DiscoveredPanel: React.FC<DiscoveredPanelProps> = ({
   };
 
   const handleFinalize = async () => {
-    if (!job) return;
+    if (!job || isFinalizing) return;
     try {
       setIsFinalizing(true);
       await api.processJob(job.id);
 
-      toast.success("Job moved to Ready", {
-        description: "Your tailored PDF has been generated.",
-      });
+      toast.success("Job moved to Ready");
 
       onJobMoved(job.id);
       await onJobUpdated();
@@ -105,29 +88,15 @@ export const DiscoveredPanel: React.FC<DiscoveredPanelProps> = ({
 
   return (
     <div className="h-full">
-      {mode === "decide" ? (
-        <DecideMode
-          job={job}
-          onTailor={() => setMode("tailor")}
-          onSkip={handleSkip}
-          isSkipping={isSkipping}
-          onRescore={handleRescore}
-          isRescoring={isRescoring}
-          onEditDetails={() => setIsEditDetailsOpen(true)}
-          onCheckSponsor={async () => {
-            await api.checkSponsor(job.id);
-            await onJobUpdated();
-          }}
-        />
-      ) : (
-        <TailorMode
-          job={job}
-          onBack={() => setMode("decide")}
-          onFinalize={handleFinalize}
-          isFinalizing={isFinalizing}
-          onDirtyChange={onTailoringDirtyChange}
-        />
-      )}
+      <DecideMode
+        job={job}
+        onTailor={handleFinalize}
+        onSkip={handleSkip}
+        isSkipping={isSkipping}
+        onRescore={handleRescore}
+        isRescoring={isRescoring}
+        onEditDetails={() => setIsEditDetailsOpen(true)}
+      />
 
       <JobDetailsEditDrawer
         open={isEditDetailsOpen}

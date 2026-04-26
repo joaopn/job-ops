@@ -16,8 +16,6 @@ export const queryKeys = {
     revision: (options?: { statuses?: JobStatus[] }) =>
       [...queryKeys.jobs.all, "revision", options ?? {}] as const,
     detail: (id: string) => [...queryKeys.jobs.all, "detail", id] as const,
-    stageEvents: (id: string) =>
-      [...queryKeys.jobs.all, "stage-events", id] as const,
     tasks: (id: string) => [...queryKeys.jobs.all, "tasks", id] as const,
     notes: (id: string) => [...queryKeys.jobs.all, "notes", id] as const,
   },

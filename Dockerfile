@@ -54,17 +54,12 @@ FROM build-base AS node-deps
 # Copy package files for dependency installation.
 COPY package*.json ./
 COPY scripts/camoufox-fetch.mjs ./scripts/camoufox-fetch.mjs
-COPY docs-site/package*.json ./docs-site/
 COPY shared/package*.json ./shared/
 COPY orchestrator/package*.json ./orchestrator/
-COPY extractors/adzuna/package*.json ./extractors/adzuna/
 COPY extractors/hiringcafe/package*.json ./extractors/hiringcafe/
-COPY extractors/gradcracker/package*.json ./extractors/gradcracker/
 COPY extractors/startupjobs/package*.json ./extractors/startupjobs/
 COPY extractors/workingnomads/package*.json ./extractors/workingnomads/
 COPY extractors/golangjobs/package*.json ./extractors/golangjobs/
-COPY extractors/ukvisajobs/package*.json ./extractors/ukvisajobs/
-COPY extractors/seek/package*.json ./extractors/seek/
 
 # Install Node dependencies with npm cache (dev deps needed for build).
 RUN --mount=type=cache,target=/root/.npm \
@@ -78,27 +73,16 @@ RUN --mount=type=secret,id=github_token,required=false \
 FROM node-deps AS build-sources
 
 COPY shared ./shared
-COPY docs-site ./docs-site
 COPY orchestrator ./orchestrator
-COPY visa-sponsor-providers ./visa-sponsor-providers
-COPY extractors/adzuna ./extractors/adzuna
 COPY extractors/hiringcafe ./extractors/hiringcafe
-COPY extractors/gradcracker ./extractors/gradcracker
 COPY extractors/jobspy ./extractors/jobspy
 COPY extractors/startupjobs ./extractors/startupjobs
 COPY extractors/workingnomads ./extractors/workingnomads
 COPY extractors/golangjobs ./extractors/golangjobs
-COPY extractors/ukvisajobs ./extractors/ukvisajobs
-COPY extractors/seek ./extractors/seek
 
 # ============================================================================
 # PARALLEL BUILD STAGES
 # ============================================================================
-FROM build-sources AS docs-build
-
-WORKDIR /app/docs-site
-RUN npm run build
-
 FROM build-sources AS client-build
 
 WORKDIR /app/orchestrator
@@ -111,17 +95,12 @@ FROM runtime-base AS runtime-node-deps
 
 # Copy package files for production dependency installation.
 COPY package*.json ./
-COPY docs-site/package*.json ./docs-site/
 COPY shared/package*.json ./shared/
 COPY orchestrator/package*.json ./orchestrator/
-COPY extractors/adzuna/package*.json ./extractors/adzuna/
 COPY extractors/hiringcafe/package*.json ./extractors/hiringcafe/
-COPY extractors/gradcracker/package*.json ./extractors/gradcracker/
 COPY extractors/startupjobs/package*.json ./extractors/startupjobs/
 COPY extractors/workingnomads/package*.json ./extractors/workingnomads/
 COPY extractors/golangjobs/package*.json ./extractors/golangjobs/
-COPY extractors/ukvisajobs/package*.json ./extractors/ukvisajobs/
-COPY extractors/seek/package*.json ./extractors/seek/
 
 # Install production Node dependencies only.
 RUN --mount=type=cache,target=/root/.npm \
@@ -163,19 +142,13 @@ COPY --from=node-deps /root/.cache/camoufox /root/.cache/camoufox
 
 # Copy built assets and runtime source code.
 COPY --from=client-build /app/orchestrator/dist ./orchestrator/dist
-COPY --from=docs-build /app/docs-site/build ./orchestrator/dist/docs
 COPY shared ./shared
 COPY orchestrator ./orchestrator
-COPY visa-sponsor-providers ./visa-sponsor-providers
-COPY extractors/adzuna ./extractors/adzuna
 COPY extractors/hiringcafe ./extractors/hiringcafe
-COPY extractors/gradcracker ./extractors/gradcracker
 COPY extractors/jobspy ./extractors/jobspy
 COPY extractors/startupjobs ./extractors/startupjobs
 COPY extractors/workingnomads ./extractors/workingnomads
 COPY extractors/golangjobs ./extractors/golangjobs
-COPY extractors/ukvisajobs ./extractors/ukvisajobs
-COPY extractors/seek ./extractors/seek
 
 # Create runtime directories.
 RUN mkdir -p /app/data/pdfs /app/codex-home

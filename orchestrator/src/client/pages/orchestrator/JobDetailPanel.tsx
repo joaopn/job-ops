@@ -2,12 +2,11 @@ import * as api from "@client/api";
 import {
   DiscoveredPanel,
   FitAssessment,
-  JobHeader,
+  ScoreIndicator,
   TailoredSummary,
 } from "@client/components";
 import { JobDetailsEditDrawer } from "@client/components/JobDetailsEditDrawer";
 import { ReadyPanel } from "@client/components/ReadyPanel";
-import { TailoringEditor } from "@client/components/TailoringEditor";
 import {
   useMarkAsAppliedMutation,
   useSkipJobMutation,
@@ -66,16 +65,14 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
   onJobUpdated,
   onPauseRefreshChange,
 }) => {
-  const [detailTab, setDetailTab] = useState<
-    "overview" | "tailoring" | "description"
-  >("overview");
+  const [detailTab, setDetailTab] = useState<"overview" | "description">(
+    "overview",
+  );
   const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [editedDescription, setEditedDescription] = useState("");
   const [isSavingDescription, setIsSavingDescription] = useState(false);
-  const [hasUnsavedTailoring, setHasUnsavedTailoring] = useState(false);
   const [processingJobId, setProcessingJobId] = useState<string | null>(null);
   const [isEditDetailsOpen, setIsEditDetailsOpen] = useState(false);
-  const saveTailoringRef = useRef<null | (() => Promise<void>)>(null);
   const previousSelectedJobIdRef = useRef<string | null>(null);
   const markAsAppliedMutation = useMarkAsAppliedMutation();
   const skipJobMutation = useSkipJobMutation();
@@ -88,7 +85,6 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
 
   const handleTailoringDirtyChange = useCallback(
     (isDirty: boolean) => {
-      setHasUnsavedTailoring(isDirty);
       onPauseRefreshChange?.(isDirty);
     },
     [onPauseRefreshChange],
@@ -98,8 +94,6 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
     const currentJobId = selectedJob?.id ?? null;
     if (previousSelectedJobIdRef.current === currentJobId) return;
     previousSelectedJobIdRef.current = currentJobId;
-    setHasUnsavedTailoring(false);
-    saveTailoringRef.current = null;
     onPauseRefreshChange?.(false);
   }, [selectedJob?.id, onPauseRefreshChange]);
 
@@ -154,62 +148,33 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
     isEditingDescription &&
     editedDescription !== (selectedJob.jobDescription || "");
 
-  const confirmAndSaveEdits = useCallback(
-    async ({
-      includeTailoring = true,
-    }: {
-      includeTailoring?: boolean;
-    } = {}) => {
-      const pendingDescription = hasUnsavedDescription;
-      const pendingTailoring = includeTailoring && hasUnsavedTailoring;
+  const confirmAndSaveEdits = useCallback(async () => {
+    if (!hasUnsavedDescription) return true;
 
-      if (!pendingDescription && !pendingTailoring) return true;
+    const message =
+      "You have unsaved job description edits. Save before generating the PDF?";
+    if (!window.confirm(message)) return false;
 
-      const parts = [];
-      if (pendingDescription) parts.push("job description");
-      if (pendingTailoring) parts.push("tailoring changes");
-
-      const message = `You have unsaved ${parts.join(" and ")}. Save before generating the PDF?`;
-      if (!window.confirm(message)) return false;
-
-      try {
-        if (pendingDescription && selectedJob) {
-          await api.updateJob(selectedJob.id, {
-            jobDescription: editedDescription,
-          });
-        }
-
-        if (pendingTailoring) {
-          const saveTailoring = saveTailoringRef.current;
-          if (!saveTailoring) {
-            toast.error("Could not save tailoring changes");
-            return false;
-          }
-          await saveTailoring();
-        }
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : "Failed to save changes";
-        toast.error(errorMessage);
-        return false;
+    try {
+      if (selectedJob) {
+        await api.updateJob(selectedJob.id, {
+          jobDescription: editedDescription,
+        });
       }
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to save changes";
+      toast.error(errorMessage);
+      return false;
+    }
 
-      return true;
-    },
-    [
-      editedDescription,
-      hasUnsavedDescription,
-      hasUnsavedTailoring,
-      selectedJob,
-    ],
-  );
+    return true;
+  }, [editedDescription, hasUnsavedDescription, selectedJob]);
 
   const handleProcess = async () => {
     if (!selectedJob) return;
     try {
-      const shouldProceed = await confirmAndSaveEdits({
-        includeTailoring: true,
-      });
+      const shouldProceed = await confirmAndSaveEdits();
       if (!shouldProceed) return;
 
       setProcessingJobId(selectedJob.id);
@@ -352,13 +317,22 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
 
   return (
     <div className="space-y-3">
-      <JobHeader
-        job={selectedJob}
-        onCheckSponsor={async () => {
-          await api.checkSponsor(selectedJob.id);
-          await onJobUpdated();
-        }}
-      />
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold leading-tight">
+            {selectedJob.title}
+          </h2>
+          <p className="text-sm text-muted-foreground">{selectedJob.employer}</p>
+          {selectedJob.location ? (
+            <p className="text-xs text-muted-foreground">
+              {selectedJob.location}
+            </p>
+          ) : null}
+        </div>
+        {typeof selectedJob.suitabilityScore === "number" ? (
+          <ScoreIndicator score={selectedJob.suitabilityScore} />
+        ) : null}
+      </div>
 
       <div className="flex flex-wrap items-center gap-1.5">
         <Button
@@ -526,9 +500,6 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
           <TabsTrigger value="overview" className="text-xs">
             Overview
           </TabsTrigger>
-          <TabsTrigger value="tailoring" className="text-xs">
-            Tailoring
-          </TabsTrigger>
           <TabsTrigger value="description" className="text-xs">
             Description
           </TabsTrigger>
@@ -591,20 +562,6 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
               </button>
             </div>
           </div>
-        </TabsContent>
-
-        <TabsContent value="tailoring" className="pt-3">
-          <TailoringEditor
-            job={selectedJob}
-            onUpdate={onJobUpdated}
-            onDirtyChange={handleTailoringDirtyChange}
-            onRegisterSave={(save) => {
-              saveTailoringRef.current = save;
-            }}
-            onBeforeGenerate={() =>
-              confirmAndSaveEdits({ includeTailoring: false })
-            }
-          />
         </TabsContent>
 
         <TabsContent value="description" className="space-y-3 pt-3">

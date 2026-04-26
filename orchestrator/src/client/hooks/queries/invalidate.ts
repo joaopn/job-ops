@@ -17,13 +17,7 @@ export async function invalidateJobData(
     queryKey: [...queryKeys.jobs.all, "revision"] as const,
   });
   await queryClient.invalidateQueries({
-    queryKey: queryKeys.jobs.inProgressBoard(),
-  });
-  await queryClient.invalidateQueries({
     queryKey: queryKeys.jobs.detail(jobId),
-  });
-  await queryClient.invalidateQueries({
-    queryKey: queryKeys.jobs.stageEvents(jobId),
   });
   await queryClient.invalidateQueries({
     queryKey: queryKeys.jobs.tasks(jobId),
@@ -34,5 +28,4 @@ export async function invalidateSettingsData(
   queryClient: QueryClient,
 ): Promise<void> {
   await queryClient.invalidateQueries({ queryKey: queryKeys.settings.all });
-  await queryClient.invalidateQueries({ queryKey: queryKeys.tracer.all });
 }

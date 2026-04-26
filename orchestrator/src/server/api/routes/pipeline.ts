@@ -6,11 +6,10 @@ import {
   requestTimeout,
   serviceUnavailable,
 } from "@infra/errors";
-import { fail, ok, okWithMeta } from "@infra/http";
+import { fail, ok } from "@infra/http";
 import { logger } from "@infra/logger";
 import { runWithRequestContext } from "@infra/request-context";
 import { setupSse, startSseHeartbeat, writeSseData } from "@infra/sse";
-import { isDemoMode } from "@server/config/demo";
 import {
   type ExtractorRegistry,
   getExtractorRegistry,
@@ -22,7 +21,6 @@ import {
   subscribeToProgress,
 } from "@server/pipeline/index";
 import * as pipelineRepo from "@server/repositories/pipeline";
-import { simulatePipelineRun } from "@server/services/demo-simulator";
 import { PIPELINE_EXTRACTOR_SOURCE_IDS } from "@shared/extractors";
 import {
   createLocationIntent,
@@ -228,16 +226,6 @@ pipelineRouter.post("/run", async (req: Request, res: Response) => {
           ),
         );
       }
-    }
-
-    if (isDemoMode()) {
-      const simulated = await simulatePipelineRun({
-        topN: config.topN,
-        minSuitabilityScore: config.minSuitabilityScore,
-        sources: config.sources,
-        locationIntent,
-      });
-      return okWithMeta(res, simulated, { simulated: true });
     }
 
     // Start pipeline in background

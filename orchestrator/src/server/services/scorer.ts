@@ -3,13 +3,15 @@
  */
 
 import { logger } from "@infra/logger";
-import { getDefaultPromptTemplate } from "@shared/prompt-template-definitions.js";
 import type { Job } from "@shared/types";
 import { LlmService } from "./llm/service";
 import type { JsonSchemaDefinition } from "./llm/types";
 import { stripMarkdownCodeFences } from "./llm/utils/json";
 import { resolveLlmModel } from "./modelSelection";
-import { renderPromptTemplate } from "./prompt-templates";
+import {
+  getDefaultPromptTemplate,
+  renderPromptTemplate,
+} from "./prompt-templates";
 import { getEffectiveSettings } from "./settings";
 
 interface SuitabilityResult {

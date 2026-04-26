@@ -6,16 +6,8 @@ import type {
   JobDateFilter,
   JobSort,
   SalaryFilter,
-  SponsorFilter,
 } from "./constants";
 import { compareJobs, getJobDateValue, parseSalaryBounds } from "./utils";
-
-const getSponsorCategory = (score: number | null): SponsorFilter => {
-  if (score == null) return "unknown";
-  if (score >= 95) return "confirmed";
-  if (score >= 80) return "potential";
-  return "not_found";
-};
 
 const dateSortPriorityOrder: DateFilterDimension[] = [
   "ready",
@@ -29,7 +21,6 @@ export const useFilteredJobs = (
   activeTab: FilterTab,
   dateFilter: JobDateFilter,
   sourceFilter: JobSource | "all",
-  sponsorFilter: SponsorFilter,
   salaryFilter: SalaryFilter,
   sort: JobSort,
 ) =>
@@ -61,12 +52,6 @@ export const useFilteredJobs = (
 
     if (sourceFilter !== "all") {
       filtered = filtered.filter((job) => job.source === sourceFilter);
-    }
-
-    if (sponsorFilter !== "all") {
-      filtered = filtered.filter(
-        (job) => getSponsorCategory(job.sponsorMatchScore) === sponsorFilter,
-      );
     }
 
     const hasMin =
@@ -113,15 +98,7 @@ export const useFilteredJobs = (
         : sort;
 
     return [...filtered].sort((a, b) => compareJobs(a, b, effectiveSort));
-  }, [
-    jobs,
-    activeTab,
-    dateFilter,
-    sourceFilter,
-    sponsorFilter,
-    salaryFilter,
-    sort,
-  ]);
+  }, [jobs, activeTab, dateFilter, sourceFilter, salaryFilter, sort]);
 
 const matchesDateDimension = (
   job: JobListItem,
