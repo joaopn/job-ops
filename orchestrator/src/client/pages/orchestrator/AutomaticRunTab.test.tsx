@@ -111,7 +111,7 @@ describe("AutomaticRunTab", () => {
       <AutomaticRunTab
         open
         settings={createAppSettings()}
-        enabledSources={["linkedin", "gradcracker", "ukvisajobs"]}
+        enabledSources={["linkedin", "hiringcafe", "golangjobs"]}
         pipelineSources={["linkedin"]}
         onToggleSource={vi.fn()}
         onSetPipelineSources={vi.fn()}
@@ -136,7 +136,7 @@ describe("AutomaticRunTab", () => {
       <AutomaticRunTab
         open
         settings={createAppSettings()}
-        enabledSources={["linkedin", "gradcracker", "ukvisajobs"]}
+        enabledSources={["linkedin", "hiringcafe", "golangjobs"]}
         pipelineSources={["linkedin"]}
         onToggleSource={vi.fn()}
         onSetPipelineSources={vi.fn()}
@@ -194,7 +194,7 @@ describe("AutomaticRunTab", () => {
           },
           searchCities: { value: "", default: "", override: null },
         })}
-        enabledSources={["linkedin", "gradcracker", "ukvisajobs"]}
+        enabledSources={["linkedin", "hiringcafe", "golangjobs"]}
         pipelineSources={["linkedin"]}
         onToggleSource={vi.fn()}
         onSetPipelineSources={vi.fn()}
@@ -258,8 +258,8 @@ describe("AutomaticRunTab", () => {
           },
           searchCities: { value: "", default: "", override: null },
         })}
-        enabledSources={["linkedin", "gradcracker", "ukvisajobs"]}
-        pipelineSources={["linkedin", "gradcracker", "ukvisajobs"]}
+        enabledSources={["linkedin", "hiringcafe", "golangjobs"]}
+        pipelineSources={["linkedin", "hiringcafe", "golangjobs"]}
         onToggleSource={vi.fn()}
         onSetPipelineSources={onSetPipelineSources}
         isPipelineRunning={false}
@@ -354,7 +354,7 @@ describe("AutomaticRunTab", () => {
           },
           searchCities: { value: "", default: "", override: null },
         })}
-        enabledSources={["linkedin", "gradcracker", "ukvisajobs"]}
+        enabledSources={["linkedin", "hiringcafe", "golangjobs"]}
         pipelineSources={["linkedin"]}
         onToggleSource={vi.fn()}
         onSetPipelineSources={vi.fn()}

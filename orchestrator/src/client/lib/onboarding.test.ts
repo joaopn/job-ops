@@ -28,7 +28,6 @@ describe("onboarding helpers", () => {
 
     expect(
       isOnboardingComplete({
-        demoMode: false,
         settings: {
           basicAuthActive: false,
           onboardingBasicAuthDecision: "skipped",
@@ -39,7 +38,6 @@ describe("onboarding helpers", () => {
           },
         } as any,
         llmValid: true,
-        baseResumeValid: true,
       }),
     ).toBe(false);
   });
@@ -47,7 +45,6 @@ describe("onboarding helpers", () => {
   it("allows the flow to override search-term completion with session state", () => {
     expect(
       isOnboardingComplete({
-        demoMode: false,
         settings: {
           basicAuthActive: false,
           onboardingBasicAuthDecision: "skipped",
@@ -58,16 +55,14 @@ describe("onboarding helpers", () => {
           },
         } as any,
         llmValid: true,
-        baseResumeValid: true,
         searchTermsValid: false,
       }),
     ).toBe(false);
   });
 
-  it("requires all onboarding validations when not in demo mode", () => {
+  it("treats all required onboarding gates passing as complete", () => {
     expect(
       isOnboardingComplete({
-        demoMode: false,
         settings: {
           basicAuthActive: false,
           onboardingBasicAuthDecision: "skipped",
@@ -78,24 +73,6 @@ describe("onboarding helpers", () => {
           },
         } as any,
         llmValid: true,
-        baseResumeValid: false,
-      }),
-    ).toBe(false);
-
-    expect(
-      isOnboardingComplete({
-        demoMode: false,
-        settings: {
-          basicAuthActive: false,
-          onboardingBasicAuthDecision: "skipped",
-          searchTerms: {
-            value: ["Platform Engineer"],
-            default: ["Software Engineer"],
-            override: ["Platform Engineer"],
-          },
-        } as any,
-        llmValid: true,
-        baseResumeValid: true,
       }),
     ).toBe(true);
   });

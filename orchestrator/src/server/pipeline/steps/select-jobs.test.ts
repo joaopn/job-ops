@@ -9,7 +9,7 @@ vi.mock("@server/repositories/settings", () => ({
 const baseConfig: PipelineConfig = {
   topN: 2,
   minSuitabilityScore: 50,
-  sources: ["gradcracker"],
+  sources: ["linkedin"],
   outputDir: "./tmp",
   enableCrawling: true,
   enableScoring: true,

@@ -25,12 +25,12 @@ afterEach(async () => {
 describe("extractor discovery", () => {
   it("finds manifest.ts and src/manifest.ts files", async () => {
     const root = await makeTempRoot();
-    await mkdir(join(root, "adzuna", "src"), { recursive: true });
+    await mkdir(join(root, "golangjobs", "src"), { recursive: true });
     await mkdir(join(root, "jobspy"), { recursive: true });
 
     await writeFile(
-      join(root, "adzuna", "src", "manifest.ts"),
-      "export const manifest = { id: 'adzuna', displayName: 'Adzuna', providesSources: ['adzuna'], async run() { return { success: true, jobs: [] }; } };",
+      join(root, "golangjobs", "src", "manifest.ts"),
+      "export const manifest = { id: 'golangjobs', displayName: 'Golang Jobs', providesSources: ['golangjobs'], async run() { return { success: true, jobs: [] }; } };",
       "utf8",
     );
     await writeFile(
@@ -42,7 +42,7 @@ describe("extractor discovery", () => {
     const found = await discoverManifestPaths(root);
 
     expect(found).toEqual([
-      join(root, "adzuna", "src", "manifest.ts"),
+      join(root, "golangjobs", "src", "manifest.ts"),
       join(root, "jobspy", "manifest.ts"),
     ]);
   });

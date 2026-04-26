@@ -104,7 +104,6 @@ function buildLocationEvidence(
 
 function toJobSource(site: unknown): JobSource | null {
   const raw = toStringOrNull(site)?.toLowerCase();
-  if (raw === "gradcracker") return "gradcracker";
   if (raw === "indeed") return "indeed";
   if (raw === "linkedin") return "linkedin";
   if (raw === "glassdoor") return "glassdoor";

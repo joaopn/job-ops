@@ -24,7 +24,7 @@ export const jobs = sqliteTable("jobs", {
   id: text("id").primaryKey(),
 
   // From crawler
-  source: text("source").notNull().default("gradcracker"),
+  source: text("source").notNull().default("linkedin"),
   sourceJobId: text("source_job_id"),
   jobUrlDirect: text("job_url_direct"),
   datePosted: text("date_posted"),

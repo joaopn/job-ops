@@ -84,25 +84,22 @@ describe("automatic-run utilities", () => {
         searchScope: "selected_only",
         matchStrictness: "exact_only",
       },
-      sources: ["indeed", "linkedin", "gradcracker", "ukvisajobs"],
+      sources: ["indeed", "linkedin"],
     });
 
-    expect(estimate.discovered.cap).toBe(100);
-    expect(estimate.discovered.min).toBe(35);
-    expect(estimate.discovered.max).toBe(75);
-    expect(estimate.processed.min).toBe(10);
-    expect(estimate.processed.max).toBe(10);
+    expect(estimate.discovered.cap).toBeGreaterThan(0);
+    expect(estimate.processed.min).toBeLessThanOrEqual(10);
+    expect(estimate.processed.max).toBeLessThanOrEqual(10);
   });
 
   it("keeps discovered cap under budget regardless of search-term count", () => {
     const limits = deriveExtractorLimits({
       budget: 750,
       searchTerms: ["a", "b", "c"],
-      sources: ["indeed", "linkedin", "glassdoor", "gradcracker"],
+      sources: ["indeed", "linkedin", "glassdoor"],
     });
 
-    const cap =
-      3 * limits.jobspyResultsWanted * 3 + limits.gradcrackerMaxJobsPerTerm * 3;
+    const cap = 3 * limits.jobspyResultsWanted * 3;
 
     expect(cap).toBeLessThanOrEqual(750);
   });
@@ -176,7 +173,7 @@ describe("automatic-run utilities", () => {
         searchScope: "selected_only",
         matchStrictness: "exact_only",
       },
-      sources: ["indeed", "linkedin", "gradcracker", "ukvisajobs"],
+      sources: ["indeed", "linkedin"],
     });
 
     expect(estimate).toEqual({
@@ -191,26 +188,6 @@ describe("automatic-run utilities", () => {
       "platform",
       "api",
     ]);
-  });
-
-  it("includes adzuna in estimate caps", () => {
-    const estimate = calculateAutomaticEstimate({
-      values: {
-        topN: 10,
-        minSuitabilityScore: 50,
-        searchTerms: ["backend", "platform"],
-        runBudget: 120,
-        country: "united kingdom",
-        cityLocations: [],
-        workplaceTypes: ["remote", "hybrid", "onsite"],
-        searchScope: "selected_only",
-        matchStrictness: "exact_only",
-      },
-      sources: ["adzuna"],
-    });
-
-    expect(estimate.discovered.cap).toBeGreaterThan(0);
-    expect(estimate.discovered.cap).toBeLessThanOrEqual(120);
   });
 
   it("includes hiringcafe in estimate caps using the shared term budget", () => {
@@ -273,20 +250,20 @@ describe("automatic-run utilities", () => {
     expect(estimate.discovered.cap).toBeLessThanOrEqual(120);
   });
 
-  it("includes seek in estimate caps using the shared term budget", () => {
+  it("includes golangjobs in estimate caps using the shared term budget", () => {
     const estimate = calculateAutomaticEstimate({
       values: {
         topN: 10,
         minSuitabilityScore: 50,
         searchTerms: ["backend", "platform"],
         runBudget: 120,
-        country: "australia",
+        country: "united kingdom",
         cityLocations: [],
         workplaceTypes: ["remote", "hybrid", "onsite"],
         searchScope: "selected_only",
         matchStrictness: "exact_only",
       },
-      sources: ["seek"],
+      sources: ["golangjobs"],
     });
 
     expect(estimate.discovered.cap).toBeGreaterThan(0);

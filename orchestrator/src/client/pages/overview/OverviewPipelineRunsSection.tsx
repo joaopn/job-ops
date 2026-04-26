@@ -355,13 +355,9 @@ function RunInsightsBody(props: {
                   }
                 />
                 <MetricCard
-                  label="PDF renderer"
-                  value={savedDetails.effectiveConfig.pdfRenderer}
-                />
-                <MetricCard
                   label="Source limits"
-                  value={`Indeed ${savedDetails.effectiveConfig.sourceLimits.jobspyResultsWanted}; UK Visa Jobs ${savedDetails.effectiveConfig.sourceLimits.ukvisajobsMaxJobs}`}
-                  hint={`Adzuna ${savedDetails.effectiveConfig.sourceLimits.adzunaMaxJobsPerTerm}; Gradcracker ${savedDetails.effectiveConfig.sourceLimits.gradcrackerMaxJobsPerTerm}; startup.jobs ${savedDetails.effectiveConfig.sourceLimits.startupjobsMaxJobsPerTerm}`}
+                  value={`JobSpy ${savedDetails.effectiveConfig.sourceLimits.jobspyResultsWanted}`}
+                  hint={`startup.jobs ${savedDetails.effectiveConfig.sourceLimits.startupjobsMaxJobsPerTerm}`}
                 />
                 <MetricCard
                   label="Resume projects"

@@ -85,9 +85,6 @@ describe.sequential("Pipeline API routes", () => {
         skippedSources: [],
         blockedCompanyKeywordsCount: 1,
         sourceLimits: {
-          ukvisajobsMaxJobs: 50,
-          adzunaMaxJobsPerTerm: 50,
-          gradcrackerMaxJobsPerTerm: 50,
           startupjobsMaxJobsPerTerm: 50,
           jobspyResultsWanted: 20,
         },
@@ -257,7 +254,7 @@ describe.sequential("Pipeline API routes", () => {
         workplaceTypes: ["remote", "hybrid"],
         searchScope: "selected_plus_remote_worldwide",
         matchStrictness: "flexible",
-        sources: ["gradcracker"],
+        sources: ["linkedin"],
       }),
     });
     const runBody = await runRes.json();
@@ -266,7 +263,7 @@ describe.sequential("Pipeline API routes", () => {
       expect.objectContaining({
         topN: 5,
         minSuitabilityScore: 65,
-        sources: ["gradcracker"],
+        sources: ["linkedin"],
         locationIntent: expect.objectContaining({
           selectedCountry: "united kingdom",
           country: "united kingdom",
@@ -289,20 +286,20 @@ describe.sequential("Pipeline API routes", () => {
     expect(glassdoorRunBody.ok).toBe(false);
     expect(glassdoorRunBody.error.message).toContain("incompatible");
 
-    const adzunaRunRes = await fetch(`${baseUrl}/api/pipeline/run`, {
+    const hiringcafeRunRes = await fetch(`${baseUrl}/api/pipeline/run`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        sources: ["adzuna"],
+        sources: ["hiringcafe"],
         country: "united kingdom",
       }),
     });
-    const adzunaRunBody = await adzunaRunRes.json();
-    expect(adzunaRunBody.ok).toBe(true);
+    const hiringcafeRunBody = await hiringcafeRunRes.json();
+    expect(hiringcafeRunBody.ok).toBe(true);
     expect(runPipeline).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
-        sources: ["adzuna"],
+        sources: ["hiringcafe"],
         locationIntent: expect.objectContaining({
           selectedCountry: "united kingdom",
           country: "united kingdom",

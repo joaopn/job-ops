@@ -18,7 +18,7 @@ vi.mock("@server/extractors/registry", () => ({
 const baseConfig: PipelineConfig = {
   topN: 10,
   minSuitabilityScore: 50,
-  sources: ["indeed", "linkedin", "ukvisajobs"],
+  sources: ["indeed", "linkedin", "hiringcafe"],
   outputDir: "./tmp",
   enableCrawling: true,
   enableScoring: true,
@@ -60,9 +60,9 @@ describe("discoverJobsStep", () => {
       }),
     };
     const ukvisaManifest = {
-      id: "ukvisajobs",
-      displayName: "UK Visa Jobs",
-      providesSources: ["ukvisajobs"],
+      id: "hiringcafe",
+      displayName: "Hiring Cafe",
+      providesSources: ["hiringcafe"],
       run: vi.fn().mockResolvedValue({
         success: false,
         jobs: [],
@@ -78,22 +78,22 @@ describe("discoverJobsStep", () => {
     vi.mocked(registryModule.getExtractorRegistry).mockResolvedValue({
       manifests: new Map([
         ["jobspy", jobspyManifest as any],
-        ["ukvisajobs", ukvisaManifest as any],
+        ["hiringcafe", ukvisaManifest as any],
       ]),
       manifestBySource: new Map([
         ["indeed", jobspyManifest as any],
         ["linkedin", jobspyManifest as any],
         ["glassdoor", jobspyManifest as any],
-        ["ukvisajobs", ukvisaManifest as any],
+        ["hiringcafe", ukvisaManifest as any],
       ]),
-      availableSources: ["indeed", "linkedin", "glassdoor", "ukvisajobs"],
+      availableSources: ["indeed", "linkedin", "glassdoor", "hiringcafe"],
     } as any);
 
     const result = await discoverJobsStep({ mergedConfig: baseConfig });
 
     expect(result.discoveredJobs).toHaveLength(1);
     expect(result.sourceErrors).toEqual([
-      "UK Visa Jobs: login failed (sources: ukvisajobs)",
+      "Hiring Cafe: login failed (sources: hiringcafe)",
     ]);
     expect(jobspyManifest.run).toHaveBeenCalledWith(
       expect.objectContaining({ selectedSources: ["indeed", "linkedin"] }),
@@ -105,9 +105,9 @@ describe("discoverJobsStep", () => {
     const registryModule = await import("@server/extractors/registry");
 
     const ukvisaManifest = {
-      id: "ukvisajobs",
-      displayName: "UK Visa Jobs",
-      providesSources: ["ukvisajobs"],
+      id: "hiringcafe",
+      displayName: "Hiring Cafe",
+      providesSources: ["hiringcafe"],
       run: vi.fn().mockResolvedValue({
         success: false,
         jobs: [],
@@ -121,20 +121,20 @@ describe("discoverJobsStep", () => {
     } as any);
 
     vi.mocked(registryModule.getExtractorRegistry).mockResolvedValue({
-      manifests: new Map([["ukvisajobs", ukvisaManifest as any]]),
-      manifestBySource: new Map([["ukvisajobs", ukvisaManifest as any]]),
-      availableSources: ["ukvisajobs"],
+      manifests: new Map([["hiringcafe", ukvisaManifest as any]]),
+      manifestBySource: new Map([["hiringcafe", ukvisaManifest as any]]),
+      availableSources: ["hiringcafe"],
     } as any);
 
     await expect(
       discoverJobsStep({
         mergedConfig: {
           ...baseConfig,
-          sources: ["ukvisajobs"],
+          sources: ["hiringcafe"],
         },
       }),
     ).rejects.toThrow(
-      "All sources failed: UK Visa Jobs: boom (sources: ukvisajobs)",
+      "All sources failed: Hiring Cafe: boom (sources: hiringcafe)",
     );
   });
 
@@ -142,9 +142,11 @@ describe("discoverJobsStep", () => {
     const settingsRepo = await import("@server/repositories/settings");
     const registryModule = await import("@server/extractors/registry");
 
+    // Glassdoor is the only kept source with country restrictions; pick a
+    // country it does not support so the country-compat filter rejects it.
     vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
       searchTerms: JSON.stringify(["engineer"]),
-      jobspyCountryIndeed: "united states",
+      jobspyCountryIndeed: "croatia",
     } as any);
 
     vi.mocked(registryModule.getExtractorRegistry).mockResolvedValue({
@@ -157,12 +159,10 @@ describe("discoverJobsStep", () => {
       discoverJobsStep({
         mergedConfig: {
           ...baseConfig,
-          sources: ["gradcracker", "ukvisajobs"],
+          sources: ["glassdoor"],
         },
       }),
-    ).rejects.toThrow(
-      "No compatible sources for selected country: United States",
-    );
+    ).rejects.toThrow("No compatible sources for selected country: Croatia");
   });
 
   it("does not throw when no sources are requested", async () => {
@@ -248,22 +248,22 @@ describe("discoverJobsStep", () => {
     const settingsRepo = await import("@server/repositories/settings");
     const registryModule = await import("@server/extractors/registry");
 
-    const gradcrackerManifest = {
-      id: "gradcracker",
-      displayName: "Gradcracker",
-      providesSources: ["gradcracker"],
+    const golangjobsManifest = {
+      id: "golangjobs",
+      displayName: "Golang Jobs",
+      providesSources: ["golangjobs"],
       run: vi.fn().mockResolvedValue({
         success: true,
         jobs: [
           {
-            source: "gradcracker",
+            source: "golangjobs",
             title: "Engineer - Leeds",
             employer: "ACME",
             location: "Leeds, England, UK",
             jobUrl: "https://example.com/grad-1",
           },
           {
-            source: "gradcracker",
+            source: "golangjobs",
             title: "Engineer - London",
             employer: "ACME",
             location: "London, England, UK",
@@ -273,14 +273,14 @@ describe("discoverJobsStep", () => {
       }),
     };
     const ukvisaManifest = {
-      id: "ukvisajobs",
-      displayName: "UK Visa Jobs",
-      providesSources: ["ukvisajobs"],
+      id: "hiringcafe",
+      displayName: "Hiring Cafe",
+      providesSources: ["hiringcafe"],
       run: vi.fn().mockResolvedValue({
         success: true,
         jobs: [
           {
-            source: "ukvisajobs",
+            source: "hiringcafe",
             title: "Developer - Leeds",
             employer: "Contoso",
             location: "Leeds, England, UK",
@@ -298,20 +298,20 @@ describe("discoverJobsStep", () => {
 
     vi.mocked(registryModule.getExtractorRegistry).mockResolvedValue({
       manifests: new Map([
-        ["gradcracker", gradcrackerManifest as any],
-        ["ukvisajobs", ukvisaManifest as any],
+        ["golangjobs", golangjobsManifest as any],
+        ["hiringcafe", ukvisaManifest as any],
       ]),
       manifestBySource: new Map([
-        ["gradcracker", gradcrackerManifest as any],
-        ["ukvisajobs", ukvisaManifest as any],
+        ["golangjobs", golangjobsManifest as any],
+        ["hiringcafe", ukvisaManifest as any],
       ]),
-      availableSources: ["gradcracker", "ukvisajobs"],
+      availableSources: ["golangjobs", "hiringcafe"],
     } as any);
 
     const result = await discoverJobsStep({
       mergedConfig: {
         ...baseConfig,
-        sources: ["gradcracker", "ukvisajobs"],
+        sources: ["golangjobs", "hiringcafe"],
       },
     });
 
@@ -566,16 +566,16 @@ describe("discoverJobsStep", () => {
       providesSources: ["indeed", "linkedin", "glassdoor"],
       run: vi.fn().mockResolvedValue({ success: true, jobs: [] }),
     };
-    const gradcrackerManifest = {
-      id: "gradcracker",
-      displayName: "Gradcracker",
-      providesSources: ["gradcracker"],
+    const golangjobsManifest = {
+      id: "golangjobs",
+      displayName: "Golang Jobs",
+      providesSources: ["golangjobs"],
       run: vi.fn().mockResolvedValue({ success: true, jobs: [] }),
     };
     const ukvisaManifest = {
-      id: "ukvisajobs",
-      displayName: "UK Visa Jobs",
-      providesSources: ["ukvisajobs"],
+      id: "hiringcafe",
+      displayName: "Hiring Cafe",
+      providesSources: ["hiringcafe"],
       run: vi.fn().mockResolvedValue({ success: true, jobs: [] }),
     };
 
@@ -590,42 +590,42 @@ describe("discoverJobsStep", () => {
     vi.mocked(registryModule.getExtractorRegistry).mockResolvedValue({
       manifests: new Map([
         ["jobspy", jobspyManifest as any],
-        ["gradcracker", gradcrackerManifest as any],
-        ["ukvisajobs", ukvisaManifest as any],
+        ["golangjobs", golangjobsManifest as any],
+        ["hiringcafe", ukvisaManifest as any],
       ]),
       manifestBySource: new Map([
         ["indeed", jobspyManifest as any],
         ["linkedin", jobspyManifest as any],
         ["glassdoor", jobspyManifest as any],
-        ["gradcracker", gradcrackerManifest as any],
-        ["ukvisajobs", ukvisaManifest as any],
+        ["golangjobs", golangjobsManifest as any],
+        ["hiringcafe", ukvisaManifest as any],
       ]),
       availableSources: [
         "indeed",
         "linkedin",
         "glassdoor",
-        "gradcracker",
-        "ukvisajobs",
+        "golangjobs",
+        "hiringcafe",
       ],
     } as any);
 
     await discoverJobsStep({
       mergedConfig: {
         ...baseConfig,
-        sources: ["linkedin", "gradcracker", "ukvisajobs"],
+        sources: ["linkedin", "golangjobs", "hiringcafe"],
       },
     });
 
     const progress = getProgress();
     expect(progress.crawlingSourcesTotal).toBe(3);
     expect(progress.crawlingSourcesCompleted).toBe(3);
-    expect(gradcrackerManifest.run).toHaveBeenCalledWith(
+    expect(golangjobsManifest.run).toHaveBeenCalledWith(
       expect.objectContaining({
         getExistingJobUrls: expect.any(Function),
       }),
     );
 
-    const [{ getExistingJobUrls }] = gradcrackerManifest.run.mock.calls[0] as [
+    const [{ getExistingJobUrls }] = golangjobsManifest.run.mock.calls[0] as [
       { getExistingJobUrls: () => Promise<string[]> },
     ];
     await expect(getExistingJobUrls()).resolves.toEqual([

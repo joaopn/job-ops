@@ -33,13 +33,6 @@ const HEALTH_PROBE_CONFIG_BY_SOURCE: Record<
   ExtractorSourceId,
   HealthProbeConfig
 > = {
-  gradcracker: {
-    searchTerm: DEFAULT_HEALTH_SEARCH_TERM,
-    selectedCountry: DEFAULT_HEALTH_SELECTED_COUNTRY,
-    settings: {
-      gradcrackerMaxJobsPerTerm: "1",
-    },
-  },
   indeed: {
     searchTerm: DEFAULT_HEALTH_SEARCH_TERM,
     selectedCountry: DEFAULT_HEALTH_SELECTED_COUNTRY,
@@ -62,20 +55,6 @@ const HEALTH_PROBE_CONFIG_BY_SOURCE: Record<
     settings: {
       jobspyCountryIndeed: "UK",
       jobspyResultsWanted: "1",
-    },
-  },
-  ukvisajobs: {
-    searchTerm: DEFAULT_HEALTH_SEARCH_TERM,
-    selectedCountry: DEFAULT_HEALTH_SELECTED_COUNTRY,
-    settings: {
-      ukvisajobsMaxJobs: "1",
-    },
-  },
-  adzuna: {
-    searchTerm: DEFAULT_HEALTH_SEARCH_TERM,
-    selectedCountry: DEFAULT_HEALTH_SELECTED_COUNTRY,
-    settings: {
-      adzunaMaxJobsPerTerm: "1",
     },
   },
   hiringcafe: {
@@ -104,13 +83,6 @@ const HEALTH_PROBE_CONFIG_BY_SOURCE: Record<
     selectedCountry: DEFAULT_HEALTH_SELECTED_COUNTRY,
     settings: {
       jobspyResultsWanted: "1",
-    },
-  },
-  seek: {
-    searchTerm: DEFAULT_HEALTH_SEARCH_TERM,
-    selectedCountry: "australia",
-    settings: {
-      seekMaxJobsPerTerm: "1",
     },
   },
   manual: {

@@ -34,7 +34,6 @@ import {
   discoverJobsStep,
   importJobsStep,
   loadProfileStep,
-  notifyPipelineWebhookStep,
   processJobsStep,
   scoreJobsStep,
   selectJobsStep,
@@ -44,7 +43,7 @@ const DEFAULT_CONFIG: PipelineConfig = {
   topN: 10,
   minSuitabilityScore: 50,
   // Keep Glassdoor opt-in via source picker/settings; do not enable by default.
-  sources: ["gradcracker", "indeed", "linkedin", "ukvisajobs"],
+  sources: ["indeed", "linkedin"],
   outputDir: join(getDataDir(), "pdfs"),
   enableCrawling: true,
   enableScoring: true,
@@ -198,7 +197,7 @@ export async function runPipeline(
 
       ensureNotCancelled();
       await persistResultSummary({ stage: "scoring" });
-      const { unprocessedJobs, scoredJobs } = await scoreJobsStep({
+      const { scoredJobs } = await scoreJobsStep({
         profile,
         shouldCancel: () => cancelRequestedAt !== null,
       });
@@ -253,13 +252,6 @@ export async function runPipeline(
         jobsProcessed: processedCount,
       });
 
-      await notifyPipelineWebhookStep("pipeline.completed", {
-        pipelineRunId: pipelineRun.id,
-        jobsDiscovered: created,
-        jobsScored: unprocessedJobs.length,
-        jobsProcessed: processedCount,
-      });
-
       return {
         success: true,
         jobsDiscovered: created,
@@ -300,11 +292,6 @@ export async function runPipeline(
 
       progressHelpers.failed(message);
       pipelineLogger.error("Pipeline run failed", error);
-
-      await notifyPipelineWebhookStep("pipeline.failed", {
-        pipelineRunId: pipelineRun.id,
-        error: message,
-      });
 
       return {
         success: false,

@@ -43,7 +43,6 @@ vi.mock("./steps", () => ({
   scoreJobsStep: vi.fn(async () => ({ unprocessedJobs: [], scoredJobs: [] })),
   selectJobsStep: vi.fn(() => []),
   processJobsStep: vi.fn(async () => ({ processedCount: 0 })),
-  notifyPipelineWebhookStep: vi.fn(async () => undefined),
 }));
 
 describe.sequential("pipeline cancellation", () => {

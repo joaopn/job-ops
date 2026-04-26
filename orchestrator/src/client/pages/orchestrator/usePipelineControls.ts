@@ -182,11 +182,7 @@ export function usePipelineControls(
         locationSearchScope: values.searchScope,
         locationMatchStrictness: values.matchStrictness,
         jobspyResultsWanted: limits.jobspyResultsWanted,
-        gradcrackerMaxJobsPerTerm: limits.gradcrackerMaxJobsPerTerm,
-        ukvisajobsMaxJobs: limits.ukvisajobsMaxJobs,
-        adzunaMaxJobsPerTerm: limits.adzunaMaxJobsPerTerm,
         startupjobsMaxJobsPerTerm: limits.startupjobsMaxJobsPerTerm,
-        seekMaxJobsPerTerm: limits.seekMaxJobsPerTerm,
         jobspyCountryIndeed: values.country,
         searchCities,
       });

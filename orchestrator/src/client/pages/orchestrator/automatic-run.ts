@@ -141,12 +141,8 @@ export function normalizeWorkplaceTypes(
 
 export interface ExtractorLimits {
   jobspyResultsWanted: number;
-  gradcrackerMaxJobsPerTerm: number;
-  ukvisajobsMaxJobs: number;
-  adzunaMaxJobsPerTerm: number;
   startupjobsMaxJobsPerTerm: number;
   workingnomadsMaxJobsPerTerm: number;
-  seekMaxJobsPerTerm: number;
 }
 
 export function inferAutomaticPresetSelection(args: {
@@ -195,49 +191,34 @@ export function deriveExtractorLimits(args: {
   const includesIndeed = args.sources.includes("indeed");
   const includesLinkedIn = args.sources.includes("linkedin");
   const includesGlassdoor = args.sources.includes("glassdoor");
-  const includesGradcracker = args.sources.includes("gradcracker");
-  const includesUkVisaJobs = args.sources.includes("ukvisajobs");
-  const includesAdzuna = args.sources.includes("adzuna");
   const includesHiringCafe = args.sources.includes("hiringcafe");
   const includesStartupJobs = args.sources.includes("startupjobs");
   const includesWorkingNomads = args.sources.includes("workingnomads");
-  const includesSeek = args.sources.includes("seek");
+  const includesGolangJobs = args.sources.includes("golangjobs");
 
   const weightedContributors =
     (includesIndeed ? termCount : 0) +
     (includesLinkedIn ? termCount : 0) +
     (includesGlassdoor ? termCount : 0) +
-    (includesGradcracker ? termCount : 0) +
-    (includesUkVisaJobs ? 1 : 0) +
-    (includesAdzuna ? termCount : 0) +
     (includesHiringCafe ? termCount : 0) +
     (includesStartupJobs ? termCount : 0) +
     (includesWorkingNomads ? termCount : 0) +
-    (includesSeek ? termCount : 0);
+    (includesGolangJobs ? termCount : 0);
 
   if (weightedContributors <= 0) {
     return {
       jobspyResultsWanted: budget,
-      gradcrackerMaxJobsPerTerm: budget,
-      ukvisajobsMaxJobs: budget,
-      adzunaMaxJobsPerTerm: budget,
       startupjobsMaxJobsPerTerm: budget,
       workingnomadsMaxJobsPerTerm: budget,
-      seekMaxJobsPerTerm: budget,
     };
   }
 
   const perUnit = Math.max(1, Math.floor(budget / weightedContributors));
-  const remainder = Math.max(0, budget - perUnit * weightedContributors);
 
   return {
     jobspyResultsWanted: perUnit,
-    gradcrackerMaxJobsPerTerm: perUnit,
-    ukvisajobsMaxJobs: Math.min(budget, perUnit + remainder),
-    adzunaMaxJobsPerTerm: perUnit,
     startupjobsMaxJobsPerTerm: perUnit,
     workingnomadsMaxJobsPerTerm: perUnit,
-    seekMaxJobsPerTerm: perUnit,
   };
 }
 
@@ -314,16 +295,13 @@ export function calculateAutomaticEstimate(args: {
   }
 
   const termCount = values.searchTerms.length;
-  const hasGradcracker = sources.includes("gradcracker");
-  const hasUkVisaJobs = sources.includes("ukvisajobs");
   const hasIndeed = sources.includes("indeed");
   const hasLinkedIn = sources.includes("linkedin");
   const hasGlassdoor = sources.includes("glassdoor");
-  const hasAdzuna = sources.includes("adzuna");
   const hasHiringCafe = sources.includes("hiringcafe");
   const hasStartupJobs = sources.includes("startupjobs");
   const hasWorkingNomads = sources.includes("workingnomads");
-  const hasSeek = sources.includes("seek");
+  const hasGolangJobs = sources.includes("golangjobs");
   const limits = deriveExtractorLimits({
     budget: values.runBudget,
     searchTerms: values.searchTerms,
@@ -334,11 +312,6 @@ export function calculateAutomaticEstimate(args: {
     Boolean,
   ).length;
   const jobspyCap = jobspySitesCount * limits.jobspyResultsWanted * termCount;
-  const gradcrackerCap = hasGradcracker
-    ? limits.gradcrackerMaxJobsPerTerm * termCount
-    : 0;
-  const ukvisaCap = hasUkVisaJobs ? limits.ukvisajobsMaxJobs : 0;
-  const adzunaCap = hasAdzuna ? limits.adzunaMaxJobsPerTerm * termCount : 0;
   const hiringCafeCap = hasHiringCafe
     ? limits.jobspyResultsWanted * termCount
     : 0;
@@ -348,17 +321,16 @@ export function calculateAutomaticEstimate(args: {
   const workingNomadsCap = hasWorkingNomads
     ? limits.workingnomadsMaxJobsPerTerm * termCount
     : 0;
-  const seekCap = hasSeek ? limits.seekMaxJobsPerTerm * termCount : 0;
+  const golangJobsCap = hasGolangJobs
+    ? limits.jobspyResultsWanted * termCount
+    : 0;
 
   const discoveredCap =
     jobspyCap +
-    gradcrackerCap +
-    ukvisaCap +
-    adzunaCap +
     hiringCafeCap +
     startupJobsCap +
     workingNomadsCap +
-    seekCap;
+    golangJobsCap;
   const discoveredMin = Math.round(discoveredCap * 0.35);
   const discoveredMax = Math.round(discoveredCap * 0.75);
   const processedMin = Math.min(values.topN, discoveredMin);
