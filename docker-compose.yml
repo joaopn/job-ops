@@ -7,8 +7,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      secrets:
-        - github_token
     image: job-ops:local
     container_name: job-ops
     ports:
@@ -16,6 +14,8 @@ services:
     volumes:
       # Persist database and generated PDFs
       - ./data:/app/data
+      # User-editable LLM prompts (YAML); host edits hot-reload via mtime cache
+      - ./prompts:/app/prompts
       # Persist Codex login/session data for app-server provider
       - codex-home:/app/codex-home
     environment:
@@ -30,6 +30,8 @@ services:
       - PYTHON_PATH=/usr/bin/python3
       # Codex runtime home (stores auth and config)
       - CODEX_HOME=/app/codex-home
+      # Prompts directory (bind-mounted above)
+      - PROMPTS_DIR=/app/prompts
 
     env_file:
       - path: ./.env
@@ -61,6 +63,10 @@ services:
         - path: ./extractors/jobspy
           target: /app/extractors/jobspy
           action: sync+restart
+        # Sync prompts so YAML edits propagate without an explicit reload
+        - path: ./prompts
+          target: /app/prompts
+          action: sync
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
@@ -68,10 +74,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
-
-secrets:
-  github_token:
-    environment: GITHUB_TOKEN
 
 # Volumes for data persistence
 volumes:

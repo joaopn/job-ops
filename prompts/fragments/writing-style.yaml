@@ -1,0 +1,9 @@
+name: writing-style
+description: |
+  Partial that injects tone, formality, constraints, and avoid-terms guidance.
+  Empty `constraintsSentence` / `avoidTermsSentence` interpolate to empty
+  strings, leaving harmless blank lines.
+template: |
+  Tone: {{tone}}. Formality: {{formality}}.
+  {{constraintsSentence}}
+  {{avoidTermsSentence}}

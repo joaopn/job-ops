@@ -67,8 +67,8 @@ RUN --mount=type=cache,target=/root/.npm \
     --no-audit --no-fund --progress=false
 
 # Fetch Camoufox binaries before copying source to keep the download cached.
-RUN --mount=type=secret,id=github_token,required=false \
-    sh -c 'GITHUB_TOKEN="$([ -f /run/secrets/github_token ] && cat /run/secrets/github_token || true)" node ./scripts/camoufox-fetch.mjs'
+# Anonymous GitHub fetch — no token plumbing into the build by design.
+RUN node ./scripts/camoufox-fetch.mjs
 
 FROM node-deps AS build-sources
 
@@ -150,8 +150,14 @@ COPY extractors/startupjobs ./extractors/startupjobs
 COPY extractors/workingnomads ./extractors/workingnomads
 COPY extractors/golangjobs ./extractors/golangjobs
 
+# Bake user-editable prompt YAMLs into the image as a fallback so a fresh
+# `docker compose up` works even before the host-side bind mount is wired.
+COPY prompts ./prompts
+
 # Create runtime directories.
 RUN mkdir -p /app/data/pdfs /app/codex-home
+
+ENV PROMPTS_DIR=/app/prompts
 
 EXPOSE 3001
 

@@ -1,0 +1,6 @@
+name: output-language
+description: |
+  Partial that pins the output language. Spliced into prompts via
+  `{{> output-language}}`.
+template: |
+  Always respond in {{outputLanguage}}.

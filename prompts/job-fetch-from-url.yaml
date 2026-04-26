@@ -1,0 +1,55 @@
+name: job-fetch-from-url
+description: |
+  Extracts structured job-posting fields from raw HTML or pasted plain-text
+  job descriptions. Used by services/manualJob.ts when the user pastes a JD
+  or URL contents into the manual-job dialog.
+variables:
+  - name: jobDescription
+    description: Raw HTML or plain-text job posting.
+model:
+  preferStructuredOutput: true
+system: ""
+user: |
+  You are extracting structured data from a job posting.
+  The input may be raw HTML from a job listing page or plain text - extract the
+  relevant job information either way.
+  Return JSON only with the keys listed below. Use empty string if unknown.
+  Do not guess or invent data. Ignore navigation, headers, footers, and other
+  non-job content.
+
+  Keys:
+  - title (job title)
+  - employer (company name)
+  - location (job location)
+  - salary (salary/compensation info)
+  - deadline (application deadline)
+  - jobUrl (the listing URL, if present in the content)
+  - applicationLink (the apply URL, if present)
+  - jobType (full-time, part-time, contract, etc.)
+  - jobLevel (entry, mid, senior, etc.)
+  - jobFunction (engineering, marketing, etc.)
+  - disciplines (required fields/disciplines)
+  - degreeRequired (required education)
+  - starting (start date)
+  - jobDescription (clean plain text of the job description including responsibilities and requirements - extract this from the HTML/content)
+
+  JOB POSTING CONTENT:
+  {{jobDescription}}
+
+  OUTPUT FORMAT (JSON ONLY):
+  {
+    "title": "",
+    "employer": "",
+    "location": "",
+    "salary": "",
+    "deadline": "",
+    "jobUrl": "",
+    "applicationLink": "",
+    "jobType": "",
+    "jobLevel": "",
+    "jobFunction": "",
+    "disciplines": "",
+    "degreeRequired": "",
+    "starting": "",
+    "jobDescription": ""
+  }

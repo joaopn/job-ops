@@ -7,6 +7,7 @@ import type { ManualJobDraft } from "@shared/types";
 import { LlmService } from "./llm/service";
 import type { JsonSchemaDefinition } from "./llm/types";
 import { resolveLlmModel } from "./modelSelection";
+import { loadPrompt } from "./prompts";
 
 export interface ManualJobInferenceResult {
   job: ManualJobDraft;
@@ -95,12 +96,18 @@ export async function inferManualJobDetails(
   jobDescription: string,
 ): Promise<ManualJobInferenceResult> {
   const model = await resolveLlmModel();
-  const prompt = buildInferencePrompt(jobDescription);
+  const prompt = await loadPrompt("job-fetch-from-url", { jobDescription });
 
   const llm = new LlmService();
+  const messages: Array<{ role: "system" | "user"; content: string }> = [];
+  if (prompt.system) {
+    messages.push({ role: "system", content: prompt.system });
+  }
+  messages.push({ role: "user", content: prompt.user });
+
   const result = await llm.callJson<ManualJobApiResponse>({
     model,
-    messages: [{ role: "user", content: prompt }],
+    messages,
     jsonSchema: MANUAL_JOB_SCHEMA,
   });
 
@@ -119,52 +126,6 @@ export async function inferManualJobDetails(
   }
 
   return { job: normalizeDraft(result.data) };
-}
-
-function buildInferencePrompt(jd: string): string {
-  return `
-You are extracting structured data from a job posting.
-The input may be raw HTML from a job listing page or plain text - extract the relevant job information either way.
-Return JSON only with the keys listed below. Use empty string if unknown.
-Do not guess or invent data. Ignore navigation, headers, footers, and other non-job content.
-
-Keys:
-- title (job title)
-- employer (company name)
-- location (job location)
-- salary (salary/compensation info)
-- deadline (application deadline)
-- jobUrl (the listing URL, if present in the content)
-- applicationLink (the apply URL, if present)
-- jobType (full-time, part-time, contract, etc.)
-- jobLevel (entry, mid, senior, etc.)
-- jobFunction (engineering, marketing, etc.)
-- disciplines (required fields/disciplines)
-- degreeRequired (required education)
-- starting (start date)
-- jobDescription (clean plain text of the job description including responsibilities and requirements - extract this from the HTML/content)
-
-JOB POSTING CONTENT:
-${jd}
-
-OUTPUT FORMAT (JSON ONLY):
-{
-  "title": "",
-  "employer": "",
-  "location": "",
-  "salary": "",
-  "deadline": "",
-  "jobUrl": "",
-  "applicationLink": "",
-  "jobType": "",
-  "jobLevel": "",
-  "jobFunction": "",
-  "disciplines": "",
-  "degreeRequired": "",
-  "starting": "",
-  "jobDescription": ""
-}
-`.trim();
 }
 
 function normalizeDraft(parsed: ManualJobApiResponse): ManualJobDraft {

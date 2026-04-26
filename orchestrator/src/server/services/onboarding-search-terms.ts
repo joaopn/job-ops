@@ -13,6 +13,7 @@ import {
 import { LlmService } from "./llm/service";
 import type { JsonSchemaDefinition } from "./llm/types";
 import { getProfile } from "./profile";
+import { loadPrompt } from "./prompts";
 
 type SearchTermSuggestionModelResponse = {
   terms: string[];
@@ -133,20 +134,13 @@ export function buildFallbackSearchTerms(
   };
 }
 
-function buildPrompt(context: SearchTermContext): string {
-  return [
-    "Suggest 5 to 8 concise job-title search terms for a job seeker based on this resume snapshot.",
-    "Return only job-title-style phrases that work well on job boards.",
-    "Rules:",
-    "- Keep each term short and specific.",
-    "- Use common title phrasing employers actually post.",
-    "- Do not include locations, company names, salaries, Boolean operators, or explanations.",
-    "- Do not return duplicate or near-duplicate terms.",
-    "- Stay grounded in the resume evidence.",
-    "",
-    "Resume snapshot:",
-    JSON.stringify(context, null, 2),
-  ].join("\n");
+async function buildPrompt(
+  context: SearchTermContext,
+): Promise<{ system: string; user: string }> {
+  const loaded = await loadPrompt("onboarding-search-terms", {
+    contextJson: JSON.stringify(context, null, 2),
+  });
+  return { system: loaded.system, user: loaded.user };
 }
 
 export async function suggestOnboardingSearchTerms(): Promise<SearchTermsSuggestionResponse> {
@@ -181,9 +175,16 @@ export async function suggestOnboardingSearchTerms(): Promise<SearchTermsSuggest
   try {
     const model = await resolveLlmModel("tailoring");
     const llm = new LlmService();
+    const prompt = await buildPrompt(context);
+    const messages: Array<{ role: "system" | "user"; content: string }> = [];
+    if (prompt.system) {
+      messages.push({ role: "system", content: prompt.system });
+    }
+    messages.push({ role: "user", content: prompt.user });
+
     const result = await llm.callJson<SearchTermSuggestionModelResponse>({
       model,
-      messages: [{ role: "user", content: buildPrompt(context) }],
+      messages,
       jsonSchema: SEARCH_TERMS_SCHEMA,
     });
 

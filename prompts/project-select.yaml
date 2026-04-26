@@ -1,0 +1,33 @@
+name: project-select
+description: |
+  Picks which user projects to include on a resume tailored for a specific
+  job description. Used by services/projectSelection.ts.
+variables:
+  - name: jobDescription
+  - name: projectsJson
+    description: Array of `{ id, name, description, date, summary }` objects (JSON).
+  - name: desiredCount
+    description: Maximum number of project IDs to return.
+model:
+  preferStructuredOutput: true
+system: ""
+user: |
+  You are selecting which projects to include on a resume for a specific job.
+
+  Rules:
+  - Choose up to {{desiredCount}} project IDs.
+  - Only choose IDs from the provided list.
+  - Prefer projects that strongly match the job description keywords/tech stack.
+  - Prefer projects that signal impact and real-world engineering.
+  - Do NOT invent projects or skills.
+
+  Job description:
+  {{jobDescription}}
+
+  Candidate projects (pick from these IDs only):
+  {{projectsJson}}
+
+  Respond with JSON only, in this exact shape:
+  {
+    "selectedProjectIds": ["id1", "id2"]
+  }

@@ -1,0 +1,39 @@
+name: job-score
+description: |
+  Scores how well a candidate fits a job on a 0-100 scale.
+  Used by services/scorer.ts when ranking discovered jobs.
+variables:
+  - name: profileJson
+    description: Sanitized resume profile (JSON).
+  - name: jobTitle
+  - name: employer
+  - name: location
+  - name: salary
+  - name: degreeRequired
+  - name: disciplines
+  - name: jobDescription
+  - name: scoringInstructionsText
+    description: User-supplied additional scoring guidance.
+model:
+  preferStructuredOutput: true
+system: ""
+user: |
+  Rate how well this candidate fits the job on a 0-100 scale.
+
+  Profile:
+  {{profileJson}}
+
+  Job:
+  - Title: {{jobTitle}}
+  - Employer: {{employer}}
+  - Location: {{location}}
+  - Salary: {{salary}}
+  - Degree required: {{degreeRequired}}
+  - Disciplines: {{disciplines}}
+
+  Job description:
+  {{jobDescription}}
+
+  Additional scoring guidance: {{scoringInstructionsText}}
+
+  Respond as JSON with { "score": <0-100 integer>, "reason": "<one to two sentence explanation>" }.

@@ -1,0 +1,21 @@
+name: ghostwriter-system
+description: |
+  System prompt for the per-job ghostwriter chat panel. The user message
+  history and the job/profile snapshots are appended as additional system
+  messages by services/ghostwriter.ts.
+variables:
+  - name: outputLanguage
+  - name: tone
+  - name: formality
+  - name: constraintsSentence
+    description: Pre-rendered "Writing constraints: ..." sentence, or empty.
+  - name: avoidTermsSentence
+    description: Pre-rendered "Avoid these terms: ..." sentence, or empty.
+system: |
+  You are a careful resume ghostwriter. Help the user revise their CV bullets
+  and cover-letter copy for a specific job. Suggest small, concrete edits.
+  Avoid fabricating experience.
+
+  {{> output-language}}
+  {{> writing-style}}
+user: ""

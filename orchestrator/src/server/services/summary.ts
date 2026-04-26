@@ -11,10 +11,7 @@ import {
   getWritingLanguageLabel,
   resolveWritingOutputLanguage,
 } from "./output-language";
-import {
-  getEffectivePromptTemplate,
-  renderPromptTemplate,
-} from "./prompt-templates";
+import { loadPrompt } from "./prompts";
 import {
   getWritingStyle,
   stripKeywordLimitFromConstraints,
@@ -92,9 +89,15 @@ export async function generateTailoring(
   );
 
   const llm = new LlmService();
+  const messages: Array<{ role: "system" | "user"; content: string }> = [];
+  if (prompt.system) {
+    messages.push({ role: "system", content: prompt.system });
+  }
+  messages.push({ role: "user", content: prompt.user });
+
   const result = await llm.callJson<TailoredData>({
     model,
-    messages: [{ role: "user", content: prompt }],
+    messages,
     jsonSchema: TAILORING_SCHEMA,
   });
 
@@ -148,7 +151,7 @@ async function buildTailoringPrompt(
   profile: ResumeProfile,
   jd: string,
   writingStyle: Awaited<ReturnType<typeof getWritingStyle>>,
-): Promise<string> {
+): Promise<{ system: string; user: string }> {
   const resolvedLanguage = resolveWritingOutputLanguage({
     style: writingStyle,
     profile,
@@ -185,9 +188,7 @@ async function buildTailoringPrompt(
     })),
   };
 
-  const template = await getEffectivePromptTemplate("tailoringPromptTemplate");
-
-  return renderPromptTemplate(template, {
+  const loaded = await loadPrompt("job-summary", {
     jobDescription: jd,
     profileJson: JSON.stringify(relevantProfile, null, 2),
     outputLanguage,
@@ -208,6 +209,7 @@ async function buildTailoringPrompt(
       ? `- Avoid these words or phrases: ${writingStyle.doNotUse}`
       : "",
   });
+  return { system: loaded.system, user: loaded.user };
 }
 
 function sanitizeText(text: string): string {

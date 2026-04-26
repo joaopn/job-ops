@@ -8,10 +8,7 @@ import {
   resolveWritingOutputLanguage,
 } from "./output-language";
 import { getProfile } from "./profile";
-import {
-  getEffectivePromptTemplate,
-  renderPromptTemplate,
-} from "./prompt-templates";
+import { loadPrompt } from "./prompts";
 import {
   getWritingStyle,
   stripLanguageDirectivesFromConstraints,
@@ -120,11 +117,8 @@ async function buildSystemPrompt(
   const effectiveConstraints = stripLanguageDirectivesFromConstraints(
     style.constraints,
   );
-  const template = await getEffectivePromptTemplate(
-    "ghostwriterSystemPromptTemplate",
-  );
 
-  return renderPromptTemplate(template, {
+  const loaded = await loadPrompt("ghostwriter-system", {
     outputLanguage,
     tone: style.tone,
     formality: style.formality,
@@ -135,6 +129,7 @@ async function buildSystemPrompt(
       ? `Avoid these terms: ${style.doNotUse}`
       : "",
   });
+  return loaded.system;
 }
 
 export async function buildJobChatPromptContext(

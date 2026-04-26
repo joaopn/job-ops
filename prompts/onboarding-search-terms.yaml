@@ -1,0 +1,22 @@
+name: onboarding-search-terms
+description: |
+  Suggests 5-8 concise job-title search terms from a resume snapshot.
+  Used by services/onboarding-search-terms.ts during the onboarding wizard.
+variables:
+  - name: contextJson
+    description: Resume snapshot (headline, summary, experiencePositions, projectNames, projectKeywords, skillNames, skillKeywords) as JSON.
+model:
+  preferStructuredOutput: true
+system: ""
+user: |
+  Suggest 5 to 8 concise job-title search terms for a job seeker based on this resume snapshot.
+  Return only job-title-style phrases that work well on job boards.
+  Rules:
+  - Keep each term short and specific.
+  - Use common title phrasing employers actually post.
+  - Do not include locations, company names, salaries, Boolean operators, or explanations.
+  - Do not return duplicate or near-duplicate terms.
+  - Stay grounded in the resume evidence.
+
+  Resume snapshot:
+  {{contextJson}}

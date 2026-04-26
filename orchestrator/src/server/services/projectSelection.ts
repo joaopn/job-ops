@@ -5,6 +5,7 @@
 import { LlmService } from "./llm/service";
 import type { JsonSchemaDefinition } from "./llm/types";
 import { resolveLlmModel } from "./modelSelection";
+import { loadPrompt } from "./prompts";
 import type { ResumeProjectSelectionItem } from "./resumeProjects";
 
 /** JSON schema for project selection response */
@@ -37,16 +38,22 @@ export async function pickProjectIdsForJob(args: {
 
   const model = await resolveLlmModel("projectSelection");
 
-  const prompt = buildProjectSelectionPrompt({
+  const prompt = await buildProjectSelectionPrompt({
     jobDescription: args.jobDescription,
     projects: args.eligibleProjects,
     desiredCount,
   });
 
   const llm = new LlmService();
+  const messages: Array<{ role: "system" | "user"; content: string }> = [];
+  if (prompt.system) {
+    messages.push({ role: "system", content: prompt.system });
+  }
+  messages.push({ role: "user", content: prompt.user });
+
   const result = await llm.callJson<{ selectedProjectIds: string[] }>({
     model,
-    messages: [{ role: "user", content: prompt }],
+    messages,
     jsonSchema: PROJECT_SELECTION_SCHEMA,
   });
 
@@ -87,11 +94,11 @@ export async function pickProjectIdsForJob(args: {
   return unique;
 }
 
-function buildProjectSelectionPrompt(args: {
+async function buildProjectSelectionPrompt(args: {
   jobDescription: string;
   projects: ResumeProjectSelectionItem[];
   desiredCount: number;
-}): string {
+}): Promise<{ system: string; user: string }> {
   const projects = args.projects.map((p) => ({
     id: p.id,
     name: p.name,
@@ -100,27 +107,12 @@ function buildProjectSelectionPrompt(args: {
     summary: truncate(p.summaryText, 500),
   }));
 
-  return `
-You are selecting which projects to include on a resume for a specific job.
-
-Rules:
-- Choose up to ${args.desiredCount} project IDs.
-- Only choose IDs from the provided list.
-- Prefer projects that strongly match the job description keywords/tech stack.
-- Prefer projects that signal impact and real-world engineering.
-- Do NOT invent projects or skills.
-
-Job description:
-${args.jobDescription}
-
-Candidate projects (pick from these IDs only):
-${JSON.stringify(projects, null, 2)}
-
-Respond with JSON only, in this exact shape:
-{
-  "selectedProjectIds": ["id1", "id2"]
-}
-`.trim();
+  const loaded = await loadPrompt("project-select", {
+    jobDescription: args.jobDescription,
+    projectsJson: JSON.stringify(projects, null, 2),
+    desiredCount: args.desiredCount,
+  });
+  return { system: loaded.system, user: loaded.user };
 }
 
 function fallbackPickProjectIds(

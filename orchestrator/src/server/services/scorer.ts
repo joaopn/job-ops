@@ -8,10 +8,7 @@ import { LlmService } from "./llm/service";
 import type { JsonSchemaDefinition } from "./llm/types";
 import { stripMarkdownCodeFences } from "./llm/utils/json";
 import { resolveLlmModel } from "./modelSelection";
-import {
-  getDefaultPromptTemplate,
-  renderPromptTemplate,
-} from "./prompt-templates";
+import { loadPrompt } from "./prompts";
 import { getEffectiveSettings } from "./settings";
 
 interface SuitabilityResult {
@@ -21,7 +18,6 @@ interface SuitabilityResult {
 
 type ScoringPreferences = {
   instructions: string;
-  promptTemplate: string;
 };
 
 /** JSON schema for suitability scoring response */
@@ -98,17 +94,24 @@ export async function scoreJobSuitability(
     getEffectiveSettings(),
   ]);
 
-  const prompt = buildScoringPrompt(job, sanitizeProfileForPrompt(profile), {
-    instructions: settings.scoringInstructions?.value ?? "",
-    promptTemplate:
-      settings.scoringPromptTemplate?.value ??
-      getDefaultPromptTemplate("scoringPromptTemplate"),
-  });
+  const prompt = await buildScoringPrompt(
+    job,
+    sanitizeProfileForPrompt(profile),
+    {
+      instructions: settings.scoringInstructions?.value ?? "",
+    },
+  );
 
   const llm = new LlmService();
+  const messages: Array<{ role: "system" | "user"; content: string }> = [];
+  if (prompt.system) {
+    messages.push({ role: "system", content: prompt.system });
+  }
+  messages.push({ role: "user", content: prompt.user });
+
   const result = await llm.callJson<{ score: number; reason: string }>({
     model,
-    messages: [{ role: "user", content: prompt }],
+    messages,
     jsonSchema: SCORING_SCHEMA,
     maxRetries: 2,
     jobId: job.id,
@@ -256,12 +259,12 @@ export function parseJsonFromContent(
   throw new Error("Unable to parse JSON from model response");
 }
 
-function buildScoringPrompt(
+async function buildScoringPrompt(
   job: Job,
   profile: Record<string, unknown>,
   preferences: ScoringPreferences,
-): string {
-  return renderPromptTemplate(preferences.promptTemplate, {
+): Promise<{ system: string; user: string }> {
+  const loaded = await loadPrompt("job-score", {
     profileJson: JSON.stringify(profile, null, 2),
     jobTitle: job.title,
     employer: job.employer,
@@ -274,6 +277,7 @@ function buildScoringPrompt(
       ? preferences.instructions
       : "No additional custom scoring instructions.",
   });
+  return { system: loaded.system, user: loaded.user };
 }
 
 function sanitizeProfileForPrompt(

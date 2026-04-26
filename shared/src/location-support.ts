@@ -99,10 +99,6 @@ export const SUPPORTED_COUNTRY_INPUTS = [
   "worldwide",
 ] as const;
 
-const UK_ONLY_SOURCES = new Set<JobSource>(["gradcracker", "ukvisajobs"]);
-const SEEK_SUPPORTED_COUNTRIES = new Set(
-  ["australia", "new zealand"].map((c) => normalizeCountryKey(c)),
-);
 const GLASSDOOR_SUPPORTED_COUNTRIES = new Set(
   [
     "australia",
@@ -127,28 +123,6 @@ const GLASSDOOR_SUPPORTED_COUNTRIES = new Set(
     "vietnam",
   ].map((country) => normalizeCountryKey(country)),
 );
-const ADZUNA_COUNTRY_CODE_BY_KEY: Record<string, string> = {
-  "united kingdom": "gb",
-  "united states": "us",
-  austria: "at",
-  australia: "au",
-  belgium: "be",
-  brazil: "br",
-  canada: "ca",
-  switzerland: "ch",
-  germany: "de",
-  spain: "es",
-  france: "fr",
-  india: "in",
-  italy: "it",
-  mexico: "mx",
-  netherlands: "nl",
-  "new zealand": "nz",
-  poland: "pl",
-  singapore: "sg",
-  "south africa": "za",
-};
-
 export function normalizeCountryKey(value: string | null | undefined): string {
   const normalized = value?.trim().toLowerCase() ?? "";
   return COUNTRY_ALIASES[normalized] ?? normalized;
@@ -179,21 +153,11 @@ export function isGlassdoorCountry(
   return GLASSDOOR_SUPPORTED_COUNTRIES.has(normalizeCountryKey(country));
 }
 
-export function getAdzunaCountryCode(
-  country: string | null | undefined,
-): string | null {
-  return ADZUNA_COUNTRY_CODE_BY_KEY[normalizeCountryKey(country)] ?? null;
-}
-
 export function isSourceAllowedForCountry(
   source: JobSource,
   country: string | null | undefined,
 ): boolean {
-  if (UK_ONLY_SOURCES.has(source)) return isUkCountry(country);
-  if (source === "seek")
-    return SEEK_SUPPORTED_COUNTRIES.has(normalizeCountryKey(country));
   if (source === "glassdoor") return isGlassdoorCountry(country);
-  if (source === "adzuna") return getAdzunaCountryCode(country) !== null;
   return true;
 }
 
