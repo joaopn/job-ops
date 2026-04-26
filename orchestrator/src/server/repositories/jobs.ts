@@ -7,6 +7,7 @@ import { buildLocationEvidence } from "@shared/location-domain.js";
 import type {
   CreateJobInput,
   CreateJobNoteInput,
+  CvContent,
   Job,
   JobListItem,
   JobLocationEvidence,
@@ -477,7 +478,7 @@ export async function updateJob(
   input: UpdateJobInput,
 ): Promise<Job | null> {
   const now = new Date().toISOString();
-  const { locationEvidence, ...updateFields } = input;
+  const { locationEvidence, tailoredContent, ...updateFields } = input;
   const readyAtUpdate =
     input.readyAt !== undefined
       ? { readyAt: input.readyAt }
@@ -498,6 +499,7 @@ export async function updateJob(
       ...(locationEvidence !== undefined
         ? { locationEvidence: serializeLocationEvidence(locationEvidence) }
         : {}),
+      ...(tailoredContent !== undefined ? { tailoredContent } : {}),
       updatedAt: now,
       ...(input.status === "processing" ? { processedAt: now } : {}),
       ...readyAtUpdate,
@@ -624,9 +626,8 @@ function mapRowToJob(row: typeof jobs.$inferSelect): Job {
     closedAt: row.closedAt ?? null,
     suitabilityScore: row.suitabilityScore,
     suitabilityReason: row.suitabilityReason,
-    tailoredSummary: row.tailoredSummary,
-    tailoredHeadline: row.tailoredHeadline ?? null,
-    tailoredSkills: row.tailoredSkills ?? null,
+    tailoredContent: (row.tailoredContent ?? null) as CvContent | null,
+    cvDocumentId: row.cvDocumentId ?? null,
     selectedProjectIds: row.selectedProjectIds ?? null,
     pdfPath: row.pdfPath,
     jobType: row.jobType ?? null,

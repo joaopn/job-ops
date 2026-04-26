@@ -22,6 +22,25 @@ export const JOB_CHAT_RUN_STATUSES = [
 ] as const;
 export type JobChatRunStatus = (typeof JOB_CHAT_RUN_STATUSES)[number];
 
+export const JOB_CHAT_EDIT_STATUSES = [
+  "pending",
+  "accepted",
+  "rejected",
+] as const;
+export type JobChatEditStatus = (typeof JOB_CHAT_EDIT_STATUSES)[number];
+
+export interface JobChatProposedCvEditOp {
+  path: Array<string | number>;
+  from: string;
+  to: string;
+}
+
+export interface JobChatProposedCvEdit {
+  kind: "cv-edit";
+  edits: JobChatProposedCvEditOp[];
+  rationale: string;
+}
+
 export interface JobChatThread {
   id: string;
   jobId: string;
@@ -45,6 +64,8 @@ export interface JobChatMessage {
   replacesMessageId: string | null;
   parentMessageId: string | null;
   activeChildId: string | null;
+  proposedEdit: JobChatProposedCvEdit | null;
+  editStatus: JobChatEditStatus | null;
   createdAt: string;
   updatedAt: string;
 }

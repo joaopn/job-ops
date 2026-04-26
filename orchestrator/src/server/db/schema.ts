@@ -7,18 +7,31 @@ import {
   APPLICATION_TASK_TYPES,
   INTERVIEW_OUTCOMES,
   INTERVIEW_TYPES,
+  JOB_CHAT_EDIT_STATUSES,
   JOB_CHAT_MESSAGE_ROLES,
   JOB_CHAT_MESSAGE_STATUSES,
   JOB_CHAT_RUN_STATUSES,
 } from "@shared/types";
 import { sql } from "drizzle-orm";
 import {
+  blob,
   index,
   integer,
   real,
   sqliteTable,
   text,
 } from "drizzle-orm/sqlite-core";
+
+export const cvDocuments = sqliteTable("cv_documents", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  originalArchive: blob("original_archive", { mode: "buffer" }).notNull(),
+  flattenedTex: text("flattened_tex").notNull(),
+  template: text("template").notNull(),
+  content: text("content", { mode: "json" }).notNull(),
+  createdAt: integer("created_at", { mode: "number" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "number" }).notNull(),
+});
 
 export const jobs = sqliteTable("jobs", {
   id: text("id").primaryKey(),
@@ -86,9 +99,10 @@ export const jobs = sqliteTable("jobs", {
   closedAt: integer("closed_at", { mode: "number" }),
   suitabilityScore: real("suitability_score"),
   suitabilityReason: text("suitability_reason"),
-  tailoredSummary: text("tailored_summary"),
-  tailoredHeadline: text("tailored_headline"),
-  tailoredSkills: text("tailored_skills"),
+  tailoredContent: text("tailored_content", { mode: "json" }),
+  cvDocumentId: text("cv_document_id").references(() => cvDocuments.id, {
+    onDelete: "set null",
+  }),
   selectedProjectIds: text("selected_project_ids"),
   pdfPath: text("pdf_path"),
 
@@ -206,6 +220,8 @@ export const jobChatMessages = sqliteTable(
     replacesMessageId: text("replaces_message_id"),
     parentMessageId: text("parent_message_id"),
     activeChildId: text("active_child_id"),
+    proposedEdit: text("proposed_edit", { mode: "json" }),
+    editStatus: text("edit_status", { enum: JOB_CHAT_EDIT_STATUSES }),
     createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
     updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
   },
@@ -289,3 +305,5 @@ export type JobChatRunRow = typeof jobChatRuns.$inferSelect;
 export type NewJobChatRunRow = typeof jobChatRuns.$inferInsert;
 export type SettingsRow = typeof settings.$inferSelect;
 export type NewSettingsRow = typeof settings.$inferInsert;
+export type CvDocumentRow = typeof cvDocuments.$inferSelect;
+export type NewCvDocumentRow = typeof cvDocuments.$inferInsert;

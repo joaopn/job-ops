@@ -1,4 +1,5 @@
 import type { ExtractorSourceId } from "../extractors";
+import type { CvContent } from "./cv-content";
 import type { LocationEvidence, LocationMatchResult } from "./location";
 
 export type { LocationEvidenceQuality } from "./location";
@@ -174,9 +175,8 @@ export interface Job {
   closedAt: number | null;
   suitabilityScore: number | null; // 0-100 AI-generated score
   suitabilityReason: string | null; // AI explanation
-  tailoredSummary: string | null; // Generated resume summary
-  tailoredHeadline: string | null; // Generated resume headline
-  tailoredSkills: string | null; // Generated resume skills (JSON)
+  tailoredContent: CvContent | null; // LLM-adjusted CvContent for this job
+  cvDocumentId: string | null; // FK to cv_documents.id; pins which CV was tailored
   selectedProjectIds: string | null; // Comma-separated IDs of selected projects
   pdfPath: string | null; // Path to generated PDF
   appliedDuplicateMatch?: AppliedDuplicateMatch | null; // Included on detail responses and may be omitted on list responses
@@ -332,9 +332,8 @@ export interface UpdateJobInput {
   locationEvidence?: JobLocationEvidence | null;
   suitabilityScore?: number;
   suitabilityReason?: string;
-  tailoredSummary?: string;
-  tailoredHeadline?: string;
-  tailoredSkills?: string;
+  tailoredContent?: CvContent | null;
+  cvDocumentId?: string | null;
   selectedProjectIds?: string;
   pdfPath?: string;
   readyAt?: string;

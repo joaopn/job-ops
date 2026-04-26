@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
 import type {
+  JobChatEditStatus,
   JobChatMessage,
   JobChatMessageRole,
   JobChatMessageStatus,
+  JobChatProposedCvEdit,
   JobChatRun,
   JobChatRunStatus,
   JobChatThread,
@@ -38,6 +40,8 @@ function mapMessage(row: typeof jobChatMessages.$inferSelect): JobChatMessage {
     replacesMessageId: row.replacesMessageId,
     parentMessageId: row.parentMessageId,
     activeChildId: row.activeChildId,
+    proposedEdit: (row.proposedEdit ?? null) as JobChatProposedCvEdit | null,
+    editStatus: row.editStatus ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -186,6 +190,8 @@ export async function createMessage(input: {
   version?: number;
   replacesMessageId?: string | null;
   parentMessageId?: string | null;
+  proposedEdit?: JobChatProposedCvEdit | null;
+  editStatus?: JobChatEditStatus | null;
 }): Promise<JobChatMessage> {
   const id = randomUUID();
   const now = new Date().toISOString();
@@ -202,6 +208,8 @@ export async function createMessage(input: {
     version: input.version ?? 1,
     replacesMessageId: input.replacesMessageId ?? null,
     parentMessageId: input.parentMessageId ?? null,
+    proposedEdit: input.proposedEdit ?? null,
+    editStatus: input.editStatus ?? null,
     createdAt: now,
     updatedAt: now,
   });
@@ -213,6 +221,22 @@ export async function createMessage(input: {
     throw new Error(`Failed to load created chat message ${id}.`);
   }
   return created;
+}
+
+/**
+ * Update the proposedEdit / editStatus state on a message (e.g. when the user
+ * accepts or rejects a CV-edit suggestion in the ghostwriter panel).
+ */
+export async function setMessageEditStatus(
+  messageId: string,
+  editStatus: JobChatEditStatus,
+): Promise<JobChatMessage | null> {
+  const now = new Date().toISOString();
+  await db
+    .update(jobChatMessages)
+    .set({ editStatus, updatedAt: now })
+    .where(eq(jobChatMessages.id, messageId));
+  return getMessageById(messageId);
 }
 
 export async function updateMessage(
