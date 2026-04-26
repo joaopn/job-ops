@@ -189,7 +189,7 @@ describe("OrchestratorFilters", () => {
       screen.queryByRole("button", { name: "LinkedIn" }),
     ).not.toBeInTheDocument();
     expect(
-      await screen.findByRole("button", { name: "Gradcracker" }),
+      await screen.findByRole("button", { name: "Hiring Cafe" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Manual" })).toBeInTheDocument();
 

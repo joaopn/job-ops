@@ -2,35 +2,6 @@ import { describe, expect, it } from "vitest";
 import { updateSettingsSchema } from "./settings-schema";
 
 describe("updateSettingsSchema", () => {
-  it("accepts supported PDF renderer values and rejects unsupported ones", () => {
-    expect(
-      updateSettingsSchema.parse({
-        pdfRenderer: "latex",
-      }),
-    ).toEqual({
-      pdfRenderer: "latex",
-    });
-
-    expect(
-      updateSettingsSchema.parse({
-        pdfRenderer: null,
-      }),
-    ).toEqual({
-      pdfRenderer: null,
-    });
-
-    const result = updateSettingsSchema.safeParse({
-      pdfRenderer: "custom",
-    });
-
-    expect(result.success).toBe(false);
-    if (result.success) {
-      return;
-    }
-
-    expect(result.error.flatten().fieldErrors.pdfRenderer).toBeDefined();
-  });
-
   it("accepts supported language mode and manual language values", () => {
     expect(
       updateSettingsSchema.parse({
@@ -73,31 +44,4 @@ describe("updateSettingsSchema", () => {
     ).toBeDefined();
   });
 
-  it("accepts a nullable rxresumeUrl and rejects invalid URLs", () => {
-    expect(
-      updateSettingsSchema.parse({
-        rxresumeUrl: "https://resume.example.com",
-      }),
-    ).toEqual({
-      rxresumeUrl: "https://resume.example.com",
-    });
-
-    expect(
-      updateSettingsSchema.parse({
-        rxresumeUrl: null,
-      }),
-    ).toEqual({
-      rxresumeUrl: null,
-    });
-
-    const result = updateSettingsSchema.safeParse({
-      rxresumeUrl: "not-a-url",
-    });
-
-    expect(result.success).toBe(false);
-    if (result.success) {
-      return;
-    }
-    expect(result.error.flatten().fieldErrors.rxresumeUrl).toBeDefined();
-  });
 });

@@ -17,6 +17,16 @@ vi.mock("./profile", () => ({
   getProfile: vi.fn(),
 }));
 
+vi.mock("./prompts", () => ({
+  loadPrompt: vi.fn().mockResolvedValue({
+    name: "onboarding-search-terms",
+    description: "",
+    system: "stub-system",
+    user: "stub-user",
+    modelHints: {},
+  }),
+}));
+
 import {
   buildFallbackSearchTerms,
   suggestOnboardingSearchTerms,
