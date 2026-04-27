@@ -107,6 +107,7 @@ export const jobs = sqliteTable("jobs", {
     onDelete: "set null",
   }),
   pdfPath: text("pdf_path"),
+  coverLetterDraft: text("cover_letter_draft").notNull().default(""),
 
   // Timestamps
   discoveredAt: text("discovered_at").notNull().default(sql`(datetime('now'))`),

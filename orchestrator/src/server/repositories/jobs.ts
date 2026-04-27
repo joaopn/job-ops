@@ -644,6 +644,7 @@ function mapRowToJob(row: typeof jobs.$inferSelect): Job {
     tailoringSkipped: parseStringList(row.tailoringSkipped),
     cvDocumentId: row.cvDocumentId ?? null,
     pdfPath: row.pdfPath,
+    coverLetterDraft: row.coverLetterDraft ?? "",
     jobType: row.jobType ?? null,
     salarySource: row.salarySource ?? null,
     salaryInterval: row.salaryInterval ?? null,

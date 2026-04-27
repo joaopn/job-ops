@@ -97,6 +97,7 @@ const migrations: string[] = [
     tailoring_skipped TEXT,
     cv_document_id TEXT REFERENCES cv_documents(id) ON DELETE SET NULL,
     pdf_path TEXT,
+    cover_letter_draft TEXT NOT NULL DEFAULT '',
     discovered_at TEXT NOT NULL DEFAULT (datetime('now')),
     processed_at TEXT,
     ready_at TEXT,
@@ -221,6 +222,7 @@ const migrations: string[] = [
   `ALTER TABLE jobs ADD COLUMN tailoring_matched TEXT`,
   `ALTER TABLE jobs ADD COLUMN tailoring_skipped TEXT`,
   `ALTER TABLE jobs ADD COLUMN cv_document_id TEXT REFERENCES cv_documents(id) ON DELETE SET NULL`,
+  `ALTER TABLE jobs ADD COLUMN cover_letter_draft TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE job_chat_messages ADD COLUMN proposed_edit TEXT`,
   `ALTER TABLE job_chat_messages ADD COLUMN edit_status TEXT`,
   `ALTER TABLE cv_documents ADD COLUMN personal_brief TEXT NOT NULL DEFAULT ''`,
@@ -284,6 +286,7 @@ const migrations: string[] = [
     tailoring_skipped TEXT,
     cv_document_id TEXT REFERENCES cv_documents(id) ON DELETE SET NULL,
     pdf_path TEXT,
+    cover_letter_draft TEXT NOT NULL DEFAULT '',
     discovered_at TEXT NOT NULL DEFAULT (datetime('now')),
     processed_at TEXT,
     ready_at TEXT,
@@ -303,8 +306,8 @@ const migrations: string[] = [
     location_evidence, degree_required, starting, job_description, status,
     outcome, closed_at, suitability_score, suitability_reason, tailored_content,
     tailoring_matched, tailoring_skipped, cv_document_id,
-    pdf_path, discovered_at, processed_at, ready_at, applied_at, created_at,
-    updated_at
+    pdf_path, cover_letter_draft, discovered_at, processed_at, ready_at,
+    applied_at, created_at, updated_at
   )
   SELECT
     id, source, source_job_id, job_url_direct, date_posted, job_type,
@@ -318,8 +321,8 @@ const migrations: string[] = [
     location_evidence, degree_required, starting, job_description, status,
     outcome, closed_at, suitability_score, suitability_reason, tailored_content,
     tailoring_matched, tailoring_skipped, cv_document_id,
-    pdf_path, discovered_at, processed_at, ready_at, applied_at, created_at,
-    updated_at
+    pdf_path, cover_letter_draft, discovered_at, processed_at,
+    ready_at, applied_at, created_at, updated_at
   FROM jobs`,
   `DROP TABLE jobs`,
   `ALTER TABLE jobs_new RENAME TO jobs`,

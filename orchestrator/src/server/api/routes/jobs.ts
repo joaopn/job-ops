@@ -70,6 +70,7 @@ const updateJobSchema = z.object({
   suitabilityScore: z.number().min(0).max(100).optional(),
   suitabilityReason: z.string().optional(),
   pdfPath: z.string().optional(),
+  coverLetterDraft: z.string().max(40000).optional(),
 });
 
 function isJobUrlConflictError(error: unknown): boolean {

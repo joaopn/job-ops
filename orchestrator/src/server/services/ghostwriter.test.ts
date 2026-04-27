@@ -141,6 +141,7 @@ describe("ghostwriter service", () => {
     mocks.settings.getAllSettings.mockResolvedValue({});
     mocks.buildJobChatPromptContext.mockResolvedValue({
       job: { id: "job-1" },
+      cv: null,
       style: {
         tone: "professional",
         formality: "medium",
@@ -150,6 +151,8 @@ describe("ghostwriter service", () => {
       systemPrompt: "system prompt",
       jobSnapshot: '{"job":"snapshot"}',
       briefSnapshot: "brief snapshot",
+      cvSnapshot: '{"cv":null}',
+      coverLetterSnapshot: "",
     });
 
     mocks.repo.getOrCreateThreadForJob.mockResolvedValue(thread);

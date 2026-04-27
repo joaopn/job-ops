@@ -4,7 +4,7 @@ import type {
   JobChatMessage,
   JobChatMessageRole,
   JobChatMessageStatus,
-  JobChatProposedCvEdit,
+  JobChatProposedEdit,
   JobChatRun,
   JobChatRunStatus,
   JobChatThread,
@@ -40,7 +40,7 @@ function mapMessage(row: typeof jobChatMessages.$inferSelect): JobChatMessage {
     replacesMessageId: row.replacesMessageId,
     parentMessageId: row.parentMessageId,
     activeChildId: row.activeChildId,
-    proposedEdit: (row.proposedEdit ?? null) as JobChatProposedCvEdit | null,
+    proposedEdit: (row.proposedEdit ?? null) as JobChatProposedEdit | null,
     editStatus: row.editStatus ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -190,7 +190,7 @@ export async function createMessage(input: {
   version?: number;
   replacesMessageId?: string | null;
   parentMessageId?: string | null;
-  proposedEdit?: JobChatProposedCvEdit | null;
+  proposedEdit?: JobChatProposedEdit | null;
   editStatus?: JobChatEditStatus | null;
 }): Promise<JobChatMessage> {
   const id = randomUUID();
@@ -246,6 +246,8 @@ export async function updateMessage(
     status?: JobChatMessageStatus;
     tokensIn?: number | null;
     tokensOut?: number | null;
+    proposedEdit?: JobChatProposedEdit | null;
+    editStatus?: JobChatEditStatus | null;
   },
 ): Promise<JobChatMessage | null> {
   const now = new Date().toISOString();
@@ -257,6 +259,10 @@ export async function updateMessage(
       ...(input.status !== undefined ? { status: input.status } : {}),
       ...(input.tokensIn !== undefined ? { tokensIn: input.tokensIn } : {}),
       ...(input.tokensOut !== undefined ? { tokensOut: input.tokensOut } : {}),
+      ...(input.proposedEdit !== undefined
+        ? { proposedEdit: input.proposedEdit }
+        : {}),
+      ...(input.editStatus !== undefined ? { editStatus: input.editStatus } : {}),
       updatedAt: now,
     })
     .where(eq(jobChatMessages.id, messageId));

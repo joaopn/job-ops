@@ -1,9 +1,9 @@
 import { badRequest, notFound } from "@infra/errors";
 import { logger } from "@infra/logger";
 import { sanitizeUnknown } from "@infra/sanitize";
-import type { Job } from "@shared/types";
+import type { CvDocument, Job } from "@shared/types";
 import * as jobsRepo from "../repositories/jobs";
-import { getActivePersonalBrief } from "./brief";
+import { getActiveCvDocument } from "./cv-active";
 import {
   getWritingLanguageLabel,
   resolveWritingOutputLanguage,
@@ -17,14 +17,20 @@ import {
 
 export type JobChatPromptContext = {
   job: Job;
+  cv: CvDocument | null;
   style: WritingStyle;
   systemPrompt: string;
   jobSnapshot: string;
   briefSnapshot: string;
+  cvSnapshot: string;
+  coverLetterSnapshot: string;
 };
 
 const MAX_JOB_DESCRIPTION = 4000;
 const MAX_BRIEF_SNAPSHOT = 6000;
+const MAX_TEMPLATE_SNAPSHOT = 3000;
+const MAX_TAILORED_CONTENT = 6000;
+const MAX_COVER_LETTER = 8000;
 
 function truncate(value: string | null | undefined, max: number): string {
   if (!value) return "";
@@ -58,6 +64,33 @@ function buildJobSnapshot(job: Job): string {
 
 function buildBriefSnapshot(brief: string): string {
   return truncate(brief, MAX_BRIEF_SNAPSHOT);
+}
+
+function buildCvSnapshot(job: Job, cv: CvDocument | null): string {
+  const tailoredContentJson = job.tailoredContent
+    ? truncate(JSON.stringify(job.tailoredContent, null, 2), MAX_TAILORED_CONTENT)
+    : null;
+
+  const snapshot = {
+    cv: cv
+      ? {
+          id: cv.id,
+          name: cv.name,
+          template: truncate(cv.template, MAX_TEMPLATE_SNAPSHOT),
+        }
+      : null,
+    tailoredContent: tailoredContentJson,
+    ats: {
+      matched: job.tailoringMatched ?? [],
+      skipped: job.tailoringSkipped ?? [],
+    },
+  };
+
+  return JSON.stringify(snapshot, null, 2);
+}
+
+function buildCoverLetterSnapshot(job: Job): string {
+  return truncate(job.coverLetterDraft, MAX_COVER_LETTER);
 }
 
 async function buildSystemPrompt(
@@ -97,17 +130,20 @@ export async function buildJobChatPromptContext(
 
   const style = await getWritingStyle();
 
-  let brief = "";
+  let cv: CvDocument | null = null;
   try {
-    brief = await getActivePersonalBrief();
+    cv = await getActiveCvDocument();
   } catch (error) {
-    logger.warn("Failed to load personal brief for job chat context", {
+    logger.warn("Failed to load active CV for job chat context", {
       jobId,
       error: sanitizeUnknown(error),
     });
   }
 
+  const brief = cv?.personalBrief?.trim() ?? "";
   const briefSnapshot = buildBriefSnapshot(brief);
+  const cvSnapshot = buildCvSnapshot(job, cv);
+  const coverLetterSnapshot = buildCoverLetterSnapshot(job);
   const systemPrompt = await buildSystemPrompt(style, brief);
   const jobSnapshot = buildJobSnapshot(job);
 
@@ -118,18 +154,25 @@ export async function buildJobChatPromptContext(
   logger.info("Built job chat context", {
     jobId,
     includesBrief: Boolean(briefSnapshot),
+    includesCv: Boolean(cv),
+    includesCoverLetter: Boolean(coverLetterSnapshot),
     contextStats: sanitizeUnknown({
       systemChars: systemPrompt.length,
       jobChars: jobSnapshot.length,
       briefChars: briefSnapshot.length,
+      cvChars: cvSnapshot.length,
+      coverLetterChars: coverLetterSnapshot.length,
     }),
   });
 
   return {
     job,
+    cv,
     style,
     systemPrompt,
     jobSnapshot,
     briefSnapshot,
+    cvSnapshot,
+    coverLetterSnapshot,
   };
 }

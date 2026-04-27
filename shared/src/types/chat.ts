@@ -41,6 +41,22 @@ export interface JobChatProposedCvEdit {
   rationale: string;
 }
 
+/**
+ * A proposed edit to the candidate's personal_brief. Either appends to the
+ * end of the brief or replaces it wholesale; the two are mutually exclusive
+ * but we keep both fields optional in the type so the loader can validate.
+ */
+export interface JobChatProposedBriefEdit {
+  kind: "brief-edit";
+  append?: string;
+  replace?: string;
+  rationale: string;
+}
+
+export type JobChatProposedEdit =
+  | JobChatProposedCvEdit
+  | JobChatProposedBriefEdit;
+
 export interface JobChatThread {
   id: string;
   jobId: string;
@@ -64,7 +80,7 @@ export interface JobChatMessage {
   replacesMessageId: string | null;
   parentMessageId: string | null;
   activeChildId: string | null;
-  proposedEdit: JobChatProposedCvEdit | null;
+  proposedEdit: JobChatProposedEdit | null;
   editStatus: JobChatEditStatus | null;
   createdAt: string;
   updatedAt: string;

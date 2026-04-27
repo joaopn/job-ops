@@ -7,7 +7,15 @@ import {
 } from "@infra/errors";
 import { logger } from "@infra/logger";
 import { getRequestId } from "@infra/request-context";
-import type { BranchInfo, JobChatMessage, JobChatRun } from "@shared/types";
+import type {
+  BranchInfo,
+  JobChatMessage,
+  JobChatProposedBriefEdit,
+  JobChatProposedCvEdit,
+  JobChatProposedCvEditOp,
+  JobChatProposedEdit,
+  JobChatRun,
+} from "@shared/types";
 import * as jobChatRepo from "../repositories/ghostwriter";
 import { buildJobChatPromptContext } from "./ghostwriter-context";
 import { LlmService } from "./llm/service";
@@ -23,19 +31,152 @@ type LlmRuntimeSettings = {
 
 const abortControllers = new Map<string, AbortController>();
 
+/**
+ * The LLM may answer in one of three modes:
+ *
+ *  - `text`: a free-form chat reply (renders directly to the cover-letter
+ *    pane or as a normal chat message).
+ *  - `cv-edit`: a structured proposal to edit `jobs.tailoredContent`. The
+ *    `rationale` becomes the chat-pane text; the structured payload is
+ *    persisted in `job_chat_messages.proposed_edit` for the user to accept.
+ *  - `brief-edit`: a structured proposal to edit `cv_documents.personal_brief`.
+ *
+ * We use a single object schema with optional fields rather than a JSON Schema
+ * `oneOf` because not all providers we target support `oneOf` reliably under
+ * strict structured-output mode. The dispatcher validates the discriminator
+ * (`kind`) at runtime.
+ */
 const CHAT_RESPONSE_SCHEMA: JsonSchemaDefinition = {
   name: "job_chat_response",
   schema: {
     type: "object",
     properties: {
+      kind: {
+        type: "string",
+        enum: ["text", "cv-edit", "brief-edit"],
+      },
       response: {
         type: "string",
+        description: "Free-form chat reply (only when kind = 'text').",
+      },
+      rationale: {
+        type: "string",
+        description:
+          "One-sentence justification (required when kind = 'cv-edit' or 'brief-edit').",
+      },
+      edits: {
+        type: "array",
+        description: "CV edits (only when kind = 'cv-edit').",
+        items: {
+          type: "object",
+          properties: {
+            path: {
+              type: "array",
+              description:
+                "Path into tailoredContent. Numeric indices are encoded as strings (e.g. ['experience', '2', 'bullets', '0']).",
+              items: { type: "string" },
+            },
+            from: { type: "string" },
+            to: { type: "string" },
+          },
+          required: ["path", "from", "to"],
+          additionalProperties: false,
+        },
+      },
+      append: {
+        type: "string",
+        description: "Text to append to personal_brief (kind = 'brief-edit').",
+      },
+      replace: {
+        type: "string",
+        description:
+          "Replacement text for the entire personal_brief (kind = 'brief-edit'). Mutually exclusive with append.",
       },
     },
-    required: ["response"],
+    required: ["kind"],
     additionalProperties: false,
   },
 };
+
+type ChatResponse = {
+  kind: "text" | "cv-edit" | "brief-edit";
+  response?: string;
+  rationale?: string;
+  edits?: Array<{
+    path: string[];
+    from: string;
+    to: string;
+  }>;
+  append?: string;
+  replace?: string;
+};
+
+type DispatchedReply = {
+  /** Text streamed to and persisted as `content` on the assistant message. */
+  text: string;
+  /** Structured edit, or null for a plain text reply. */
+  proposedEdit: JobChatProposedEdit | null;
+};
+
+function coercePathSegment(segment: string): string | number {
+  if (/^[0-9]+$/.test(segment)) {
+    const parsed = Number(segment);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return segment;
+}
+
+function dispatchChatResponse(raw: ChatResponse): DispatchedReply {
+  if (raw.kind === "cv-edit") {
+    const edits = raw.edits ?? [];
+    if (edits.length === 0) {
+      return {
+        text: (raw.rationale ?? raw.response ?? "").trim(),
+        proposedEdit: null,
+      };
+    }
+    const cvEdit: JobChatProposedCvEdit = {
+      kind: "cv-edit",
+      rationale: (raw.rationale ?? "").trim(),
+      edits: edits.map<JobChatProposedCvEditOp>((op) => ({
+        path: op.path.map(coercePathSegment),
+        from: op.from,
+        to: op.to,
+      })),
+    };
+    return {
+      text: cvEdit.rationale || "Proposed CV edit.",
+      proposedEdit: cvEdit,
+    };
+  }
+
+  if (raw.kind === "brief-edit") {
+    const append = raw.append?.trim() ?? "";
+    const replace = raw.replace?.trim() ?? "";
+    if (!append && !replace) {
+      return {
+        text: (raw.rationale ?? raw.response ?? "").trim(),
+        proposedEdit: null,
+      };
+    }
+    const briefEdit: JobChatProposedBriefEdit = {
+      kind: "brief-edit",
+      rationale: (raw.rationale ?? "").trim(),
+      ...(append ? { append } : {}),
+      ...(!append && replace ? { replace } : {}),
+    };
+    return {
+      text: briefEdit.rationale || "Proposed brief edit.",
+      proposedEdit: briefEdit,
+    };
+  }
+
+  // kind === "text" or unknown — treat as free-form text.
+  return {
+    text: (raw.response ?? raw.rationale ?? "").trim(),
+    proposedEdit: null,
+  };
+}
 
 function estimateTokenCount(value: string): number {
   if (!value) return 0;
@@ -269,7 +410,7 @@ async function runAssistantReply(
       apiKey: llmConfig.apiKey,
     });
 
-    const llmResult = await llm.callJson<{ response: string }>({
+    const llmResult = await llm.callJson<ChatResponse>({
       model: llmConfig.model,
       messages: [
         {
@@ -283,6 +424,14 @@ async function runAssistantReply(
         {
           role: "system",
           content: `Candidate Brief:\n${context.briefSnapshot || "No personal brief available."}`,
+        },
+        {
+          role: "system",
+          content: `CV State (JSON):\n${context.cvSnapshot || "No active CV."}`,
+        },
+        {
+          role: "system",
+          content: `Cover Letter Draft:\n${context.coverLetterSnapshot || "(no cover letter draft yet)"}`,
         },
         ...history,
         {
@@ -306,7 +455,8 @@ async function runAssistantReply(
       });
     }
 
-    const finalText = (llmResult.data.response || "").trim();
+    const dispatched = dispatchChatResponse(llmResult.data);
+    const finalText = dispatched.text;
     const chunks = chunkText(finalText);
 
     for (const chunk of chunks) {
@@ -345,6 +495,8 @@ async function runAssistantReply(
         status: "complete",
         tokensIn: estimateTokenCount(options.prompt),
         tokensOut: estimateTokenCount(accumulated),
+        proposedEdit: dispatched.proposedEdit,
+        editStatus: dispatched.proposedEdit ? "pending" : null,
       },
     );
 

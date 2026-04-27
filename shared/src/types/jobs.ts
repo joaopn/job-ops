@@ -180,6 +180,7 @@ export interface Job {
   tailoringSkipped: string[] | null; // JD keywords dropped for lack of evidence
   cvDocumentId: string | null; // FK to cv_documents.id; pins which CV was tailored
   pdfPath: string | null; // Path to generated PDF
+  coverLetterDraft: string; // Markdown cover-letter draft persisted independently of chat history
   appliedDuplicateMatch?: AppliedDuplicateMatch | null; // Included on detail responses and may be omitted on list responses
 
   // JobSpy fields (nullable for non-JobSpy sources)
@@ -338,6 +339,7 @@ export interface UpdateJobInput {
   tailoringSkipped?: string[] | null;
   cvDocumentId?: string | null;
   pdfPath?: string;
+  coverLetterDraft?: string;
   readyAt?: string;
   appliedAt?: string;
 }

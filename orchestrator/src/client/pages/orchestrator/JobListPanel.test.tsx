@@ -2,6 +2,7 @@ import { setupWindowVirtualizerTestEnvironment } from "@client/test/virtualizati
 import { createJob } from "@shared/testing/factories.js";
 import {
   act,
+  cleanup,
   fireEvent,
   render,
   screen,
@@ -23,9 +24,17 @@ let virtualizationEnvironment: ReturnType<
   typeof setupWindowVirtualizerTestEnvironment
 > | null = null;
 
-afterEach(() => {
+afterEach(async () => {
   virtualizationEnvironment?.cleanup();
   virtualizationEnvironment = null;
+  // Unmount before draining so react-virtual's listener is unsubscribed.
+  cleanup();
+  // @tanstack/virtual-core's `maybeNotify` schedules a setTimeout that calls
+  // back into React's reducer dispatch. If jsdom tears down before that timer
+  // fires we get `ReferenceError: window is not defined` from
+  // `getCurrentEventPriority`. Awaiting one tick lets the timer fire while
+  // jsdom is still alive.
+  await new Promise((resolve) => setTimeout(resolve, 0));
 });
 
 describe("JobListPanel", () => {
