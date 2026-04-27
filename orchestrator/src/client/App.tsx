@@ -15,6 +15,7 @@ import { CSSTransition, SwitchTransition } from "react-transition-group";
 import { Toaster } from "@/components/ui/sonner";
 import { OnboardingGate } from "./components/OnboardingGate";
 import { setAuthNavigator } from "./lib/auth-navigation";
+import { CvPage } from "./pages/CvPage";
 import { OnboardingPage } from "./pages/OnboardingPage";
 import { OrchestratorPage } from "./pages/OrchestratorPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -94,6 +95,7 @@ export const App: React.FC = () => {
                 <Route path="/onboarding" element={<OnboardingPage />} />
                 <Route path="/sign-in" element={<SignInPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/cv" element={<CvPage />} />
                 <Route path="/jobs/:tab" element={<OrchestratorPage />} />
                 <Route
                   path="/jobs/:tab/:jobId"

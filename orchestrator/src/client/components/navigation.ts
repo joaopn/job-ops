@@ -1,4 +1,4 @@
-import { LayoutDashboard, Settings } from "lucide-react";
+import { FileText, LayoutDashboard, Settings } from "lucide-react";
 
 export type NavLink = {
   to: string;
@@ -19,6 +19,7 @@ export const NAV_LINKS: NavLink[] = [
       "/jobs/all",
     ],
   },
+  { to: "/cv", label: "My CV", icon: FileText },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 
