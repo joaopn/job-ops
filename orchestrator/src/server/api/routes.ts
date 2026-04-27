@@ -4,6 +4,7 @@
 
 import { Router } from "express";
 import { authRouter } from "./routes/auth";
+import { cvRouter } from "./routes/cv";
 import { databaseRouter } from "./routes/database";
 import { extractorHealthRouter } from "./routes/extractor-health";
 import { ghostwriterRouter } from "./routes/ghostwriter";
@@ -21,6 +22,7 @@ apiRouter.use("/jobs/:id/chat", ghostwriterRouter);
 apiRouter.use("/settings", settingsRouter);
 apiRouter.use("/pipeline", pipelineRouter);
 apiRouter.use("/manual-jobs", manualJobsRouter);
+apiRouter.use("/cv", cvRouter);
 apiRouter.use("/profile", profileRouter);
 apiRouter.use("/database", databaseRouter);
 apiRouter.use("/onboarding", onboardingRouter);

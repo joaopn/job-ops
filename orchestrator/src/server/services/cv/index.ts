@@ -5,6 +5,12 @@ export {
   type FlattenInputResult,
 } from "./flatten-input";
 export {
+  CvExtractError,
+  extractCv,
+  type ExtractCvArgs,
+  type ExtractCvResult,
+} from "./llm-extract-cv";
+export {
   latexEscape,
   renderTemplate,
   RenderTemplateError,
