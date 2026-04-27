@@ -1,6 +1,6 @@
 export { discoverJobsStep } from "./discover-jobs";
 export { importJobsStep } from "./import-jobs";
-export { loadProfileStep } from "./load-profile";
+export { loadBriefStep } from "./load-brief";
 export { processJobsStep } from "./process-jobs";
 export { scoreJobsStep } from "./score-jobs";
 export { selectJobsStep } from "./select-jobs";

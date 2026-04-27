@@ -10,7 +10,7 @@ import type { ScoredJob } from "./types";
 const SCORING_CONCURRENCY = 4;
 
 export async function scoreJobsStep(args: {
-  profile: Record<string, unknown>;
+  brief: string;
   shouldCancel?: () => boolean;
 }): Promise<{ unprocessedJobs: Job[]; scoredJobs: ScoredJob[] }> {
   logger.info("Running scoring step");
@@ -62,7 +62,7 @@ export async function scoreJobsStep(args: {
         return;
       }
 
-      const { score, reason } = await scoreJobSuitability(job, args.profile);
+      const { score, reason } = await scoreJobSuitability(job, args.brief);
       if (args.shouldCancel?.()) return;
 
       // Check if job should be auto-skipped based on score threshold

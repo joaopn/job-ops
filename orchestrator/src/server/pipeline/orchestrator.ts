@@ -28,7 +28,7 @@ import {
 import {
   discoverJobsStep,
   importJobsStep,
-  loadProfileStep,
+  loadBriefStep,
   processJobsStep,
   scoreJobsStep,
   selectJobsStep,
@@ -167,7 +167,7 @@ export async function runPipeline(
     try {
       ensureNotCancelled();
       await persistResultSummary({ stage: "started" });
-      const profile = await loadProfileStep();
+      const brief = await loadBriefStep();
       await persistResultSummary({ stage: "profile_loaded" });
 
       ensureNotCancelled();
@@ -193,7 +193,7 @@ export async function runPipeline(
       ensureNotCancelled();
       await persistResultSummary({ stage: "scoring" });
       const { scoredJobs } = await scoreJobsStep({
-        profile,
+        brief,
         shouldCancel: () => cancelRequestedAt !== null,
       });
       await persistResultSummary({

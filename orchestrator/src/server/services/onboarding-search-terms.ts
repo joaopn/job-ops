@@ -1,33 +1,22 @@
 import { conflict } from "@infra/errors";
 import { logger } from "@infra/logger";
 import { resolveLlmModel } from "@server/services/modelSelection";
-import type {
-  ResumeProfile,
-  SearchTermsSuggestionResponse,
-} from "@shared/types";
+import type { SearchTermsSuggestionResponse } from "@shared/types";
 import {
   MAX_SEARCH_TERM_LENGTH,
   MAX_SEARCH_TERMS,
   normalizeSearchTerms,
 } from "@shared/utils/search-terms";
+import { getActiveCvDocument } from "./cv-active";
 import { LlmService } from "./llm/service";
 import type { JsonSchemaDefinition } from "./llm/types";
-import { getProfile } from "./profile";
 import { loadPrompt } from "./prompts";
 
 type SearchTermSuggestionModelResponse = {
   terms: string[];
 };
 
-type SearchTermContext = {
-  headline: string;
-  summary: string;
-  experiencePositions: string[];
-  projectNames: string[];
-  projectKeywords: string[];
-  skillNames: string[];
-  skillKeywords: string[];
-};
+const MAX_BRIEF_CHARS = 6000;
 
 const SEARCH_TERMS_SCHEMA: JsonSchemaDefinition = {
   name: "onboarding_search_terms",
@@ -49,117 +38,154 @@ const SEARCH_TERMS_SCHEMA: JsonSchemaDefinition = {
   },
 };
 
-function isVisible(value: { visible?: boolean } | null | undefined): boolean {
-  return value?.visible !== false;
-}
-
-function toTrimmed(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function dedupe(values: string[], maxItems = MAX_SEARCH_TERMS): string[] {
-  return normalizeSearchTerms(values, {
-    maxTerms: maxItems,
-    maxLength: MAX_SEARCH_TERM_LENGTH,
-  });
-}
-
-function collectContext(profile: ResumeProfile): SearchTermContext {
-  const experienceItems =
-    profile.sections?.experience?.items?.filter((item) => isVisible(item)) ??
-    [];
-  const projectItems =
-    profile.sections?.projects?.items?.filter((item) => isVisible(item)) ?? [];
-  const skillItems =
-    profile.sections?.skills?.items?.filter((item) => isVisible(item)) ?? [];
-
-  return {
-    headline: toTrimmed(profile.basics?.headline || profile.basics?.label),
-    summary: toTrimmed(
-      profile.basics?.summary || profile.sections?.summary?.content,
-    ),
-    experiencePositions: dedupe(
-      experienceItems.map((item) => toTrimmed(item.position)),
-      12,
-    ),
-    projectNames: dedupe(
-      projectItems.map((item) => toTrimmed(item.name)),
-      12,
-    ),
-    projectKeywords: dedupe(
-      projectItems.flatMap((item) => item.keywords ?? []).map(toTrimmed),
-      20,
-    ),
-    skillNames: dedupe(
-      skillItems.map((item) => toTrimmed(item.name)),
-      20,
-    ),
-    skillKeywords: dedupe(
-      skillItems.flatMap((item) => item.keywords ?? []).map(toTrimmed),
-      30,
-    ),
-  };
-}
-
-function hasUsableContext(context: SearchTermContext): boolean {
-  return Boolean(
-    context.headline ||
-      context.summary ||
-      context.experiencePositions.length > 0 ||
-      context.projectNames.length > 0 ||
-      context.projectKeywords.length > 0 ||
-      context.skillNames.length > 0 ||
-      context.skillKeywords.length > 0,
+function dedupe(values: Array<string | undefined>, maxItems = MAX_SEARCH_TERMS): string[] {
+  return normalizeSearchTerms(
+    values.filter((value): value is string => Boolean(value)),
+    {
+      maxTerms: maxItems,
+      maxLength: MAX_SEARCH_TERM_LENGTH,
+    },
   );
 }
 
-export function buildFallbackSearchTerms(
-  profile: ResumeProfile,
-): SearchTermsSuggestionResponse {
-  const context = collectContext(profile);
+function readString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
 
+function readArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+/**
+ * Pull a few flat hints out of whatever shape the extracted CV happens to
+ * use: a top-level headline (`basics.headline`/`basics.label`), positions
+ * from an `experience` array, project names, and skill names. Missing keys
+ * are skipped — different templates use different shapes.
+ */
+function collectCvHints(content: unknown): {
+  headline: string | undefined;
+  positions: string[];
+  projectNames: string[];
+  skillNames: string[];
+} {
+  if (!content || typeof content !== "object") {
+    return { headline: undefined, positions: [], projectNames: [], skillNames: [] };
+  }
+
+  const root = content as Record<string, unknown>;
+  const basics = (root.basics ?? {}) as Record<string, unknown>;
+  const headline = readString(basics.headline) ?? readString(basics.label);
+
+  const positions = readArray(root.experience)
+    .map((entry) =>
+      entry && typeof entry === "object"
+        ? readString((entry as Record<string, unknown>).position)
+        : undefined,
+    )
+    .filter((value): value is string => Boolean(value));
+
+  const projectNames = readArray(root.projects)
+    .map((entry) =>
+      entry && typeof entry === "object"
+        ? readString((entry as Record<string, unknown>).name)
+        : undefined,
+    )
+    .filter((value): value is string => Boolean(value));
+
+  const skillNames = readArray(root.skillGroups)
+    .flatMap((entry) => {
+      if (!entry || typeof entry !== "object") return [];
+      const group = entry as Record<string, unknown>;
+      const name = readString(group.name);
+      const keywords = readArray(group.keywords)
+        .map((k) => readString(k))
+        .filter((value): value is string => Boolean(value));
+      return name ? [name, ...keywords] : keywords;
+    });
+
+  return { headline, positions, projectNames, skillNames };
+}
+
+function truncateBrief(brief: string): string {
+  const trimmed = brief.trim();
+  if (trimmed.length <= MAX_BRIEF_CHARS) return trimmed;
+  return `${trimmed.slice(0, MAX_BRIEF_CHARS)}\n[brief truncated]`;
+}
+
+export type OnboardingSearchTermContext = {
+  brief: string;
+  headline: string | undefined;
+  positions: string[];
+  projectNames: string[];
+  skillNames: string[];
+};
+
+export function buildFallbackSearchTerms(
+  context: OnboardingSearchTermContext,
+): SearchTermsSuggestionResponse {
   return {
     terms: dedupe([
       context.headline,
-      ...context.experiencePositions,
+      ...context.positions,
       ...context.projectNames,
       ...context.skillNames,
-      ...context.projectKeywords,
-      ...context.skillKeywords,
-      // Summary is a last resort so AI failures still return something
-      // deterministic for resumes that lack explicit title-like fields.
-      context.summary,
     ]),
     source: "fallback",
   };
 }
 
+function hasUsableContext(context: OnboardingSearchTermContext): boolean {
+  return Boolean(
+    context.brief ||
+      context.headline ||
+      context.positions.length > 0 ||
+      context.projectNames.length > 0 ||
+      context.skillNames.length > 0,
+  );
+}
+
 async function buildPrompt(
-  context: SearchTermContext,
+  context: OnboardingSearchTermContext,
 ): Promise<{ system: string; user: string }> {
   const loaded = await loadPrompt("onboarding-search-terms", {
-    contextJson: JSON.stringify(context, null, 2),
+    briefText: context.brief
+      ? truncateBrief(context.brief)
+      : "No personal brief provided.",
+    contextJson: JSON.stringify(
+      {
+        headline: context.headline,
+        positions: context.positions,
+        projectNames: context.projectNames,
+        skillNames: context.skillNames,
+      },
+      null,
+      2,
+    ),
   });
   return { system: loaded.system, user: loaded.user };
 }
 
 export async function suggestOnboardingSearchTerms(): Promise<SearchTermsSuggestionResponse> {
-  let profile: ResumeProfile;
-
-  try {
-    profile = await getProfile();
-  } catch (error) {
+  const cv = await getActiveCvDocument();
+  if (!cv) {
     logger.warn(
-      "Onboarding search-term suggestion skipped because no resume is available",
+      "Onboarding search-term suggestion skipped because no CV has been uploaded",
       {
         route: "POST /api/onboarding/search-terms/suggest",
-        error,
       },
     );
     throw conflict("Resume must be configured before suggesting search terms.");
   }
 
-  const context = collectContext(profile);
+  const hints = collectCvHints(cv.content);
+  const context: OnboardingSearchTermContext = {
+    brief: cv.personalBrief ?? "",
+    headline: hints.headline,
+    positions: dedupe(hints.positions, 12),
+    projectNames: dedupe(hints.projectNames, 12),
+    skillNames: dedupe(hints.skillNames, 20),
+  };
+
   if (!hasUsableContext(context)) {
     logger.warn(
       "Onboarding search-term suggestion skipped because resume context was empty",
@@ -170,7 +196,7 @@ export async function suggestOnboardingSearchTerms(): Promise<SearchTermsSuggest
     throw conflict("Resume must be configured before suggesting search terms.");
   }
 
-  const fallback = buildFallbackSearchTerms(profile);
+  const fallback = buildFallbackSearchTerms(context);
 
   try {
     const model = await resolveLlmModel("tailoring");

@@ -65,8 +65,8 @@ vi.mock("@server/services/scorer", () => ({
   scoreJobSuitability: vi.fn(),
 }));
 
-vi.mock("@server/services/profile", () => ({
-  getProfile: vi.fn().mockResolvedValue({}),
+vi.mock("@server/services/brief", () => ({
+  getActivePersonalBrief: vi.fn().mockResolvedValue(""),
 }));
 
 const originalEnv = { ...process.env };

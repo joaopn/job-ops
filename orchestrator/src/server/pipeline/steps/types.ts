@@ -7,7 +7,7 @@ export type ScoredJob = Job & {
 
 export type RunPipelineContext = {
   mergedConfig: PipelineConfig;
-  profile: Record<string, unknown>;
+  brief: string;
   discoveredJobs: CreateJobInput[];
   sourceErrors: string[];
   created: number;

@@ -11,7 +11,7 @@ import { logger } from "@infra/logger";
 import { processJob } from "@server/pipeline/index";
 import * as jobsRepo from "@server/repositories/jobs";
 import { inferManualJobDetails } from "@server/services/manualJob";
-import { getProfile } from "@server/services/profile";
+import { getActivePersonalBrief } from "@server/services/brief";
 import { scoreJobSuitability } from "@server/services/scorer";
 import { type Request, type Response, Router } from "express";
 import { JSDOM } from "jsdom";
@@ -256,18 +256,10 @@ manualJobsRouter.post("/import", async (req: Request, res: Response) => {
     // Score asynchronously so the import returns immediately.
     (async () => {
       try {
-        const rawProfile = await getProfile();
-        if (
-          !rawProfile ||
-          typeof rawProfile !== "object" ||
-          Array.isArray(rawProfile)
-        ) {
-          throw new Error("Invalid resume profile format");
-        }
-        const profile = rawProfile as Record<string, unknown>;
+        const brief = await getActivePersonalBrief();
         const { score, reason } = await scoreJobSuitability(
           processedJob,
-          profile,
+          brief,
         );
         await jobsRepo.updateJob(processedJob.id, {
           suitabilityScore: score,

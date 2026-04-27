@@ -149,7 +149,7 @@ describe("ghostwriter service", () => {
       },
       systemPrompt: "system prompt",
       jobSnapshot: '{"job":"snapshot"}',
-      profileSnapshot: "profile snapshot",
+      briefSnapshot: "brief snapshot",
     });
 
     mocks.repo.getOrCreateThreadForJob.mockResolvedValue(thread);

@@ -1,13 +1,13 @@
 import { badRequest, notFound } from "@infra/errors";
 import { logger } from "@infra/logger";
 import { sanitizeUnknown } from "@infra/sanitize";
-import type { Job, ResumeProfile } from "@shared/types";
+import type { Job } from "@shared/types";
 import * as jobsRepo from "../repositories/jobs";
+import { getActivePersonalBrief } from "./brief";
 import {
   getWritingLanguageLabel,
   resolveWritingOutputLanguage,
 } from "./output-language";
-import { getProfile } from "./profile";
 import { loadPrompt } from "./prompts";
 import {
   getWritingStyle,
@@ -20,25 +20,17 @@ export type JobChatPromptContext = {
   style: WritingStyle;
   systemPrompt: string;
   jobSnapshot: string;
-  profileSnapshot: string;
+  briefSnapshot: string;
 };
 
 const MAX_JOB_DESCRIPTION = 4000;
-const MAX_PROFILE_SUMMARY = 1200;
-const MAX_SKILLS = 18;
-const MAX_PROJECTS = 6;
-const MAX_EXPERIENCE = 5;
-const MAX_ITEM_TEXT = 320;
+const MAX_BRIEF_SNAPSHOT = 6000;
 
 function truncate(value: string | null | undefined, max: number): string {
   if (!value) return "";
   const trimmed = value.trim();
   if (trimmed.length <= max) return trimmed;
   return `${trimmed.slice(0, max)}...`;
-}
-
-function compactJoin(parts: Array<string | null | undefined>): string {
-  return parts.filter(Boolean).join("\n");
 }
 
 function buildJobSnapshot(job: Job): string {
@@ -64,51 +56,17 @@ function buildJobSnapshot(job: Job): string {
   return JSON.stringify(snapshot, null, 2);
 }
 
-function buildProfileSnapshot(profile: ResumeProfile): string {
-  const summary =
-    truncate(profile?.sections?.summary?.content, MAX_PROFILE_SUMMARY) ||
-    truncate(profile?.basics?.summary, MAX_PROFILE_SUMMARY);
-
-  const skills = (profile?.sections?.skills?.items ?? [])
-    .slice(0, MAX_SKILLS)
-    .map((item) => {
-      const keywords = (item.keywords ?? []).slice(0, 8).join(", ");
-      return `${item.name}${keywords ? `: ${keywords}` : ""}`;
-    });
-
-  const projects = (profile?.sections?.projects?.items ?? [])
-    .filter((item) => item.visible !== false)
-    .slice(0, MAX_PROJECTS)
-    .map(
-      (item) =>
-        `${item.name} (${item.date || "n/a"}): ${truncate(item.summary, MAX_ITEM_TEXT)}`,
-    );
-
-  const experience = (profile?.sections?.experience?.items ?? [])
-    .filter((item) => item.visible !== false)
-    .slice(0, MAX_EXPERIENCE)
-    .map(
-      (item) =>
-        `${item.position} @ ${item.company} (${item.date || "n/a"}): ${truncate(item.summary, MAX_ITEM_TEXT)}`,
-    );
-
-  return compactJoin([
-    `Name: ${profile?.basics?.name || "Unknown"}`,
-    `Headline: ${truncate(profile?.basics?.headline || profile?.basics?.label, 200) || ""}`,
-    summary ? `Summary:\n${summary}` : null,
-    skills.length > 0 ? `Skills:\n- ${skills.join("\n- ")}` : null,
-    projects.length > 0 ? `Projects:\n- ${projects.join("\n- ")}` : null,
-    experience.length > 0 ? `Experience:\n- ${experience.join("\n- ")}` : null,
-  ]);
+function buildBriefSnapshot(brief: string): string {
+  return truncate(brief, MAX_BRIEF_SNAPSHOT);
 }
 
 async function buildSystemPrompt(
   style: WritingStyle,
-  profile: ResumeProfile,
+  brief: string,
 ): Promise<string> {
   const resolvedLanguage = resolveWritingOutputLanguage({
     style,
-    profile,
+    sample: brief,
   });
   const outputLanguage = getWritingLanguageLabel(resolvedLanguage.language);
   const effectiveConstraints = stripLanguageDirectivesFromConstraints(
@@ -139,18 +97,18 @@ export async function buildJobChatPromptContext(
 
   const style = await getWritingStyle();
 
-  let profile: ResumeProfile = {};
+  let brief = "";
   try {
-    profile = await getProfile();
+    brief = await getActivePersonalBrief();
   } catch (error) {
-    logger.warn("Failed to load profile for job chat context", {
+    logger.warn("Failed to load personal brief for job chat context", {
       jobId,
       error: sanitizeUnknown(error),
     });
   }
 
-  const profileSnapshot = buildProfileSnapshot(profile);
-  const systemPrompt = await buildSystemPrompt(style, profile);
+  const briefSnapshot = buildBriefSnapshot(brief);
+  const systemPrompt = await buildSystemPrompt(style, brief);
   const jobSnapshot = buildJobSnapshot(job);
 
   if (!jobSnapshot.trim()) {
@@ -159,11 +117,11 @@ export async function buildJobChatPromptContext(
 
   logger.info("Built job chat context", {
     jobId,
-    includesProfile: Boolean(profileSnapshot),
+    includesBrief: Boolean(briefSnapshot),
     contextStats: sanitizeUnknown({
       systemChars: systemPrompt.length,
       jobChars: jobSnapshot.length,
-      profileChars: profileSnapshot.length,
+      briefChars: briefSnapshot.length,
     }),
   });
 
@@ -172,6 +130,6 @@ export async function buildJobChatPromptContext(
     style,
     systemPrompt,
     jobSnapshot,
-    profileSnapshot,
+    briefSnapshot,
   };
 }

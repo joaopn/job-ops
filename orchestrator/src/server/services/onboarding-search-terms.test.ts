@@ -1,4 +1,4 @@
-import type { ResumeProfile } from "@shared/types";
+import type { CvDocument } from "@shared/types";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const callJsonMock = vi.fn();
@@ -13,8 +13,8 @@ vi.mock("@server/services/modelSelection", () => ({
   resolveLlmModel: vi.fn().mockResolvedValue("test-model"),
 }));
 
-vi.mock("./profile", () => ({
-  getProfile: vi.fn(),
+vi.mock("./cv-active", () => ({
+  getActiveCvDocument: vi.fn(),
 }));
 
 vi.mock("./prompts", () => ({
@@ -27,11 +27,24 @@ vi.mock("./prompts", () => ({
   }),
 }));
 
-import {
-  buildFallbackSearchTerms,
-  suggestOnboardingSearchTerms,
-} from "./onboarding-search-terms";
-import { getProfile } from "./profile";
+import { buildFallbackSearchTerms, suggestOnboardingSearchTerms } from "./onboarding-search-terms";
+import { getActiveCvDocument } from "./cv-active";
+
+function makeCv(overrides: {
+  personalBrief?: string;
+  content?: Record<string, unknown>;
+}): CvDocument {
+  return {
+    id: "cv-1",
+    name: "cv.tex",
+    flattenedTex: "",
+    template: "",
+    content: (overrides.content ?? {}) as CvDocument["content"],
+    personalBrief: overrides.personalBrief ?? "",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+}
 
 describe("suggestOnboardingSearchTerms", () => {
   beforeEach(() => {
@@ -39,27 +52,15 @@ describe("suggestOnboardingSearchTerms", () => {
   });
 
   it("returns sanitized AI terms when generation succeeds", async () => {
-    vi.mocked(getProfile).mockResolvedValue({
-      basics: {
-        headline: "Senior Backend Engineer",
-        summary: "Builds APIs and platform systems.",
-      },
-      sections: {
-        experience: {
-          items: [
-            {
-              id: "exp-1",
-              company: "Example",
-              position: "Platform Engineer",
-              location: "Remote",
-              date: "2024",
-              summary: "Built services",
-              visible: true,
-            },
-          ],
+    vi.mocked(getActiveCvDocument).mockResolvedValue(
+      makeCv({
+        personalBrief: "Backend platform engineer with API and infra experience.",
+        content: {
+          basics: { headline: "Senior Backend Engineer" },
+          experience: [{ position: "Platform Engineer" }],
         },
-      },
-    } satisfies ResumeProfile);
+      }),
+    );
     callJsonMock.mockResolvedValue({
       success: true,
       data: {
@@ -80,36 +81,16 @@ describe("suggestOnboardingSearchTerms", () => {
     });
   });
 
-  it("falls back to headline and visible experience titles when AI generation fails", async () => {
-    vi.mocked(getProfile).mockResolvedValue({
-      basics: {
-        headline: "Staff Software Engineer",
-      },
-      sections: {
-        experience: {
-          items: [
-            {
-              id: "exp-1",
-              company: "Example",
-              position: "Platform Engineer",
-              location: "Remote",
-              date: "2024",
-              summary: "Built services",
-              visible: true,
-            },
-            {
-              id: "exp-2",
-              company: "Hidden",
-              position: "Principal Engineer",
-              location: "Remote",
-              date: "2023",
-              summary: "Hidden role",
-              visible: false,
-            },
-          ],
+  it("falls back to headline and experience positions when AI generation fails", async () => {
+    vi.mocked(getActiveCvDocument).mockResolvedValue(
+      makeCv({
+        personalBrief: "Staff engineer focused on platform tooling.",
+        content: {
+          basics: { headline: "Staff Software Engineer" },
+          experience: [{ position: "Platform Engineer" }],
         },
-      },
-    } satisfies ResumeProfile);
+      }),
+    );
     callJsonMock.mockResolvedValue({
       success: false,
       error: "LLM provider unavailable",
@@ -123,52 +104,21 @@ describe("suggestOnboardingSearchTerms", () => {
     });
   });
 
-  it("falls back to project and skill context when no headline or visible positions exist", async () => {
-    vi.mocked(getProfile).mockResolvedValue({
-      basics: {
-        summary: "Backend platform engineer focused on distributed systems.",
-      },
-      sections: {
-        experience: {
-          items: [
+  it("falls back to project and skill hints when no headline or positions exist", async () => {
+    vi.mocked(getActiveCvDocument).mockResolvedValue(
+      makeCv({
+        personalBrief: "Backend platform engineer focused on distributed systems.",
+        content: {
+          projects: [{ name: "Developer Platform" }],
+          skillGroups: [
             {
-              id: "exp-1",
-              company: "Hidden",
-              position: "Principal Engineer",
-              location: "Remote",
-              date: "2023",
-              summary: "Hidden role",
-              visible: false,
-            },
-          ],
-        },
-        projects: {
-          items: [
-            {
-              id: "proj-1",
-              name: "Developer Platform",
-              description: "Internal platform tooling",
-              date: "2024",
-              summary: "Platform project",
-              keywords: ["Platform Engineer", "Internal tooling"],
-              visible: true,
-            },
-          ],
-        },
-        skills: {
-          items: [
-            {
-              id: "skill-1",
               name: "Site Reliability Engineering",
-              description: "Reliability and production operations",
-              level: 5,
               keywords: ["Distributed Systems"],
-              visible: true,
             },
           ],
         },
-      },
-    } satisfies ResumeProfile);
+      }),
+    );
     callJsonMock.mockResolvedValue({
       success: false,
       error: "LLM provider unavailable",
@@ -180,20 +130,26 @@ describe("suggestOnboardingSearchTerms", () => {
       terms: [
         "Developer Platform",
         "Site Reliability Engineering",
-        "Platform Engineer",
-        "Internal tooling",
         "Distributed Systems",
-        "Backend platform engineer focused on distributed systems.",
       ],
       source: "fallback",
     });
   });
 
-  it("throws a conflict when no usable resume profile exists", async () => {
-    vi.mocked(getProfile).mockResolvedValue({
-      basics: {},
-      sections: {},
-    } satisfies ResumeProfile);
+  it("throws a conflict when no CV has been uploaded", async () => {
+    vi.mocked(getActiveCvDocument).mockResolvedValue(null);
+
+    await expect(suggestOnboardingSearchTerms()).rejects.toMatchObject({
+      status: 409,
+      code: "CONFLICT",
+      message: "Resume must be configured before suggesting search terms.",
+    });
+  });
+
+  it("throws a conflict when the CV has no usable hints or brief", async () => {
+    vi.mocked(getActiveCvDocument).mockResolvedValue(
+      makeCv({ personalBrief: "", content: {} }),
+    );
 
     await expect(suggestOnboardingSearchTerms()).rejects.toMatchObject({
       status: 409,
@@ -203,26 +159,13 @@ describe("suggestOnboardingSearchTerms", () => {
   });
 
   it("caps and deduplicates fallback search terms", () => {
-    const profile: ResumeProfile = {
-      basics: {
-        headline: "Senior Engineer",
-      },
-      sections: {
-        experience: {
-          items: Array.from({ length: 12 }, (_, index) => ({
-            id: `exp-${index}`,
-            company: "Example",
-            position: `Platform Engineer ${index}`,
-            location: "Remote",
-            date: "2024",
-            summary: "Built services",
-            visible: true,
-          })),
-        },
-      },
-    };
-
-    const result = buildFallbackSearchTerms(profile);
+    const result = buildFallbackSearchTerms({
+      brief: "",
+      headline: "Senior Engineer",
+      positions: Array.from({ length: 12 }, (_, i) => `Platform Engineer ${i}`),
+      projectNames: [],
+      skillNames: [],
+    });
 
     expect(result.source).toBe("fallback");
     expect(result.terms).toHaveLength(10);

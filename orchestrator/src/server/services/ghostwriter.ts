@@ -282,7 +282,7 @@ async function runAssistantReply(
         },
         {
           role: "system",
-          content: `Profile Context:\n${context.profileSnapshot || "No profile context available."}`,
+          content: `Candidate Brief:\n${context.briefSnapshot || "No personal brief available."}`,
         },
         ...history,
         {

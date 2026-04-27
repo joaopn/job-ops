@@ -20,6 +20,8 @@ type ScoringPreferences = {
   instructions: string;
 };
 
+const MAX_BRIEF_CHARS = 6000;
+
 /** JSON schema for suitability scoring response */
 const SCORING_SCHEMA: JsonSchemaDefinition = {
   name: "job_suitability_score",
@@ -81,26 +83,28 @@ function applySalaryPenalty(
   return { score: adjustedScore, reason: adjustedReason, penaltyApplied: true };
 }
 
+function truncateBrief(brief: string): string {
+  const trimmed = brief.trim();
+  if (trimmed.length <= MAX_BRIEF_CHARS) return trimmed;
+  return `${trimmed.slice(0, MAX_BRIEF_CHARS)}\n[brief truncated]`;
+}
+
 /**
- * Score a job's suitability based on profile and job description.
- * Includes retry logic for when AI returns garbage responses.
+ * Score a job's suitability based on the candidate's personal brief and the
+ * job description. Falls back to keyword-based mock scoring on LLM failure.
  */
 export async function scoreJobSuitability(
   job: Job,
-  profile: Record<string, unknown>,
+  brief: string,
 ): Promise<SuitabilityResult> {
   const [model, settings] = await Promise.all([
     resolveLlmModel("scoring"),
     getEffectiveSettings(),
   ]);
 
-  const prompt = await buildScoringPrompt(
-    job,
-    sanitizeProfileForPrompt(profile),
-    {
-      instructions: settings.scoringInstructions?.value ?? "",
-    },
-  );
+  const prompt = await buildScoringPrompt(job, truncateBrief(brief), {
+    instructions: settings.scoringInstructions?.value ?? "",
+  });
 
   const llm = new LlmService();
   const messages: Array<{ role: "system" | "user"; content: string }> = [];
@@ -261,11 +265,11 @@ export function parseJsonFromContent(
 
 async function buildScoringPrompt(
   job: Job,
-  profile: Record<string, unknown>,
+  briefText: string,
   preferences: ScoringPreferences,
 ): Promise<{ system: string; user: string }> {
   const loaded = await loadPrompt("job-score", {
-    profileJson: JSON.stringify(profile, null, 2),
+    briefText: briefText || "No personal brief provided.",
     jobTitle: job.title,
     employer: job.employer,
     location: job.location || "Not specified",
@@ -278,38 +282,6 @@ async function buildScoringPrompt(
       : "No additional custom scoring instructions.",
   });
   return { system: loaded.system, user: loaded.user };
-}
-
-function sanitizeProfileForPrompt(
-  profile: Record<string, unknown>,
-): Record<string, unknown> {
-  const p = profile as {
-    basics?: Record<string, unknown>;
-    sections?: {
-      skills?: unknown;
-      experience?: { items?: unknown[] };
-      projects?: { items?: unknown[] };
-      education?: { items?: unknown[] };
-    };
-  };
-
-  const experienceItems = Array.isArray(p.sections?.experience?.items)
-    ? p.sections?.experience?.items.slice(0, 5)
-    : [];
-  const projectItems = Array.isArray(p.sections?.projects?.items)
-    ? p.sections?.projects?.items.slice(0, 6)
-    : [];
-
-  return {
-    basics: {
-      label: p.basics?.label,
-      summary: p.basics?.summary,
-    },
-    skills: p.sections?.skills ?? null,
-    experience: experienceItems,
-    projects: projectItems,
-    education: p.sections?.education?.items ?? [],
-  };
 }
 
 async function mockScore(
@@ -370,13 +342,13 @@ async function mockScore(
  */
 export async function scoreAndRankJobs(
   jobs: Job[],
-  profile: Record<string, unknown>,
+  brief: string,
 ): Promise<
   Array<Job & { suitabilityScore: number; suitabilityReason: string }>
 > {
   const scoredJobs = await Promise.all(
     jobs.map(async (job) => {
-      const { score, reason } = await scoreJobSuitability(job, profile);
+      const { score, reason } = await scoreJobSuitability(job, brief);
       return {
         ...job,
         suitabilityScore: score,

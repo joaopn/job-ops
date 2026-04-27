@@ -2,7 +2,6 @@ import {
   CHAT_STYLE_MANUAL_LANGUAGE_LABELS,
   type ChatStyleLanguageMode,
   type ChatStyleManualLanguage,
-  type ResumeProfile,
 } from "@shared/types";
 
 type WritingLanguageConfig = {
@@ -78,36 +77,6 @@ const SPECIAL_CHARACTER_PATTERNS: Partial<
   spanish: /[áéíóúñ¿¡]/gi,
 };
 
-function collectProfileLanguageSample(profile: ResumeProfile): string {
-  const segments: string[] = [];
-
-  const add = (value: string | null | undefined): void => {
-    if (!value) return;
-    const trimmed = value.trim();
-    if (!trimmed) return;
-    segments.push(trimmed);
-  };
-
-  add(profile.basics?.headline);
-  add(profile.basics?.label);
-  add(profile.basics?.summary);
-  add(profile.sections?.summary?.content);
-
-  for (const item of profile.sections?.projects?.items ?? []) {
-    if (item.visible === false) continue;
-    add(item.description);
-    add(item.summary);
-  }
-
-  for (const item of profile.sections?.experience?.items ?? []) {
-    if (item.visible === false) continue;
-    add(item.position);
-    add(item.summary);
-  }
-
-  return segments.join("\n");
-}
-
 function scoreLanguageSample(
   sample: string,
   language: ChatStyleManualLanguage,
@@ -131,10 +100,9 @@ function scoreLanguageSample(
   return score;
 }
 
-export function detectProfileLanguage(
-  profile: ResumeProfile,
+export function detectLanguageFromSample(
+  sample: string,
 ): ChatStyleManualLanguage | null {
-  const sample = collectProfileLanguageSample(profile);
   if (!sample.trim()) {
     return null;
   }
@@ -164,7 +132,7 @@ export function detectProfileLanguage(
 
 export function resolveWritingOutputLanguage(args: {
   style: WritingLanguageConfig;
-  profile: ResumeProfile;
+  sample: string;
 }): ResolvedWritingLanguage {
   if (args.style.languageMode === "manual") {
     return {
@@ -173,7 +141,7 @@ export function resolveWritingOutputLanguage(args: {
     };
   }
 
-  const detectedLanguage = detectProfileLanguage(args.profile);
+  const detectedLanguage = detectLanguageFromSample(args.sample);
   if (detectedLanguage) {
     return {
       language: detectedLanguage,

@@ -32,7 +32,7 @@ vi.mock("../repositories/pipeline", () => ({
 }));
 
 vi.mock("./steps", () => ({
-  loadProfileStep: vi.fn(async () => ({})),
+  loadBriefStep: vi.fn(async () => ""),
   discoverJobsStep: vi.fn(
     () =>
       new Promise<{ discoveredJobs: []; sourceErrors: [] }>((resolve) => {

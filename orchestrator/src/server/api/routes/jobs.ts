@@ -16,7 +16,7 @@ import {
 } from "@server/pipeline/index";
 import * as jobsRepo from "@server/repositories/jobs";
 import * as settingsRepo from "@server/repositories/settings";
-import { getProfile } from "@server/services/profile";
+import { getActivePersonalBrief } from "@server/services/brief";
 import { scoreJobSuitability } from "@server/services/scorer";
 import { asyncPool } from "@server/utils/async-pool";
 import {
@@ -184,31 +184,19 @@ function mapErrorForResult(error: unknown): {
 }
 
 type JobActionExecutionOptions = {
-  getProfileForRescore?: () => Promise<Record<string, unknown>>;
+  getBriefForRescore?: () => Promise<string>;
   forceMoveToReady?: boolean;
   requestOrigin?: string | null;
 };
 
-function createSharedRescoreProfileLoader(): () => Promise<
-  Record<string, unknown>
-> {
-  let profilePromise: Promise<Record<string, unknown>> | null = null;
+function createSharedRescoreBriefLoader(): () => Promise<string> {
+  let briefPromise: Promise<string> | null = null;
 
   return async () => {
-    if (!profilePromise) {
-      profilePromise = (async () => {
-        const rawProfile = await getProfile();
-        if (
-          !rawProfile ||
-          typeof rawProfile !== "object" ||
-          Array.isArray(rawProfile)
-        ) {
-          throw badRequest("Invalid resume profile format");
-        }
-        return rawProfile as Record<string, unknown>;
-      })();
+    if (!briefPromise) {
+      briefPromise = getActivePersonalBrief();
     }
-    return profilePromise;
+    return briefPromise;
   };
 }
 
@@ -292,21 +280,11 @@ async function executeJobActionForJob(
       });
     }
 
-    const profile = options?.getProfileForRescore
-      ? await options.getProfileForRescore()
-      : await (async () => {
-          const rawProfile = await getProfile();
-          if (
-            !rawProfile ||
-            typeof rawProfile !== "object" ||
-            Array.isArray(rawProfile)
-          ) {
-            throw badRequest("Invalid resume profile format");
-          }
-          return rawProfile as Record<string, unknown>;
-        })();
+    const brief = options?.getBriefForRescore
+      ? await options.getBriefForRescore()
+      : await getActivePersonalBrief();
 
-    const { score, reason } = await scoreJobSuitability(job, profile);
+    const { score, reason } = await scoreJobSuitability(job, brief);
 
     const updated = await jobsRepo.updateJob(job.id, {
       suitabilityScore: score,
@@ -520,7 +498,7 @@ jobsRouter.post("/actions", async (req: Request, res: Response) => {
     const requestOrigin = resolveRequestOrigin(req);
     const executionOptions: JobActionExecutionOptions = {
       ...(parsed.action === "rescore"
-        ? { getProfileForRescore: createSharedRescoreProfileLoader() }
+        ? { getBriefForRescore: createSharedRescoreBriefLoader() }
         : {}),
       ...(parsed.action === "move_to_ready" &&
       parsed.options?.force !== undefined
@@ -597,7 +575,7 @@ jobsRouter.post("/actions/stream", async (req: Request, res: Response) => {
   const action = parsed.data.action;
   const executionOptions: JobActionExecutionOptions = {
     ...(action === "rescore"
-      ? { getProfileForRescore: createSharedRescoreProfileLoader() }
+      ? { getBriefForRescore: createSharedRescoreBriefLoader() }
       : {}),
     ...(action === "move_to_ready" && parsed.data.options?.force !== undefined
       ? { forceMoveToReady: parsed.data.options.force }
@@ -782,7 +760,7 @@ jobsRouter.post("/:id/skip", async (req: Request, res: Response) => {
 
 jobsRouter.post("/:id/rescore", async (req: Request, res: Response) => {
   const result = await executeJobActionForJob("rescore", req.params.id, {
-    getProfileForRescore: createSharedRescoreProfileLoader(),
+    getBriefForRescore: createSharedRescoreBriefLoader(),
   });
   if (!result.ok) return fail(res, mapJobActionFailure(result));
   ok(res, result.job);

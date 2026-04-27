@@ -3,8 +3,8 @@ description: |
   Scores how well a candidate fits a job on a 0-100 scale.
   Used by services/scorer.ts when ranking discovered jobs.
 variables:
-  - name: profileJson
-    description: Sanitized resume profile (JSON).
+  - name: briefText
+    description: Free-form personal brief describing the candidate's experience.
   - name: jobTitle
   - name: employer
   - name: location
@@ -20,8 +20,8 @@ system: ""
 user: |
   Rate how well this candidate fits the job on a 0-100 scale.
 
-  Profile:
-  {{profileJson}}
+  Candidate brief:
+  {{briefText}}
 
   Job:
   - Title: {{jobTitle}}
