@@ -16,13 +16,8 @@ import { getDataDir } from "../config/dataDir";
 import * as jobsRepo from "../repositories/jobs";
 import * as pipelineRepo from "../repositories/pipeline";
 import * as settingsRepo from "../repositories/settings";
+import { getActiveCvDocument } from "../services/cv-active";
 import { generatePdf } from "../services/pdf";
-import { getProfile } from "../services/profile";
-import { pickProjectIdsForJob } from "../services/projectSelection";
-import {
-  extractProjectsFromProfile,
-  resolveResumeProjectsSettings,
-} from "../services/resumeProjects";
 import { progressHelpers, resetProgress } from "./progress";
 import {
   buildPipelineRunSavedDetails,
@@ -312,15 +307,15 @@ export type ProcessJobOptions = {
 };
 
 /**
- * Step 1: Suggest projects for the job.
+ * Step 1: Tailor the CvContent to the job description.
  *
- * The tailoring loop (summary/headline/skills) was removed when the schema
- * pivoted to a structured CvContent stored on `jobs.tailored_content`. Phase 3
- * will reintroduce per-JD tailoring via the LaTeX-native CV layer.
+ * Phase 3 leaves the content untouched (no LLM adjustment yet) and just pins
+ * the active CV document onto the job. Phase 4 swaps the body for an LLM
+ * adjustment pass that produces a JD-tailored CvContent.
  */
 export async function summarizeJob(
   jobId: string,
-  options?: ProcessJobOptions,
+  _options?: ProcessJobOptions,
 ): Promise<{
   success: boolean;
   error?: string;
@@ -332,45 +327,17 @@ export async function summarizeJob(
       const job = await jobsRepo.getJobById(jobId);
       if (!job) return { success: false, error: "Job not found" };
 
-      const profile = await getProfile();
-
-      let selectedProjectIds = job.selectedProjectIds;
-      if (!selectedProjectIds || options?.force) {
-        jobLogger.info("Selecting projects");
-        try {
-          const { catalog, selectionItems } =
-            extractProjectsFromProfile(profile);
-          const overrideResumeProjectsRaw =
-            await settingsRepo.getSetting("resumeProjects");
-          const { resumeProjects } = resolveResumeProjectsSettings({
-            catalog,
-            overrideRaw: overrideResumeProjectsRaw,
-          });
-
-          const locked = resumeProjects.lockedProjectIds;
-          const desiredCount = Math.max(
-            0,
-            resumeProjects.maxProjects - locked.length,
-          );
-          const eligibleSet = new Set(resumeProjects.aiSelectableProjectIds);
-          const eligibleProjects = selectionItems.filter((p) =>
-            eligibleSet.has(p.id),
-          );
-
-          const picked = await pickProjectIdsForJob({
-            jobDescription: job.jobDescription || "",
-            eligibleProjects,
-            desiredCount,
-          });
-
-          selectedProjectIds = [...locked, ...picked].join(",");
-        } catch (error) {
-          jobLogger.warn("Failed to suggest projects", error);
-        }
+      const cv = await getActiveCvDocument();
+      if (!cv) {
+        return {
+          success: false,
+          error: "No CV uploaded yet. Upload a LaTeX CV before tailoring.",
+        };
       }
 
       await jobsRepo.updateJob(job.id, {
-        selectedProjectIds: selectedProjectIds ?? undefined,
+        cvDocumentId: cv.id,
+        tailoredContent: cv.content,
       });
 
       return { success: true };
@@ -383,11 +350,11 @@ export async function summarizeJob(
 }
 
 /**
- * Step 2: Generate PDF using current summary and project selection.
+ * Step 2: Render the pinned CV through Eta + Tectonic to a PDF.
  */
 export async function generateFinalPdf(
   jobId: string,
-  options?: ProcessJobOptions,
+  _options?: ProcessJobOptions,
 ): Promise<{
   success: boolean;
   error?: string;
@@ -399,22 +366,25 @@ export async function generateFinalPdf(
       const job = await jobsRepo.getJobById(jobId);
       if (!job) return { success: false, error: "Job not found" };
 
-      // Mark as processing
+      const cvDocumentId = job.cvDocumentId;
+      const tailoredContent = job.tailoredContent;
+      if (!cvDocumentId || !tailoredContent) {
+        return {
+          success: false,
+          error:
+            "Job is missing tailored CV content. Run summarizeJob first.",
+        };
+      }
+
       await jobsRepo.updateJob(job.id, { status: "processing" });
 
-      const pdfResult = await generatePdf(
-        job.id,
-        { summary: "", headline: "", skills: [] },
-        job.jobDescription || "",
-        undefined, // deprecated baseResumePath parameter
-        job.selectedProjectIds,
-        {
-          requestOrigin: options?.requestOrigin ?? null,
-        },
-      );
+      const pdfResult = await generatePdf({
+        jobId: job.id,
+        cvDocumentId,
+        content: tailoredContent,
+      });
 
       if (!pdfResult.success) {
-        // Revert status if failed
         await jobsRepo.updateJob(job.id, { status: "discovered" });
         return { success: false, error: pdfResult.error };
       }

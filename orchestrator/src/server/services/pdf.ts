@@ -1,9 +1,22 @@
-/**
- * Stub: PDF generation is being rewritten on top of a user-uploaded LaTeX
- * template + structured CvContent + Tectonic. Until that lands, every call
- * site here returns a graceful failure so the pipeline can still boot and
- * the rest of the app works.
- */
+import { promises as fs } from "node:fs";
+import { join } from "node:path";
+import { getDataDir } from "@server/config/dataDir";
+import * as cvRepo from "@server/repositories/cv-documents";
+import {
+  RenderTemplateError,
+  renderTemplate,
+} from "@server/services/cv/render-template";
+import {
+  RunTectonicError,
+  runTectonic,
+} from "@server/services/cv/run-tectonic";
+import type { CvContent } from "@shared/types";
+
+export interface GeneratePdfArgs {
+  jobId: string;
+  cvDocumentId: string;
+  content: CvContent;
+}
 
 export interface PdfResult {
   success: boolean;
@@ -11,26 +24,41 @@ export interface PdfResult {
   error?: string;
 }
 
-export interface TailoredPdfContent {
-  summary?: string | null;
-  headline?: string | null;
-  skills?: Array<{ name: string; keywords: string[] }> | null;
-}
+export async function generatePdf(args: GeneratePdfArgs): Promise<PdfResult> {
+  const document = await cvRepo.getCvDocumentById(args.cvDocumentId);
+  if (!document) {
+    return { success: false, error: "CV document not found." };
+  }
+  const archive = await cvRepo.getCvDocumentArchive(args.cvDocumentId);
+  if (!archive) {
+    return { success: false, error: "CV archive missing for document." };
+  }
 
-export interface GeneratePdfOptions {
-  requestOrigin?: string | null;
-}
+  let renderedTex: string;
+  try {
+    renderedTex = renderTemplate(document.template, args.content);
+  } catch (error) {
+    if (error instanceof RenderTemplateError) {
+      return { success: false, error: `Template render failed: ${error.message}` };
+    }
+    throw error;
+  }
 
-const PENDING_MESSAGE =
-  "PDF generation is offline while the LaTeX-based resume layer is being rebuilt.";
+  const pdfDir = join(getDataDir(), "pdfs");
+  await fs.mkdir(pdfDir, { recursive: true });
+  const pdfPath = join(pdfDir, `resume_${args.jobId}.pdf`);
 
-export async function generatePdf(
-  _jobId: string,
-  _content: TailoredPdfContent,
-  _jobDescription: string,
-  _baseResumePath?: string,
-  _selectedProjectIds?: string | null,
-  _options?: GeneratePdfOptions,
-): Promise<PdfResult> {
-  return { success: false, error: PENDING_MESSAGE };
+  try {
+    const result = await runTectonic({
+      renderedTex,
+      archive: new Uint8Array(archive),
+    });
+    await fs.writeFile(pdfPath, Buffer.from(result.pdf));
+    return { success: true, pdfPath };
+  } catch (error) {
+    if (error instanceof RunTectonicError) {
+      return { success: false, error: `LaTeX compile failed: ${error.message}` };
+    }
+    throw error;
+  }
 }
