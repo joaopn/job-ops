@@ -2,11 +2,7 @@ import * as settingsRepo from "@server/repositories/settings";
 import { getEffectiveSettings } from "@server/services/settings";
 import { getDefaultModelForProvider } from "@shared/settings-registry";
 
-export type LlmModelPurpose =
-  | "default"
-  | "scoring"
-  | "tailoring"
-  | "projectSelection";
+export type LlmModelPurpose = "default" | "scoring" | "tailoring";
 
 function readStringSettingValue(
   setting: { value?: unknown } | null | undefined,
@@ -45,12 +41,6 @@ export async function resolveLlmModel(
     return readStringSettingValue(settings?.modelTailoring) ?? defaultModel;
   }
 
-  if (purpose === "projectSelection") {
-    return (
-      readStringSettingValue(settings?.modelProjectSelection) ?? defaultModel
-    );
-  }
-
   return defaultModel;
 }
 
@@ -77,10 +67,7 @@ export async function resolveLlmRuntimeSettings(
       ? (readStringSettingValue(settings?.modelScorer) ?? defaultModel)
       : purpose === "tailoring"
         ? (readStringSettingValue(settings?.modelTailoring) ?? defaultModel)
-        : purpose === "projectSelection"
-          ? (readStringSettingValue(settings?.modelProjectSelection) ??
-            defaultModel)
-          : defaultModel;
+        : defaultModel;
 
   return {
     model,

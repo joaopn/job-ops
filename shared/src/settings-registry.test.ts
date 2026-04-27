@@ -180,23 +180,6 @@ describe("settingsRegistry helpers", () => {
     });
   });
 
-  describe("Resume projects settings", () => {
-    it("parses and serializes resume projects", () => {
-      const obj = {
-        maxProjects: 10,
-        lockedProjectIds: ["1", "2"],
-        aiSelectableProjectIds: ["3"],
-      };
-      const json = JSON.stringify(obj);
-
-      expect(settingsRegistry.resumeProjects.parse(json)).toEqual(obj);
-      expect(settingsRegistry.resumeProjects.parse("invalid")).toBeNull();
-
-      expect(settingsRegistry.resumeProjects.serialize(obj)).toBe(json);
-      expect(settingsRegistry.resumeProjects.serialize(null)).toBeNull();
-    });
-  });
-
   describe("writing-style language settings", () => {
     it("defaults to manual english", () => {
       const previousLanguageMode = process.env.CHAT_STYLE_LANGUAGE_MODE;

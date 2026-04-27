@@ -5,7 +5,6 @@ import {
 } from "@shared/settings-registry";
 import type { AppSettings } from "@shared/types";
 import { getEnvSettingsData } from "./envSettings";
-import { resolveResumeProjectsSettings } from "./resumeProjects";
 
 function resolveDefaultLlmBaseUrl(provider: string): string {
   const normalized = provider.trim().toLowerCase().replace(/-/g, "_");
@@ -113,21 +112,6 @@ export async function getEffectiveSettings(): Promise<AppSettings> {
           effectiveLlmProvider ?? settingsRegistry.llmProvider.default();
         defaultValue =
           process.env.LLM_BASE_URL || resolveDefaultLlmBaseUrl(provider);
-      }
-
-      if (key === "resumeProjects") {
-        const resolved = resolveResumeProjectsSettings({
-          catalog: [],
-          overrideRaw: rawOverride ?? null,
-        });
-        result.profileProjects = resolved.profileProjects;
-        // biome-ignore lint/suspicious/noExplicitAny: dynamic assignment for settings building
-        (result as any).resumeProjects = {
-          value: resolved.resumeProjects,
-          default: resolved.defaultResumeProjects,
-          override: resolved.overrideResumeProjects,
-        };
-        continue;
       }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

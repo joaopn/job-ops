@@ -64,13 +64,6 @@ export interface PipelineRunSourceLimitSnapshot {
 export interface PipelineRunModelSnapshot {
   scorer: string;
   tailoring: string;
-  projectSelection: string;
-}
-
-export interface PipelineRunResumeProjectsSnapshot {
-  maxProjects: number;
-  lockedProjectCount: number;
-  aiSelectableProjectCount: number;
 }
 
 export interface PipelineRunSkippedSource {
@@ -92,7 +85,6 @@ export interface PipelineRunEffectiveConfig {
   sourceLimits: PipelineRunSourceLimitSnapshot;
   autoSkipScoreThreshold: number | null;
   models: PipelineRunModelSnapshot;
-  resumeProjects: PipelineRunResumeProjectsSnapshot;
 }
 
 export interface PipelineRunResultSummary {

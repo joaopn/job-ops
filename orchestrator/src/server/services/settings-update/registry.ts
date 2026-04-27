@@ -1,7 +1,6 @@
 import type { SettingKey } from "@server/repositories/settings";
 import * as settingsRepo from "@server/repositories/settings";
 import { applyEnvValue, normalizeEnvInput } from "@server/services/envSettings";
-import { normalizeResumeProjectsSettings } from "@server/services/resumeProjects";
 import { settingsRegistry } from "@shared/settings-registry";
 import type { UpdateSettingsInput } from "@shared/settings-schema";
 
@@ -70,25 +69,6 @@ for (const [key, def] of Object.entries(settingsRegistry)) {
   const targetKey =
     def.kind === "alias" ? (def.target as SettingKey) : (key as SettingKey);
   const hasEnvKey = "envKey" in def && !!def.envKey;
-
-  if (key === "resumeProjects") {
-    settingsUpdateRegistry.resumeProjects = async ({ value }) => {
-      const resumeProjects = value ?? null;
-      if (resumeProjects === null) {
-        return result({ actions: [persistAction(targetKey, null)] });
-      }
-
-      const normalized = normalizeResumeProjectsSettings(
-        resumeProjects as Parameters<typeof normalizeResumeProjectsSettings>[0],
-        new Set(),
-      );
-
-      return result({
-        actions: [persistAction(targetKey, JSON.stringify(normalized))],
-      });
-    };
-    continue;
-  }
 
   settingsUpdateRegistry[key as keyof UpdateSettingsInput] = ({ value }) => {
     let serialized: string | null;

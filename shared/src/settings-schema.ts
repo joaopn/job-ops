@@ -1,7 +1,5 @@
 import { z } from "zod";
-import { resumeProjectsSchema, settingsRegistry } from "./settings-registry";
-
-export { resumeProjectsSchema };
+import { settingsRegistry } from "./settings-registry";
 
 type RegistryKeys = keyof typeof settingsRegistry;
 
@@ -44,4 +42,3 @@ export const updateSettingsSchema = z.object(shape).superRefine((data, ctx) => {
 });
 
 export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;
-export type ResumeProjectsSettingsInput = z.infer<typeof resumeProjectsSchema>;

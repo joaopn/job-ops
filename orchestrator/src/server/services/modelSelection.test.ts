@@ -19,7 +19,6 @@ function settings(overrides: Partial<Record<string, Setting>>): unknown {
     model: { value: "global-model", default: "global-model", override: null },
     modelScorer: { value: "global-model", override: null },
     modelTailoring: { value: "global-model", override: null },
-    modelProjectSelection: { value: "global-model", override: null },
     llmProvider: {
       value: "openrouter",
       default: "openrouter",
@@ -94,29 +93,6 @@ describe("resolveLlmModel", () => {
     );
 
     expect(await resolveLlmModel("tailoring")).toBe("global-model");
-  });
-
-  it("uses purpose-specific project-selection model when set", async () => {
-    vi.mocked(getEffectiveSettings).mockResolvedValue(
-      settings({
-        modelProjectSelection: {
-          value: "specific-project-model",
-          override: null,
-        },
-      }) as Awaited<ReturnType<typeof getEffectiveSettings>>,
-    );
-
-    expect(await resolveLlmModel("projectSelection")).toBe(
-      "specific-project-model",
-    );
-  });
-
-  it("falls back to the global model for project selection when override is unset", async () => {
-    vi.mocked(getEffectiveSettings).mockResolvedValue(
-      settings({}) as Awaited<ReturnType<typeof getEffectiveSettings>>,
-    );
-
-    expect(await resolveLlmModel("projectSelection")).toBe("global-model");
   });
 
   it("returns the global model for the default purpose", async () => {

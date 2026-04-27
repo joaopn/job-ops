@@ -8,7 +8,6 @@ import {
   CHAT_STYLE_MANUAL_LANGUAGE_VALUES,
   type ChatStyleLanguageMode,
   type ChatStyleManualLanguage,
-  type ResumeProjectsSettings,
 } from "./types/settings";
 
 function parseNonEmptyStringOrNull(raw: string | undefined): string | null {
@@ -145,12 +144,6 @@ const parseLocationMatchStrictnessOrNull = createEnumParser(
   LOCATION_MATCH_STRICTNESS_VALUES,
 );
 
-export const resumeProjectsSchema = z.object({
-  maxProjects: z.number().int().min(0).max(100),
-  lockedProjectIds: z.array(z.string().trim().min(1)).max(200),
-  aiSelectableProjectIds: z.array(z.string().trim().min(1)).max(200),
-});
-
 export const settingsRegistry = {
   // --- Typed Settings ---
   model: {
@@ -204,28 +197,6 @@ export const settingsRegistry = {
     parse: parseNonEmptyStringOrNull,
     serialize: (value: string | null | undefined): string | null =>
       value ?? null,
-  },
-  resumeProjects: {
-    kind: "typed" as const,
-    schema: resumeProjectsSchema,
-    default: (): ResumeProjectsSettings => ({
-      maxProjects: 20,
-      lockedProjectIds: [],
-      aiSelectableProjectIds: [],
-    }),
-    parse: (raw: string | undefined): ResumeProjectsSettings | null => {
-      if (!raw) return null;
-      try {
-        return JSON.parse(raw);
-      } catch {
-        return null;
-      }
-    },
-    serialize: (
-      value: ResumeProjectsSettings | null | undefined,
-    ): string | null => {
-      return value ? JSON.stringify(value) : null;
-    },
   },
   startupjobsMaxJobsPerTerm: {
     kind: "typed" as const,
@@ -480,10 +451,6 @@ export const settingsRegistry = {
     schema: z.string().trim().max(200),
   },
   modelTailoring: {
-    kind: "model" as const,
-    schema: z.string().trim().max(200),
-  },
-  modelProjectSelection: {
     kind: "model" as const,
     schema: z.string().trim().max(200),
   },

@@ -90,14 +90,6 @@ function buildEffectiveConfigSnapshot(args: {
     models: {
       scorer: args.settings.modelScorer.value,
       tailoring: args.settings.modelTailoring.value,
-      projectSelection: args.settings.modelProjectSelection.value,
-    },
-    resumeProjects: {
-      maxProjects: args.settings.resumeProjects.value.maxProjects,
-      lockedProjectCount:
-        args.settings.resumeProjects.value.lockedProjectIds.length,
-      aiSelectableProjectCount:
-        args.settings.resumeProjects.value.aiSelectableProjectIds.length,
     },
   };
 }

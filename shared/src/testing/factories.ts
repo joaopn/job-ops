@@ -3,7 +3,6 @@ import type {
   AppSettings,
   Job,
   PipelineRun,
-  ResumeProjectCatalogItem,
   StageEvent,
 } from "../types";
 
@@ -113,38 +112,16 @@ export const createPipelineRun = (
   ...overrides,
 });
 
-export const createResumeProjectCatalogItem = (
-  overrides: Partial<ResumeProjectCatalogItem> = {},
-): ResumeProjectCatalogItem => ({
-  id: "p1",
-  name: "Project 1",
-  description: "Description 1",
-  date: "2024",
-  isVisibleInBase: true,
-  ...overrides,
-});
-
 export const createAppSettings = (
   overrides: Partial<AppSettings> = {},
 ): AppSettings => ({
   model: { value: "gpt-4o", default: "gpt-4o", override: null },
   modelScorer: { value: "gpt-4o", override: null },
   modelTailoring: { value: "gpt-4o", override: null },
-  modelProjectSelection: { value: "gpt-4o", override: null },
   llmProvider: { value: "openai", default: "openai", override: null },
   llmBaseUrl: {
     value: "https://api.openai.com/v1",
     default: "https://api.openai.com/v1",
-    override: null,
-  },
-  profileProjects: [],
-  resumeProjects: {
-    value: { maxProjects: 3, lockedProjectIds: [], aiSelectableProjectIds: [] },
-    default: {
-      maxProjects: 3,
-      lockedProjectIds: [],
-      aiSelectableProjectIds: [],
-    },
     override: null,
   },
   onboardingBasicAuthDecision: null,
