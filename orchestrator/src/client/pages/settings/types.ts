@@ -11,7 +11,6 @@ export type EffectiveDefault<T> = {
 export type ModelValues = EffectiveDefault<string> & {
   scorer: string;
   tailoring: string;
-  projectSelection: string;
   llmProvider: string;
   llmBaseUrl: string;
   llmApiKeyHint: string | null;

@@ -7,7 +7,7 @@
  * Now includes inline tailoring mode for editing and regenerating PDFs without switching tabs.
  */
 
-import type { Job, ResumeProjectCatalogItem } from "@shared/types.js";
+import type { Job } from "@shared/types.js";
 import {
   CheckCircle2,
   ChevronUp,
@@ -16,7 +16,6 @@ import {
   Edit2,
   ExternalLink,
   FileText,
-  FolderKanban,
   Loader2,
   RefreshCcw,
   Undo2,
@@ -72,7 +71,6 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [isEditDetailsOpen, setIsEditDetailsOpen] = useState(false);
   const { isRescoring, rescoreJob } = useRescoreJob(onJobUpdated);
-  const [catalog, setCatalog] = useState<ResumeProjectCatalogItem[]>([]);
   const [recentlyApplied, setRecentlyApplied] = useState<{
     jobId: string;
     jobTitle: string;
@@ -86,10 +84,6 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
   const { personName } = useActiveCv();
   const openEditDetails = useCallback(() => {
     window.setTimeout(() => setIsEditDetailsOpen(true), 0);
-  }, []);
-
-  useEffect(() => {
-    api.getResumeProjectsCatalog().then(setCatalog).catch(console.error);
   }, []);
 
   useEffect(() => {
@@ -107,9 +101,6 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
 
   const jobLink = job ? job.applicationLink || job.jobUrl : "#";
 
-  const selectedProjectIds = useMemo(() => {
-    return job?.selectedProjectIds?.split(",").filter(Boolean) ?? [];
-  }, [job?.selectedProjectIds]);
   const googleDorks = useMemo(
     () => (job ? buildReadyPanelGoogleDorks(job) : []),
     [job],
@@ -348,29 +339,6 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
             </ReadySummaryAccordion>
           ) : null}
 
-          {/* Project selection - expandable accordion */}
-          <ReadySummaryAccordion
-            icon={FolderKanban}
-            summary={
-              <>
-                {selectedProjectIds.length}{" "}
-                {selectedProjectIds.length === 1 ? "project" : "projects"}{" "}
-                selected
-              </>
-            }
-            value="projects"
-          >
-            <ul className="list-disc text-xs text-muted-foreground space-y-1">
-              {selectedProjectIds.map((id) => {
-                const name = catalog.find((p) => p.id === id)?.name;
-                if (!name) return null;
-                return <li key={id}>{name}</li>;
-              })}
-              {selectedProjectIds.length === 0 && (
-                <li className="list-none italic">No projects selected</li>
-              )}
-            </ul>
-          </ReadySummaryAccordion>
         </div>
       </div>
 

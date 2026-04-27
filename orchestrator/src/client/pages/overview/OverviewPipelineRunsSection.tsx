@@ -360,14 +360,9 @@ function RunInsightsBody(props: {
                   hint={`startup.jobs ${savedDetails.effectiveConfig.sourceLimits.startupjobsMaxJobsPerTerm}`}
                 />
                 <MetricCard
-                  label="Resume projects"
-                  value={`${savedDetails.effectiveConfig.resumeProjects.maxProjects} max`}
-                  hint={`${savedDetails.effectiveConfig.resumeProjects.lockedProjectCount} locked, ${savedDetails.effectiveConfig.resumeProjects.aiSelectableProjectCount} AI-selectable`}
-                />
-                <MetricCard
                   label="Models"
                   value={savedDetails.effectiveConfig.models.scorer}
-                  hint={`Tailoring ${savedDetails.effectiveConfig.models.tailoring}; project selection ${savedDetails.effectiveConfig.models.projectSelection}`}
+                  hint={`Tailoring ${savedDetails.effectiveConfig.models.tailoring}`}
                 />
               </div>
             </div>

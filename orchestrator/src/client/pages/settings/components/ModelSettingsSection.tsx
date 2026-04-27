@@ -91,7 +91,6 @@ export const ModelSettingsSection: React.FC<ModelSettingsSectionProps> = ({
   const modelValue = watch("model") ?? "";
   const modelScorerValue = watch("modelScorer") ?? "";
   const modelTailoringValue = watch("modelTailoring") ?? "";
-  const modelProjectSelectionValue = watch("modelProjectSelection") ?? "";
   const providerDefaultModel = getDefaultModelForProvider(
     selectedProvider,
     selectedProvider === llmProvider ? defaultModel : undefined,
@@ -125,7 +124,6 @@ export const ModelSettingsSection: React.FC<ModelSettingsSectionProps> = ({
     setValue("model", "", { shouldDirty: true });
     setValue("modelScorer", "", { shouldDirty: true });
     setValue("modelTailoring", "", { shouldDirty: true });
-    setValue("modelProjectSelection", "", { shouldDirty: true });
   }, [dirtyFields.llmProvider, selectedProvider, setValue]);
 
   useEffect(() => {
@@ -191,11 +189,8 @@ export const ModelSettingsSection: React.FC<ModelSettingsSectionProps> = ({
     selectedDefaultModel || effective || providerDefaultModel || "-";
   const selectedScoringModel = modelScorerValue.trim();
   const selectedTailoringModel = modelTailoringValue.trim();
-  const selectedProjectSelectionModel = modelProjectSelectionValue.trim();
   const scoringModel = selectedScoringModel || previewDefaultModel;
   const tailoringModel = selectedTailoringModel || previewDefaultModel;
-  const projectSelectionModel =
-    selectedProjectSelectionModel || previewDefaultModel;
   const modelHelper = supportsModelSuggestions
     ? !hasAvailableApiKey
       ? `Add or save a ${providerConfig.label} API key to load available models.`
@@ -224,12 +219,6 @@ export const ModelSettingsSection: React.FC<ModelSettingsSectionProps> = ({
     emptyLabel: "Inherit default model",
     emptyValue: "",
     fallbackValue: modelTailoringValue.trim(),
-  });
-  const projectSelectionModelOptions = buildModelOptions({
-    models: availableModels,
-    emptyLabel: "Inherit default model",
-    emptyValue: "",
-    fallbackValue: modelProjectSelectionValue.trim(),
   });
 
   return (
@@ -440,46 +429,6 @@ export const ModelSettingsSection: React.FC<ModelSettingsSectionProps> = ({
                     Current: <span className="font-mono">{tailoringModel}</span>
                   </div>
                 </div>
-
-                <div className="space-y-2">
-                  <label
-                    htmlFor="modelProjectSelection"
-                    className="text-sm font-medium"
-                  >
-                    Project Selection Model
-                  </label>
-                  <Controller
-                    name="modelProjectSelection"
-                    control={control}
-                    render={({ field }) => (
-                      <SearchableDropdown
-                        inputId="modelProjectSelection"
-                        value={field.value ?? ""}
-                        options={projectSelectionModelOptions}
-                        onValueChange={field.onChange}
-                        placeholder={
-                          previewDefaultModel || "Inherit default model"
-                        }
-                        searchPlaceholder="Search models..."
-                        emptyText="No models found."
-                        ariaLabel="Project Selection Model"
-                        disabled={isLoading || isSaving || isLoadingModels}
-                        triggerClassName="h-9 w-full justify-between rounded-md border border-input bg-transparent px-3 text-sm font-normal shadow-sm"
-                        contentClassName="w-[var(--radix-popover-trigger-width)] border-border bg-popover p-0"
-                        listClassName="max-h-64"
-                      />
-                    )}
-                  />
-                  {errors.modelProjectSelection?.message && (
-                    <p className="text-xs text-destructive">
-                      {errors.modelProjectSelection.message as string}
-                    </p>
-                  )}
-                  <div className="text-xs text-muted-foreground">
-                    Current:{" "}
-                    <span className="font-mono">{projectSelectionModel}</span>
-                  </div>
-                </div>
               </>
             ) : (
               <>
@@ -499,17 +448,6 @@ export const ModelSettingsSection: React.FC<ModelSettingsSectionProps> = ({
                   disabled={isLoading || isSaving}
                   error={errors.modelTailoring?.message as string | undefined}
                   current={tailoringModel}
-                />
-
-                <SettingsInput
-                  label="Project Selection Model"
-                  inputProps={register("modelProjectSelection")}
-                  placeholder={previewDefaultModel || "inherit"}
-                  disabled={isLoading || isSaving}
-                  error={
-                    errors.modelProjectSelection?.message as string | undefined
-                  }
-                  current={projectSelectionModel}
                 />
               </>
             )}
@@ -541,13 +479,6 @@ export const ModelSettingsSection: React.FC<ModelSettingsSectionProps> = ({
             <div className="text-muted-foreground">Tailoring model</div>
             <div className="font-mono">
               {selectedTailoringModel ? tailoringModel : "inherits"}
-            </div>
-
-            <div className="text-muted-foreground">Project selection</div>
-            <div className="font-mono">
-              {selectedProjectSelectionModel
-                ? projectSelectionModel
-                : "inherits"}
             </div>
           </div>
         </div>

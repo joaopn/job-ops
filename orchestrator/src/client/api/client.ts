@@ -33,7 +33,6 @@ import type {
   PipelineRun,
   PipelineRunInsights,
   PipelineStatusResponse,
-  ResumeProjectCatalogItem,
   SearchTermsSuggestionResponse,
   UpdateJobNoteInput,
   ValidationResult,
@@ -1122,15 +1121,6 @@ export async function getSettings(): Promise<AppSettings> {
   });
 
   return settingsPromise;
-}
-
-// Project-selection catalog stays at [] until Phase 4 wires CV-derived
-// project picking. ReadyPanel still calls this — leaving it as a stub avoids
-// a UI churn that Phase 4 will redo anyway.
-export async function getResumeProjectsCatalog(): Promise<
-  ResumeProjectCatalogItem[]
-> {
-  return [];
 }
 
 export async function listCvDocuments(): Promise<CvDocumentSummary[]> {

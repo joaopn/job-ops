@@ -39,7 +39,6 @@ const DEFAULT_FORM_VALUES: UpdateSettingsInput = {
   model: "",
   modelScorer: "",
   modelTailoring: "",
-  modelProjectSelection: "",
   llmProvider: null,
   llmBaseUrl: "",
   llmApiKey: "",
@@ -153,7 +152,6 @@ const SECTION_FIELD_MAP: Record<
     "model",
     "modelScorer",
     "modelTailoring",
-    "modelProjectSelection",
   ],
   chat: [
     "chatStyleTone",
@@ -192,7 +190,6 @@ const NULL_SETTINGS_PAYLOAD: UpdateSettingsInput = {
   model: null,
   modelScorer: null,
   modelTailoring: null,
-  modelProjectSelection: null,
   llmProvider: null,
   llmBaseUrl: null,
   llmApiKey: null,
@@ -218,7 +215,6 @@ const mapSettingsToForm = (data: AppSettings): UpdateSettingsInput => ({
   model: data.model.override ?? "",
   modelScorer: data.modelScorer.override ?? "",
   modelTailoring: data.modelTailoring.override ?? "",
-  modelProjectSelection: data.modelProjectSelection.override ?? "",
   llmProvider: normalizeLlmProviderValue(
     data.llmProvider.override ?? data.llmProvider.value,
   ),
@@ -265,7 +261,6 @@ const getDerivedSettings = (settings: AppSettings | null) => {
       default: settings?.model?.default ?? "",
       scorer: settings?.modelScorer?.value ?? "",
       tailoring: settings?.modelTailoring?.value ?? "",
-      projectSelection: settings?.modelProjectSelection?.value ?? "",
       llmProvider: settings?.llmProvider?.value ?? "",
       llmBaseUrl: settings?.llmBaseUrl?.value ?? "",
       llmApiKeyHint: settings?.llmApiKeyHint ?? null,
@@ -469,11 +464,6 @@ export const SettingsPage: React.FC = () => {
             ? normalizeString(data.modelTailoring)
             : null
           : normalizeString(data.modelTailoring),
-        modelProjectSelection: dirtyFields.llmProvider
-          ? dirtyFields.modelProjectSelection
-            ? normalizeString(data.modelProjectSelection)
-            : null
-          : normalizeString(data.modelProjectSelection),
         showSponsorInfo: nullIfSame(
           data.showSponsorInfo,
           display.showSponsorInfo.default,

@@ -266,7 +266,6 @@ export function useOnboardingFlow() {
       model: null,
       modelScorer: null,
       modelTailoring: null,
-      modelProjectSelection: null,
     };
 
     if (showApiKey && apiKeyValue) {
