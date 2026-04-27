@@ -1171,6 +1171,31 @@ jobsRouter.post("/:id/generate-pdf", async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/jobs/:id/re-tailor - Re-run cv-adjust against the current
+ * personal_brief + JD + active CV content, re-render the PDF, and update
+ * tailoredContent + tailoringMatched/Skipped + pdfPath in place.
+ */
+jobsRouter.post("/:id/re-tailor", async (req: Request, res: Response) => {
+  try {
+    const result = await processJob(req.params.id, {
+      requestOrigin: resolveRequestOrigin(req),
+    });
+
+    if (!result.success) {
+      return fail(res, badRequest(result.error ?? "Re-tailor failed"));
+    }
+
+    const job = await jobsRepo.getJobById(req.params.id);
+    if (!job) {
+      return fail(res, notFound("Job not found"));
+    }
+    ok(res, job);
+  } catch (error) {
+    fail(res, toAppError(error));
+  }
+});
+
+/**
  * POST /api/jobs/:id/apply - Mark a job as applied
  */
 jobsRouter.post("/:id/apply", async (req: Request, res: Response) => {

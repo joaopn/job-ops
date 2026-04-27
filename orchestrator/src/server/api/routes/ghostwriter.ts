@@ -3,6 +3,7 @@ import { runWithRequestContext } from "@infra/request-context";
 import { setupSse, writeSseData } from "@infra/sse";
 import { badRequest, toAppError } from "@server/infra/errors";
 import * as ghostwriterService from "@server/services/ghostwriter";
+import * as jobEditsService from "@server/services/job-edits";
 import { type Request, Router } from "express";
 import { z } from "zod";
 
@@ -392,6 +393,44 @@ ghostwriterRouter.post(
       });
 
       ok(res, result);
+    });
+  }),
+);
+
+ghostwriterRouter.post(
+  "/messages/:messageId/accept-edit",
+  asyncRoute(async (req, res) => {
+    const jobId = getJobId(req);
+    const messageId = req.params.messageId;
+    if (!messageId) {
+      return fail(res, badRequest("Missing message id"));
+    }
+
+    await runWithRequestContext({ jobId }, async () => {
+      const result = await jobEditsService.acceptEditForJob({
+        jobId,
+        messageId,
+      });
+      ok(res, result);
+    });
+  }),
+);
+
+ghostwriterRouter.post(
+  "/messages/:messageId/reject-edit",
+  asyncRoute(async (req, res) => {
+    const jobId = getJobId(req);
+    const messageId = req.params.messageId;
+    if (!messageId) {
+      return fail(res, badRequest("Missing message id"));
+    }
+
+    await runWithRequestContext({ jobId }, async () => {
+      const message = await jobEditsService.rejectEditForJob({
+        jobId,
+        messageId,
+      });
+      ok(res, { message });
     });
   }),
 );
