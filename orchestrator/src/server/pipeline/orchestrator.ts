@@ -17,6 +17,7 @@ import * as jobsRepo from "../repositories/jobs";
 import * as pipelineRepo from "../repositories/pipeline";
 import * as settingsRepo from "../repositories/settings";
 import { getActiveCvDocument } from "../services/cv-active";
+import { llmAdjustContent } from "../services/cv/llm-adjust-content";
 import { generatePdf } from "../services/pdf";
 import { progressHelpers, resetProgress } from "./progress";
 import {
@@ -307,11 +308,9 @@ export type ProcessJobOptions = {
 };
 
 /**
- * Step 1: Tailor the CvContent to the job description.
- *
- * Phase 3 leaves the content untouched (no LLM adjustment yet) and just pins
- * the active CV document onto the job. Phase 4 swaps the body for an LLM
- * adjustment pass that produces a JD-tailored CvContent.
+ * Step 1: Tailor the active CV's content to this job's description via the
+ * cv-adjust LLM call. On LLM failure the job is pinned with the untouched
+ * content so the PDF still renders — better than no PDF.
  */
 export async function summarizeJob(
   jobId: string,
@@ -335,9 +334,30 @@ export async function summarizeJob(
         };
       }
 
+      const adjusted = await llmAdjustContent({
+        personalBrief: cv.personalBrief,
+        jobDescription: job.jobDescription ?? "",
+        currentContent: cv.content,
+      });
+
+      if (!adjusted.success) {
+        jobLogger.warn("Tailoring fell back to untouched CV content", {
+          reason: adjusted.error,
+        });
+        await jobsRepo.updateJob(job.id, {
+          cvDocumentId: cv.id,
+          tailoredContent: cv.content,
+          tailoringMatched: [],
+          tailoringSkipped: [],
+        });
+        return { success: true };
+      }
+
       await jobsRepo.updateJob(job.id, {
         cvDocumentId: cv.id,
-        tailoredContent: cv.content,
+        tailoredContent: adjusted.tailoredContent,
+        tailoringMatched: adjusted.matched,
+        tailoringSkipped: adjusted.skipped,
       });
 
       return { success: true };

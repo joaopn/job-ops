@@ -93,6 +93,8 @@ const migrations: string[] = [
     suitability_score REAL,
     suitability_reason TEXT,
     tailored_content TEXT,
+    tailoring_matched TEXT,
+    tailoring_skipped TEXT,
     cv_document_id TEXT REFERENCES cv_documents(id) ON DELETE SET NULL,
     selected_project_ids TEXT,
     pdf_path TEXT,
@@ -217,6 +219,8 @@ const migrations: string[] = [
 
   // Add new columns on top of legacy DBs (safe to skip when already present).
   `ALTER TABLE jobs ADD COLUMN tailored_content TEXT`,
+  `ALTER TABLE jobs ADD COLUMN tailoring_matched TEXT`,
+  `ALTER TABLE jobs ADD COLUMN tailoring_skipped TEXT`,
   `ALTER TABLE jobs ADD COLUMN cv_document_id TEXT REFERENCES cv_documents(id) ON DELETE SET NULL`,
   `ALTER TABLE job_chat_messages ADD COLUMN proposed_edit TEXT`,
   `ALTER TABLE job_chat_messages ADD COLUMN edit_status TEXT`,
@@ -277,6 +281,8 @@ const migrations: string[] = [
     suitability_score REAL,
     suitability_reason TEXT,
     tailored_content TEXT,
+    tailoring_matched TEXT,
+    tailoring_skipped TEXT,
     cv_document_id TEXT REFERENCES cv_documents(id) ON DELETE SET NULL,
     selected_project_ids TEXT,
     pdf_path TEXT,
@@ -298,8 +304,9 @@ const migrations: string[] = [
     application_link, disciplines, deadline, salary, location,
     location_evidence, degree_required, starting, job_description, status,
     outcome, closed_at, suitability_score, suitability_reason, tailored_content,
-    cv_document_id, selected_project_ids, pdf_path, discovered_at, processed_at,
-    ready_at, applied_at, created_at, updated_at
+    tailoring_matched, tailoring_skipped, cv_document_id, selected_project_ids,
+    pdf_path, discovered_at, processed_at, ready_at, applied_at, created_at,
+    updated_at
   )
   SELECT
     id, source, source_job_id, job_url_direct, date_posted, job_type,
@@ -312,8 +319,9 @@ const migrations: string[] = [
     application_link, disciplines, deadline, salary, location,
     location_evidence, degree_required, starting, job_description, status,
     outcome, closed_at, suitability_score, suitability_reason, tailored_content,
-    cv_document_id, selected_project_ids, pdf_path, discovered_at, processed_at,
-    ready_at, applied_at, created_at, updated_at
+    tailoring_matched, tailoring_skipped, cv_document_id, selected_project_ids,
+    pdf_path, discovered_at, processed_at, ready_at, applied_at, created_at,
+    updated_at
   FROM jobs`,
   `DROP TABLE jobs`,
   `ALTER TABLE jobs_new RENAME TO jobs`,

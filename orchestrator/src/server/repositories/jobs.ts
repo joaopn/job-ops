@@ -60,6 +60,11 @@ function parseLocationEvidence(
   }
 }
 
+function parseStringList(raw: unknown): string[] | null {
+  if (!Array.isArray(raw)) return null;
+  return raw.filter((entry): entry is string => typeof entry === "string");
+}
+
 function serializeLocationEvidence(
   evidence: JobLocationEvidence | null | undefined,
 ): string | null {
@@ -478,7 +483,13 @@ export async function updateJob(
   input: UpdateJobInput,
 ): Promise<Job | null> {
   const now = new Date().toISOString();
-  const { locationEvidence, tailoredContent, ...updateFields } = input;
+  const {
+    locationEvidence,
+    tailoredContent,
+    tailoringMatched,
+    tailoringSkipped,
+    ...updateFields
+  } = input;
   const readyAtUpdate =
     input.readyAt !== undefined
       ? { readyAt: input.readyAt }
@@ -500,6 +511,8 @@ export async function updateJob(
         ? { locationEvidence: serializeLocationEvidence(locationEvidence) }
         : {}),
       ...(tailoredContent !== undefined ? { tailoredContent } : {}),
+      ...(tailoringMatched !== undefined ? { tailoringMatched } : {}),
+      ...(tailoringSkipped !== undefined ? { tailoringSkipped } : {}),
       updatedAt: now,
       ...(input.status === "processing" ? { processedAt: now } : {}),
       ...readyAtUpdate,
@@ -627,6 +640,8 @@ function mapRowToJob(row: typeof jobs.$inferSelect): Job {
     suitabilityScore: row.suitabilityScore,
     suitabilityReason: row.suitabilityReason,
     tailoredContent: (row.tailoredContent ?? null) as CvContent | null,
+    tailoringMatched: parseStringList(row.tailoringMatched),
+    tailoringSkipped: parseStringList(row.tailoringSkipped),
     cvDocumentId: row.cvDocumentId ?? null,
     selectedProjectIds: row.selectedProjectIds ?? null,
     pdfPath: row.pdfPath,

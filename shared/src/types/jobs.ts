@@ -176,6 +176,8 @@ export interface Job {
   suitabilityScore: number | null; // 0-100 AI-generated score
   suitabilityReason: string | null; // AI explanation
   tailoredContent: CvContent | null; // LLM-adjusted CvContent for this job
+  tailoringMatched: string[] | null; // ATS keywords surfaced in tailoredContent
+  tailoringSkipped: string[] | null; // JD keywords dropped for lack of evidence
   cvDocumentId: string | null; // FK to cv_documents.id; pins which CV was tailored
   selectedProjectIds: string | null; // Comma-separated IDs of selected projects
   pdfPath: string | null; // Path to generated PDF
@@ -333,6 +335,8 @@ export interface UpdateJobInput {
   suitabilityScore?: number;
   suitabilityReason?: string;
   tailoredContent?: CvContent | null;
+  tailoringMatched?: string[] | null;
+  tailoringSkipped?: string[] | null;
   cvDocumentId?: string | null;
   selectedProjectIds?: string;
   pdfPath?: string;

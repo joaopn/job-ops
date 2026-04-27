@@ -101,6 +101,8 @@ export const jobs = sqliteTable("jobs", {
   suitabilityScore: real("suitability_score"),
   suitabilityReason: text("suitability_reason"),
   tailoredContent: text("tailored_content", { mode: "json" }),
+  tailoringMatched: text("tailoring_matched", { mode: "json" }),
+  tailoringSkipped: text("tailoring_skipped", { mode: "json" }),
   cvDocumentId: text("cv_document_id").references(() => cvDocuments.id, {
     onDelete: "set null",
   }),

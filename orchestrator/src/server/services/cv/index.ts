@@ -11,6 +11,11 @@ export {
   type ExtractCvResult,
 } from "./llm-extract-cv";
 export {
+  llmAdjustContent,
+  type AdjustContentArgs,
+  type AdjustContentResult,
+} from "./llm-adjust-content";
+export {
   latexEscape,
   renderTemplate,
   RenderTemplateError,
