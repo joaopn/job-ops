@@ -1,6 +1,6 @@
 import welcomeMessages from "@shared/messages/jobs-welcome.json";
 import { useMemo } from "react";
-import { useProfile } from "./useProfile";
+import { useActiveCv } from "./useActiveCv";
 
 function hashCode(str: string): number {
   let hash = 0;
@@ -13,7 +13,7 @@ function hashCode(str: string): number {
 }
 
 export function useWelcomeMessage(): string {
-  const { personName } = useProfile();
+  const { personName } = useActiveCv();
 
   return useMemo(() => {
     const firstName = personName?.split(" ")[0] || "User";

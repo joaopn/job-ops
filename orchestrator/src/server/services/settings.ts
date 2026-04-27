@@ -1,4 +1,3 @@
-import { logger } from "@infra/logger";
 import * as settingsRepo from "@server/repositories/settings";
 import {
   getDefaultModelForProvider,
@@ -6,7 +5,6 @@ import {
 } from "@shared/settings-registry";
 import type { AppSettings } from "@shared/types";
 import { getEnvSettingsData } from "./envSettings";
-import { getProfile } from "./profile";
 import { resolveResumeProjectsSettings } from "./resumeProjects";
 
 function resolveDefaultLlmBaseUrl(provider: string): string {
@@ -80,11 +78,6 @@ export async function getEffectiveSettings(): Promise<AppSettings> {
       effectiveLlmProvider,
       getDefaultModelForProvider(effectiveLlmProvider, process.env.MODEL),
     ) ?? getDefaultModelForProvider(effectiveLlmProvider);
-
-  await getProfile().catch((error) => {
-    logger.warn("Failed to load base resume profile for settings", { error });
-    return {};
-  });
 
   const envSettings = await getEnvSettingsData(overrides);
 

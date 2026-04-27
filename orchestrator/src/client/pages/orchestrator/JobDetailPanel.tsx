@@ -10,7 +10,7 @@ import {
   useMarkAsAppliedMutation,
   useSkipJobMutation,
 } from "@client/hooks/queries/useJobMutations";
-import { useProfile } from "@client/hooks/useProfile";
+import { useActiveCv } from "@client/hooks/useActiveCv";
 import { useSettings } from "@client/hooks/useSettings";
 import type { Job, JobListItem } from "@shared/types.js";
 import {
@@ -76,7 +76,7 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
   const markAsAppliedMutation = useMarkAsAppliedMutation();
   const skipJobMutation = useSkipJobMutation();
 
-  const { personName } = useProfile();
+  const { personName } = useActiveCv();
   const { renderMarkdownInJobDescriptions } = useSettings();
   const openEditDetails = useCallback(() => {
     window.setTimeout(() => setIsEditDetailsOpen(true), 0);

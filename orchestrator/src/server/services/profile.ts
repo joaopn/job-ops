@@ -1,21 +1,18 @@
+import { logger } from "@infra/logger";
+import { sanitizeUnknown } from "@infra/sanitize";
+import { getActiveCvContent } from "@server/services/cv-active";
+import { cvContentToResumeProfile } from "@server/services/cv-to-profile";
 import type { ResumeProfile } from "@shared/types";
 
-/**
- * Stub: the resume layer is being rewritten on top of a user-uploaded LaTeX
- * CV (extracted into structured CvContent). Until that lands, callers receive
- * a minimal empty profile so scorer/ghostwriter paths can boot without
- * pulling in RxResume.
- */
-export async function getProfile(
-  _forceRefresh = false,
-): Promise<ResumeProfile> {
-  return { basics: {}, sections: {} };
-}
-
-export async function getPersonName(): Promise<string> {
-  return "Resume";
-}
-
-export function clearProfileCache(): void {
-  // no-op until the new resume layer lands
+export async function getProfile(): Promise<ResumeProfile> {
+  try {
+    const content = await getActiveCvContent();
+    if (!content) return { basics: {}, sections: {} };
+    return cvContentToResumeProfile(content);
+  } catch (error) {
+    logger.warn("Failed to load active CV; returning empty profile", {
+      error: sanitizeUnknown(error),
+    });
+    return { basics: {}, sections: {} };
+  }
 }

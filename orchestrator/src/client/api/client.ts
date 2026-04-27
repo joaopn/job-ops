@@ -9,6 +9,9 @@ import type {
   AppSettings,
   BranchInfo,
   CreateJobNoteInput,
+  CvContent,
+  CvDocument,
+  CvDocumentSummary,
   Job,
   JobActionRequest,
   JobActionResponse,
@@ -30,8 +33,6 @@ import type {
   PipelineRun,
   PipelineRunInsights,
   PipelineStatusResponse,
-  ProfileStatusResponse,
-  ResumeProfile,
   ResumeProjectCatalogItem,
   SearchTermsSuggestionResponse,
   UpdateJobNoteInput,
@@ -409,8 +410,10 @@ async function fetchAndParse<T>(
   response: Response;
   parsed: ApiResponse<T> | LegacyApiResponse<T>;
 }> {
+  const isFormData =
+    typeof FormData !== "undefined" && options?.body instanceof FormData;
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
+    ...(isFormData ? {} : { "Content-Type": "application/json" }),
     ...normalizeHeaders(options?.headers),
   };
   if (authHeader) headers.Authorization = authHeader;
@@ -1121,30 +1124,52 @@ export async function getSettings(): Promise<AppSettings> {
   return settingsPromise;
 }
 
-export async function getProfileProjects(): Promise<
-  ResumeProjectCatalogItem[]
-> {
-  return fetchApi<ResumeProjectCatalogItem[]>("/profile/projects");
-}
-
+// Project-selection catalog stays at [] until Phase 4 wires CV-derived
+// project picking. ReadyPanel still calls this — leaving it as a stub avoids
+// a UI churn that Phase 4 will redo anyway.
 export async function getResumeProjectsCatalog(): Promise<
   ResumeProjectCatalogItem[]
 > {
-  return getProfileProjects();
+  return [];
 }
 
-export async function getProfile(): Promise<ResumeProfile> {
-  return fetchApi<ResumeProfile>("/profile");
+export async function listCvDocuments(): Promise<CvDocumentSummary[]> {
+  return fetchApi<CvDocumentSummary[]>("/cv");
 }
 
-export async function getProfileStatus(): Promise<ProfileStatusResponse> {
-  return fetchApi<ProfileStatusResponse>("/profile/status");
+export async function getCvDocument(id: string): Promise<CvDocument> {
+  return fetchApi<CvDocument>(`/cv/${id}`);
 }
 
-export async function refreshProfile(): Promise<ResumeProfile> {
-  return fetchApi<ResumeProfile>("/profile/refresh", {
-    method: "POST",
+export async function uploadCvDocument(args: {
+  file: Blob;
+  filename: string;
+  name?: string;
+}): Promise<CvDocument> {
+  const form = new FormData();
+  form.append("file", args.file, args.filename);
+  if (args.name) form.append("name", args.name);
+  return fetchApi<CvDocument>("/cv", { method: "POST", body: form });
+}
+
+export async function updateCvDocument(
+  id: string,
+  input: Partial<{ name: string; template: string; content: CvContent }>,
+): Promise<CvDocument> {
+  return fetchApi<CvDocument>(`/cv/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
   });
+}
+
+export async function deleteCvDocument(
+  id: string,
+): Promise<{ deleted: number }> {
+  return fetchApi<{ deleted: number }>(`/cv/${id}`, { method: "DELETE" });
+}
+
+export async function reExtractCvDocument(id: string): Promise<CvDocument> {
+  return fetchApi<CvDocument>(`/cv/${id}/re-extract`, { method: "POST" });
 }
 
 export async function validateLlm(input: {

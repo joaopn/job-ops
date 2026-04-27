@@ -48,8 +48,6 @@ export function createAuthGuard() {
     const normalizedMethod = method.toUpperCase();
     const normalizedPath = path.split("?")[0] || path;
 
-    if (normalizedPath === "/api/profile/status") return true;
-
     if (
       normalizedMethod === "POST" &&
       (normalizedPath === "/api/auth/login" ||

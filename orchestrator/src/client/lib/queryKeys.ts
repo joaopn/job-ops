@@ -5,9 +5,11 @@ export const queryKeys = {
     all: ["settings"] as const,
     current: () => [...queryKeys.settings.all, "current"] as const,
   },
-  profile: {
-    all: ["profile"] as const,
-    current: () => [...queryKeys.profile.all, "current"] as const,
+  cvDocuments: {
+    all: ["cv-documents"] as const,
+    list: () => [...queryKeys.cvDocuments.all, "list"] as const,
+    detail: (id: string) =>
+      [...queryKeys.cvDocuments.all, "detail", id] as const,
   },
   jobs: {
     all: ["jobs"] as const,

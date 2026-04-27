@@ -4,7 +4,7 @@ import {
   useSkipJobMutation,
 } from "@client/hooks/queries/useJobMutations";
 import { useHotkeys } from "@client/hooks/useHotkeys";
-import { useProfile } from "@client/hooks/useProfile";
+import { useActiveCv } from "@client/hooks/useActiveCv";
 import { SHORTCUTS } from "@client/lib/shortcut-map";
 import type { JobAction, JobListItem } from "@shared/types.js";
 import { useCallback, useRef } from "react";
@@ -59,7 +59,7 @@ export function useKeyboardShortcuts(args: UseKeyboardShortcutsArgs): void {
   const shortcutActionInFlight = useRef(false);
   const markAsAppliedMutation = useMarkAsAppliedMutation();
   const skipJobMutation = useSkipJobMutation();
-  const { personName } = useProfile();
+  const { personName } = useActiveCv();
 
   const navigateJobList = useCallback(
     (direction: 1 | -1) => {

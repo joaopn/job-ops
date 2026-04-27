@@ -44,7 +44,7 @@ import {
   useMarkAsAppliedMutation,
   useSkipJobMutation,
 } from "../hooks/queries/useJobMutations";
-import { useProfile } from "../hooks/useProfile";
+import { useActiveCv } from "../hooks/useActiveCv";
 import { useRescoreJob } from "../hooks/useRescoreJob";
 import { FitAssessment } from ".";
 import { GhostwriterDrawer } from "./ghostwriter/GhostwriterDrawer";
@@ -83,7 +83,7 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
   const markAsAppliedMutation = useMarkAsAppliedMutation();
   const skipJobMutation = useSkipJobMutation();
 
-  const { personName } = useProfile();
+  const { personName } = useActiveCv();
   const openEditDetails = useCallback(() => {
     window.setTimeout(() => setIsEditDetailsOpen(true), 0);
   }, []);
