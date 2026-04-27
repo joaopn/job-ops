@@ -108,6 +108,8 @@ const baseUserMessage: JobChatMessage = {
   replacesMessageId: null,
   parentMessageId: null,
   activeChildId: "assistant-1",
+  proposedEdit: null,
+  editStatus: null,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };
@@ -125,6 +127,8 @@ const baseAssistantMessage: JobChatMessage = {
   replacesMessageId: null,
   parentMessageId: "user-1",
   activeChildId: null,
+  proposedEdit: null,
+  editStatus: null,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };

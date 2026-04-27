@@ -37,13 +37,6 @@ import { z } from "zod";
 export const jobsRouter = Router();
 const JOB_ACTION_CONCURRENCY = 4;
 
-const tailoredSkillsPayloadSchema = z.array(
-  z.object({
-    name: z.string(),
-    keywords: z.array(z.string()),
-  }),
-);
-
 const jobNoteSchema = z.object({
   title: z.string().trim().min(1).max(120),
   content: z.string().trim().min(1).max(20000),
@@ -76,36 +69,6 @@ const updateJobSchema = z.object({
   jobDescription: z.string().trim().max(40000).nullable().optional(),
   suitabilityScore: z.number().min(0).max(100).optional(),
   suitabilityReason: z.string().optional(),
-  tailoredSummary: z.string().optional(),
-  tailoredHeadline: z.string().optional(),
-  tailoredSkills: z
-    .string()
-    .optional()
-    .superRefine((value, ctx) => {
-      if (value === undefined || value.trim().length === 0) return;
-
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(value);
-      } catch {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message:
-            "tailoredSkills must be a JSON array of { name, keywords } objects",
-        });
-        return;
-      }
-
-      const parseResult = tailoredSkillsPayloadSchema.safeParse(parsed);
-
-      if (!parseResult.success) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message:
-            "tailoredSkills must be a JSON array of { name, keywords } objects",
-        });
-      }
-    }),
   selectedProjectIds: z.string().optional(),
   pdfPath: z.string().optional(),
 });

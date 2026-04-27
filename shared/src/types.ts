@@ -1,14 +1,10 @@
 /**
  * Shared types for the job-ops orchestrator.
  *
- * Types are organized by domain in the `./types/` subdirectory.
- * This file re-exports everything for backward compatibility.
+ * Types are organized by domain in the `./types/` subdirectory. With
+ * `moduleResolution: "bundler"` tsc prefers this file over the directory
+ * barrel, so it must mirror `./types/index.ts` exactly — point at it
+ * directly to avoid drift.
  */
 
-export * from "./types/api";
-export * from "./types/chat";
-export * from "./types/extractors";
-export * from "./types/jobs";
-export * from "./types/location";
-export * from "./types/pipeline";
-export * from "./types/settings";
+export * from "./types/index";

@@ -31,21 +31,6 @@ describe("buildReadyPanelGoogleDorks", () => {
     );
   });
 
-  it("falls back to tailored skills when raw skills are absent", () => {
-    const links = buildReadyPanelGoogleDorks(
-      createJob({
-        employer: "Acme",
-        title: "Backend Engineer",
-        skills: null,
-        tailoredSkills: JSON.stringify(["Node.js", "TypeScript"]),
-      }),
-    );
-
-    expect(links[0]?.query).toBe(
-      'site:linkedin.com/in "Acme" "Node.js" "TypeScript"',
-    );
-  });
-
   it("deduplicates repeated keywords and excludes employer matches", () => {
     const links = buildReadyPanelGoogleDorks(
       createJob({
@@ -65,7 +50,6 @@ describe("buildReadyPanelGoogleDorks", () => {
       createJob({
         employer: "",
         skills: null,
-        tailoredSkills: null,
       }),
     );
 

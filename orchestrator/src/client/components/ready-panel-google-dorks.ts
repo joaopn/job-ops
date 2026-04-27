@@ -13,27 +13,9 @@ function splitRawSkills(skills: string): string[] {
     .filter(Boolean);
 }
 
-function parseTailoredSkills(raw: string): string[] {
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-
-    return parsed
-      .filter((value): value is string => typeof value === "string")
-      .map((value) => value.trim())
-      .filter(Boolean);
-  } catch {
-    return [];
-  }
-}
-
 function getKeywordTerms(job: Job): string[] {
   const employer = job.employer.trim().toLowerCase();
-  const rawTerms = job.skills
-    ? splitRawSkills(job.skills)
-    : job.tailoredSkills
-      ? parseTailoredSkills(job.tailoredSkills)
-      : [];
+  const rawTerms = job.skills ? splitRawSkills(job.skills) : [];
 
   const seen = new Set<string>();
   const terms: string[] = [];

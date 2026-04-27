@@ -46,7 +46,7 @@ import {
 } from "../hooks/queries/useJobMutations";
 import { useProfile } from "../hooks/useProfile";
 import { useRescoreJob } from "../hooks/useRescoreJob";
-import { FitAssessment, TailoredSummary } from ".";
+import { FitAssessment } from ".";
 import { GhostwriterDrawer } from "./ghostwriter/GhostwriterDrawer";
 import { JobDetailsEditDrawer } from "./JobDetailsEditDrawer";
 import { KbdHint } from "./KbdHint";
@@ -315,7 +315,6 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
       <div className="flex-1 py-4 space-y-4">
         <div className="space-y-3">
           <FitAssessment job={job} />
-          <TailoredSummary job={job} />
 
           {googleDorks.length > 0 ? (
             <ReadySummaryAccordion

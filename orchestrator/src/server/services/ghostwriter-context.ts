@@ -57,9 +57,6 @@ function buildJobSnapshot(job: Job): string {
       applicationLink: job.applicationLink,
       suitabilityScore: job.suitabilityScore,
       suitabilityReason: truncate(job.suitabilityReason, 600),
-      tailoredSummary: truncate(job.tailoredSummary, 1200),
-      tailoredHeadline: truncate(job.tailoredHeadline, 300),
-      tailoredSkills: truncate(job.tailoredSkills, 1200),
       jobDescription: truncate(job.jobDescription, MAX_JOB_DESCRIPTION),
     },
   };

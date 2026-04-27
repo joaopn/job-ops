@@ -23,7 +23,6 @@ import {
   extractProjectsFromProfile,
   resolveResumeProjectsSettings,
 } from "../services/resumeProjects";
-import { generateTailoring } from "../services/summary";
 import { progressHelpers, resetProgress } from "./progress";
 import {
   buildPipelineRunSavedDetails,
@@ -313,7 +312,11 @@ export type ProcessJobOptions = {
 };
 
 /**
- * Step 1: Generate AI summary and suggest projects.
+ * Step 1: Suggest projects for the job.
+ *
+ * The tailoring loop (summary/headline/skills) was removed when the schema
+ * pivoted to a structured CvContent stored on `jobs.tailored_content`. Phase 3
+ * will reintroduce per-JD tailoring via the LaTeX-native CV layer.
  */
 export async function summarizeJob(
   jobId: string,
@@ -331,30 +334,6 @@ export async function summarizeJob(
 
       const profile = await getProfile();
 
-      // 1. Generate Summary & Tailoring
-      let tailoredSummary = job.tailoredSummary;
-      let tailoredHeadline = job.tailoredHeadline;
-      let tailoredSkills = job.tailoredSkills;
-
-      if (!tailoredSummary || !tailoredHeadline || options?.force) {
-        jobLogger.info("Generating tailoring content");
-        const tailoringResult = await generateTailoring(
-          job.jobDescription || "",
-          profile,
-        );
-        if (tailoringResult.success && tailoringResult.data) {
-          tailoredSummary = tailoringResult.data.summary;
-          tailoredHeadline = tailoringResult.data.headline;
-          tailoredSkills = JSON.stringify(tailoringResult.data.skills);
-        } else if (options?.force || !tailoredSummary || !tailoredHeadline) {
-          return {
-            success: false,
-            error: `Tailoring failed: ${tailoringResult.error || "unknown error"}`,
-          };
-        }
-      }
-
-      // 2. Suggest Projects
       let selectedProjectIds = job.selectedProjectIds;
       if (!selectedProjectIds || options?.force) {
         jobLogger.info("Selecting projects");
@@ -391,9 +370,6 @@ export async function summarizeJob(
       }
 
       await jobsRepo.updateJob(job.id, {
-        tailoredSummary: tailoredSummary ?? undefined,
-        tailoredHeadline: tailoredHeadline ?? undefined,
-        tailoredSkills: tailoredSkills ?? undefined,
         selectedProjectIds: selectedProjectIds ?? undefined,
       });
 
@@ -428,11 +404,7 @@ export async function generateFinalPdf(
 
       const pdfResult = await generatePdf(
         job.id,
-        {
-          summary: job.tailoredSummary || "",
-          headline: job.tailoredHeadline || "",
-          skills: job.tailoredSkills ? JSON.parse(job.tailoredSkills) : [],
-        },
+        { summary: "", headline: "", skills: [] },
         job.jobDescription || "",
         undefined, // deprecated baseResumePath parameter
         job.selectedProjectIds,
