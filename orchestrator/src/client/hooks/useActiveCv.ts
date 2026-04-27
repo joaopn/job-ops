@@ -28,7 +28,7 @@ export function useActiveCv() {
   });
 
   const cv = detailQuery.data ?? null;
-  const personName = cv?.content.basics.name?.trim() || "Resume";
+  const personName = readPersonName(cv) || "Resume";
   const isLoading = summariesQuery.isLoading || detailQuery.isLoading;
 
   return {
@@ -37,4 +37,12 @@ export function useActiveCv() {
     isLoading,
     error: summariesQuery.error ?? detailQuery.error ?? null,
   };
+}
+
+function readPersonName(cv: CvDocument | null): string {
+  if (!cv) return "";
+  const basics = cv.content.basics;
+  if (!basics || typeof basics !== "object" || Array.isArray(basics)) return "";
+  const name = (basics as Record<string, unknown>).name;
+  return typeof name === "string" ? name.trim() : "";
 }

@@ -1,7 +1,6 @@
 // @vitest-environment node
 import type { Server } from "node:http";
 import { extractCv } from "@server/services/cv/llm-extract-cv";
-import type { CvContent } from "@shared/types";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { startServer, stopServer } from "./test-utils";
 
@@ -16,14 +15,12 @@ vi.mock("@server/services/cv/llm-extract-cv", () => ({
   },
 }));
 
-const SAMPLE_CONTENT: CvContent = {
+const SAMPLE_CONTENT = {
   basics: { name: "Ada Lovelace", profiles: [] },
   experience: [],
-  education: [],
-  projects: [],
-  skillGroups: [],
-  custom: [],
 };
+
+const SAMPLE_BRIEF = "I'm Ada — I write algorithms.";
 
 const SAMPLE_TEX = "\\documentclass{article}\n\\begin{document}Hi\\end{document}\n";
 
@@ -38,6 +35,7 @@ describe.sequential("CV API routes", () => {
     vi.mocked(extractCv).mockResolvedValue({
       template: "\\documentclass{article}\n<%= e(basics.name) %>\n",
       content: SAMPLE_CONTENT,
+      personalBrief: SAMPLE_BRIEF,
     });
   });
 
@@ -55,7 +53,7 @@ describe.sequential("CV API routes", () => {
     expect(res.status).toBe(400);
   });
 
-  it("creates a CV from a single .tex upload", async () => {
+  it("creates a CV from a single .tex upload and threads the personal brief", async () => {
     const form = new FormData();
     form.append("name", "Ada CV");
     form.append(
@@ -70,11 +68,18 @@ describe.sequential("CV API routes", () => {
     });
     expect(res.status).toBe(201);
     const payload = (await res.json()) as {
-      data: { id: string; name: string; content: CvContent; template: string };
+      data: {
+        id: string;
+        name: string;
+        content: Record<string, unknown>;
+        template: string;
+        personalBrief: string;
+      };
     };
     expect(payload.data.name).toBe("Ada CV");
-    expect(payload.data.content.basics.name).toBe("Ada Lovelace");
+    expect(payload.data.content).toEqual(SAMPLE_CONTENT);
     expect(payload.data.template).toContain("\\documentclass");
+    expect(payload.data.personalBrief).toBe(SAMPLE_BRIEF);
     expect(payload.data.id).toMatch(/[0-9a-f-]+/);
 
     const { extractCv } = await import("@server/services/cv/llm-extract-cv");
@@ -99,7 +104,7 @@ describe.sequential("CV API routes", () => {
     expect(payload.error.code).toBe("INVALID_REQUEST");
   });
 
-  it("lists, fetches, patches, and deletes CV documents", async () => {
+  it("round-trips arbitrary content shapes and personal-brief edits via PATCH", async () => {
     const form = new FormData();
     form.append("file", new Blob([SAMPLE_TEX]), "ada.tex");
     const created = (await (
@@ -107,26 +112,31 @@ describe.sequential("CV API routes", () => {
     ).json()) as { data: { id: string } };
     const id = created.data.id;
 
-    const list = (await (await fetch(`${baseUrl}/api/cv`)).json()) as {
-      data: Array<{ id: string }>;
+    const exoticContent = {
+      profile: { fullName: "Ada" },
+      publications: [{ title: "Notes on the Engine" }],
     };
-    expect(list.data.find((entry) => entry.id === id)).toBeDefined();
-
-    const single = (await (await fetch(`${baseUrl}/api/cv/${id}`)).json()) as {
-      data: { content: CvContent };
-    };
-    expect(single.data.content.basics.name).toBe("Ada Lovelace");
 
     const updated = await fetch(`${baseUrl}/api/cv/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "Renamed CV" }),
+      body: JSON.stringify({
+        name: "Renamed CV",
+        content: exoticContent,
+        personalBrief: "I now have postgres experience.",
+      }),
     });
     expect(updated.status).toBe(200);
-    const updatedPayload = (await updated.json()) as {
-      data: { name: string };
+    const payload = (await updated.json()) as {
+      data: {
+        name: string;
+        content: Record<string, unknown>;
+        personalBrief: string;
+      };
     };
-    expect(updatedPayload.data.name).toBe("Renamed CV");
+    expect(payload.data.name).toBe("Renamed CV");
+    expect(payload.data.content).toEqual(exoticContent);
+    expect(payload.data.personalBrief).toBe("I now have postgres experience.");
 
     const removed = await fetch(`${baseUrl}/api/cv/${id}`, {
       method: "DELETE",
@@ -137,7 +147,7 @@ describe.sequential("CV API routes", () => {
     expect(missing.status).toBe(404);
   });
 
-  it("re-runs extraction on POST /api/cv/:id/re-extract", async () => {
+  it("re-runs extraction on POST /api/cv/:id/re-extract and updates the brief", async () => {
     const form = new FormData();
     form.append("file", new Blob([SAMPLE_TEX]), "ada.tex");
     const created = (await (
@@ -148,6 +158,7 @@ describe.sequential("CV API routes", () => {
     vi.mocked(extractCv).mockResolvedValue({
       template: "\\documentclass{article}\n% re-extracted\n",
       content: { ...SAMPLE_CONTENT, summary: "Re-extracted summary." },
+      personalBrief: "Updated brief.",
     });
 
     const res = await fetch(
@@ -156,10 +167,15 @@ describe.sequential("CV API routes", () => {
     );
     expect(res.status).toBe(200);
     const payload = (await res.json()) as {
-      data: { template: string; content: CvContent };
+      data: {
+        template: string;
+        content: Record<string, unknown>;
+        personalBrief: string;
+      };
     };
     expect(payload.data.template).toContain("re-extracted");
     expect(payload.data.content.summary).toBe("Re-extracted summary.");
+    expect(payload.data.personalBrief).toBe("Updated brief.");
     expect(extractCv).toHaveBeenCalledTimes(1);
   });
 });

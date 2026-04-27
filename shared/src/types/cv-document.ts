@@ -6,6 +6,7 @@ export interface CvDocument {
   flattenedTex: string;
   template: string;
   content: CvContent;
+  personalBrief: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -23,6 +24,7 @@ export interface CreateCvDocumentInput {
   flattenedTex: string;
   template: string;
   content: CvContent;
+  personalBrief: string;
 }
 
 export interface UpdateCvDocumentInput {
@@ -31,4 +33,5 @@ export interface UpdateCvDocumentInput {
   flattenedTex?: string;
   template?: string;
   content?: CvContent;
+  personalBrief?: string;
 }

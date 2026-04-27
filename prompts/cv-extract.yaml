@@ -1,9 +1,8 @@
 name: cv-extract
 description: |
-  Extracts structured CvContent JSON plus a generalised Eta template from a
-  flattened LaTeX CV. The template re-renders the original CV faithfully when
-  the extracted content is plugged back in, and stays correct when the content
-  is later swapped for a tailored version.
+  Extracts a free-form JSON content object plus a generalised Eta template
+  from a flattened LaTeX CV, and drafts a first-person personal brief that
+  later powers per-job tailoring.
 variables:
   - name: flattenedTex
     description: The user's CV LaTeX, post-`\input{}` flattening, as a single string.
@@ -17,26 +16,34 @@ model:
   temperature: 0.1
   maxOutputTokens: 16000
 system: |
-  You convert a user's existing LaTeX CV into two artifacts:
+  You convert a user's existing LaTeX CV into three artifacts:
 
   1. `template` — an Eta-flavoured LaTeX template. Custom delimiters: `<%= %>`
      for value substitutions, `<% %>` for control flow. The template must
      re-render the original CV faithfully when filled with the extracted
      content, and gracefully handle empty arrays / missing optional fields
      once the content is replaced with a tailored variant.
-  2. `content` — a CvContent JSON object describing what is in the CV.
+  2. `content` — a JSON object that captures the source CV's data. Use the
+     section names and structure that match the source CV. Do not invent
+     sections, do not force keys the CV doesn't have, and do not impose any
+     fixed schema. Mirror what is on the page.
+  3. `personalBrief` — a 100–400 word first-person summary of the candidate,
+     drawn from the LaTeX prose. Cover background, focus areas, notable
+     work, and tools they've used. This is a starting point: the user will
+     paste in extra context (long-running chats, side projects, things they
+     mention in passing) on top of it. Keep it factual and grounded in the
+     CV; do not embellish or invent.
 
   Hard rules for the template:
 
   - Preserve every `\documentclass{...}`, `\usepackage{...}`, custom command
     definition, font setup, and `\includegraphics{...}` reference exactly as
     they appear in the source. Do not rename, add, or drop packages.
-  - Replace concrete data with Eta substitutions (`<%= basics.name %>`,
-    `<%= experience[0].position %>`, etc.). Plain text values must flow
-    through the LaTeX-escape filter `e` — write `<%= e(basics.name) %>`,
-    `<%= e(bullet) %>`, and so on. Skip `e()` only inside `\href{...}` URLs
-    where you specifically need raw characters; use `<%= basics.website %>`
-    in that one case.
+  - Replace concrete data with Eta substitutions whose paths match the keys
+    you used in `content` (e.g. `<%= e(basics.name) %>`, `<%= e(bullet) %>`).
+    Plain text values must flow through the LaTeX-escape filter `e`. Skip
+    `e()` only inside `\href{...}` URLs where you specifically need raw
+    characters.
   - Replace each repeated section block (experience entries, education
     entries, projects, skill groups, custom-section items, profiles, bullet
     lists) with an Eta `<% for (...) { %> ... <% } %>` loop over the matching
@@ -51,16 +58,22 @@ system: |
 
   Hard rules for the content:
 
+  - Use the section names and key names that match the source CV. If the CV
+    has "Publications" and "Consulting", emit `publications` and `consulting`
+    keys. If it has neither, do not emit them.
   - Strings carry plain text only — strip every LaTeX command, brace, and
     escape (`\textbf{X}` → `X`, `\&` → `&`, `\%` → `%`, `~` → ` `, etc.).
   - Preserve the order and grouping used in the source CV.
-  - Anything that does not fit `basics` / `summary` / `experience` /
-    `education` / `projects` / `skillGroups` (publications, awards,
-    certifications, languages, talks, etc.) goes into `custom` with the
-    section heading as `title`.
-  - Empty array fields are required — emit `[]` rather than omitting them.
+  - The whole `content` value must be a JSON object (not an array, not a
+    string). Inside the object, arrays and nested objects are encouraged
+    wherever the source CV has repeating items.
 
-  {{> cv-content-schema}}
+  Hard rules for the personal brief:
+
+  - Write in the first person ("I'm a …", "I've worked on …").
+  - 100–400 words. No bullet lists, no headings; flowing prose.
+  - Stay grounded in what the CV actually says. Do not fabricate experience,
+    titles, or numbers. If the CV is sparse, the brief is short.
 user: |
   Asset references discovered in the source (must appear verbatim in the
   template):
@@ -73,5 +86,6 @@ user: |
   {{flattenedTex}}
   ----- END CV -----
 
-  Return a JSON object with exactly two keys: `template` (string) and
-  `content` (CvContent object).
+  Return a JSON object with exactly three keys: `template` (string),
+  `content` (object whose shape mirrors the source CV), and `personalBrief`
+  (string).

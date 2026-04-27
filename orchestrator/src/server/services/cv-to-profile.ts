@@ -1,68 +1,111 @@
 import type { CvContent, ResumeProfile } from "@shared/types";
 
 /**
- * Adapts the new CvContent shape to the legacy ResumeProfile shape.
- *
- * ResumeProfile is the RxResume-derived structure that scoring, ghostwriter
- * context, and onboarding still consume. Phase 4 replaces those consumers
- * with code that reads CvContent directly and removes both this adapter and
- * the ResumeProfile type. Until then, this is the single bridge — keep it
- * thin and free of heuristics.
+ * Best-effort adapter from the free-form CvContent to the legacy ResumeProfile
+ * shape. Phase 4 deletes this together with the ResumeProfile consumers
+ * (scorer / ghostwriter context / onboarding); until then it bridges them by
+ * reading whatever conventional keys (`basics`, `experience`, etc.) the
+ * extracted JSON happens to use and returning empty values when they aren't
+ * present.
  */
 export function cvContentToResumeProfile(content: CvContent): ResumeProfile {
+  const basics = readObject(content.basics);
+  const profiles = readArray(basics.profiles).map((entry) => {
+    const profile = readObject(entry);
+    return {
+      network: readString(profile.network),
+      username: readString(profile.username),
+      url: readString(profile.url),
+    };
+  });
+
+  const summary = readString(content.summary);
+  const skillGroups = readArray(content.skillGroups);
+  const projects = readArray(content.projects);
+  const experience = readArray(content.experience);
+
   return {
     basics: {
-      name: content.basics.name,
-      headline: content.basics.headline,
-      label: content.basics.headline,
-      email: content.basics.email,
-      phone: content.basics.phone,
-      url: content.basics.website,
-      summary: content.summary,
-      profiles: content.basics.profiles.map((p) => ({
-        network: p.network,
-        username: p.username,
-        url: p.url,
-      })),
+      name: readString(basics.name),
+      headline: readString(basics.headline),
+      label: readString(basics.headline),
+      email: readString(basics.email),
+      phone: readString(basics.phone),
+      url: readString(basics.website),
+      summary,
+      profiles,
     },
     sections: {
-      summary: content.summary
-        ? { content: content.summary, visible: true }
-        : undefined,
+      summary: summary ? { content: summary, visible: true } : undefined,
       skills: {
-        items: content.skillGroups.map((group, index) => ({
-          id: `skill-${index}`,
-          name: group.name,
-          description: "",
-          level: 0,
-          keywords: group.keywords,
-          visible: true,
-        })),
+        items: skillGroups.map((entry, index) => {
+          const group = readObject(entry);
+          return {
+            id: `skill-${index}`,
+            name: readString(group.name) ?? "",
+            description: "",
+            level: 0,
+            keywords: readArray(group.keywords)
+              .map(readString)
+              .filter((value): value is string => Boolean(value)),
+            visible: true,
+          };
+        }),
       },
       projects: {
-        items: content.projects.map((project, index) => ({
-          id: `project-${index}`,
-          name: project.name,
-          description: project.role ?? "",
-          date: "",
-          summary: project.bullets.join("\n"),
-          visible: true,
-          url: project.url,
-        })),
+        items: projects.map((entry, index) => {
+          const project = readObject(entry);
+          const bullets = readArray(project.bullets)
+            .map(readString)
+            .filter((value): value is string => Boolean(value));
+          return {
+            id: `project-${index}`,
+            name: readString(project.name) ?? "",
+            description: readString(project.role) ?? "",
+            date: "",
+            summary: bullets.join("\n"),
+            visible: true,
+            url: readString(project.url),
+          };
+        }),
       },
       experience: {
-        items: content.experience.map((entry, index) => ({
-          id: `experience-${index}`,
-          company: entry.company,
-          position: entry.position,
-          location: entry.location ?? "",
-          date: formatDateRange(entry.startDate, entry.endDate),
-          summary: entry.bullets.join("\n"),
-          visible: true,
-        })),
+        items: experience.map((entry, index) => {
+          const item = readObject(entry);
+          const bullets = readArray(item.bullets)
+            .map(readString)
+            .filter((value): value is string => Boolean(value));
+          return {
+            id: `experience-${index}`,
+            company: readString(item.company) ?? "",
+            position: readString(item.position) ?? "",
+            location: readString(item.location) ?? "",
+            date: formatDateRange(
+              readString(item.startDate),
+              readString(item.endDate),
+            ),
+            summary: bullets.join("\n"),
+            visible: true,
+          };
+        }),
       },
     },
   };
+}
+
+function readObject(value: unknown): Record<string, unknown> {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return {};
+}
+
+function readArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function readString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
 }
 
 function formatDateRange(start?: string, end?: string): string {

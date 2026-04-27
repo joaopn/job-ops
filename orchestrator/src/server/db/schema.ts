@@ -29,6 +29,7 @@ export const cvDocuments = sqliteTable("cv_documents", {
   flattenedTex: text("flattened_tex").notNull(),
   template: text("template").notNull(),
   content: text("content", { mode: "json" }).notNull(),
+  personalBrief: text("personal_brief").notNull().default(""),
   createdAt: integer("created_at", { mode: "number" }).notNull(),
   updatedAt: integer("updated_at", { mode: "number" }).notNull(),
 });

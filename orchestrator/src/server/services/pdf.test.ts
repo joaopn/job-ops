@@ -20,6 +20,7 @@ const FAKE_CV: CvDocument = {
   flattenedTex: "\\documentclass{article}",
   template: "\\documentclass{article}\n<%= e(basics.name) %>\n",
   content: SAMPLE_CONTENT,
+  personalBrief: "",
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };

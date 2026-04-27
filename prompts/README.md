@@ -24,15 +24,15 @@ prompts/
 ```
 
 ```
-  cv-extract.yaml           # extract CvContent JSON + Eta template from flattened LaTeX
-  fragments/
-    cv-content-schema.yaml  # partial: CvContent JSON shape, used by cv-extract / cv-adjust
+  cv-extract.yaml           # extract free-form content JSON, Eta template,
+                            # and personalBrief draft from flattened LaTeX
 ```
 
 Files added later (Phase 4 / Phase 5):
 
 ```
-  cv-adjust.yaml            # adjust CvContent JSON for a specific JD
+  cv-adjust.yaml            # adjust the content JSON for a specific JD using
+                            # the personal brief as the source of truth
   ghostwriter-cv-edit.yaml  # propose CV-bullet diffs from chat
 ```
 

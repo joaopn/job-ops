@@ -1154,7 +1154,12 @@ export async function uploadCvDocument(args: {
 
 export async function updateCvDocument(
   id: string,
-  input: Partial<{ name: string; template: string; content: CvContent }>,
+  input: Partial<{
+    name: string;
+    template: string;
+    content: CvContent;
+    personalBrief: string;
+  }>,
 ): Promise<CvDocument> {
   return fetchApi<CvDocument>(`/cv/${id}`, {
     method: "PATCH",

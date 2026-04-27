@@ -121,4 +121,58 @@ describe("flattenInput", () => {
       /cycle/i,
     );
   });
+
+  it("ignores commented-out \\input{} in single-file uploads", () => {
+    const tex =
+      "\\documentclass{article}\n%\\input{leftover}\n\\begin{document}Hi\\end{document}\n";
+    const result = flattenInput({
+      archive: new TextEncoder().encode(tex),
+      filename: "cv.tex",
+    });
+    expect(result.flattenedTex).toBe(tex);
+  });
+
+  it("does not inline commented-out \\input{} from a zip entrypoint", () => {
+    const archive = texZip({
+      "main.tex":
+        "\\documentclass{article}\n%\\input{leftover}\n\\input{intro}\nDone.\n",
+      "intro.tex": "Intro body.\n",
+      "leftover.tex": "Should not appear.\n",
+    });
+    const result = flattenInput({ archive, filename: "cv.zip" });
+    expect(result.flattenedTex).toContain("Intro body.");
+    expect(result.flattenedTex).toContain("%\\input{leftover}");
+    expect(result.flattenedTex).not.toContain("Should not appear.");
+  });
+
+  it("treats \\%\\input{x} as an active directive (escaped percent)", () => {
+    const archive = texZip({
+      "main.tex":
+        "\\documentclass{article}\n\\%\\input{intro}\n",
+      "intro.tex": "Intro body.\n",
+    });
+    const result = flattenInput({ archive, filename: "cv.zip" });
+    expect(result.flattenedTex).toContain("Intro body.");
+  });
+
+  it("treats \\\\%\\input{x} as commented out (literal backslash then comment)", () => {
+    const archive = texZip({
+      "main.tex":
+        "\\documentclass{article}\n\\\\%\\input{intro}\nDone.\n",
+      "intro.tex": "Should not appear.\n",
+    });
+    const result = flattenInput({ archive, filename: "cv.zip" });
+    expect(result.flattenedTex).not.toContain("Should not appear.");
+    expect(result.flattenedTex).toContain("%\\input{intro}");
+  });
+
+  it("skips commented-out \\includegraphics references", () => {
+    const archive = texZip({
+      "main.tex":
+        "\\documentclass{article}\n%\\includegraphics{old.png}\n\\includegraphics{logo.png}\n",
+    });
+    const result = flattenInput({ archive, filename: "cv.zip" });
+    expect(result.assetReferences).toContain("logo.png");
+    expect(result.assetReferences).not.toContain("old.png");
+  });
 });

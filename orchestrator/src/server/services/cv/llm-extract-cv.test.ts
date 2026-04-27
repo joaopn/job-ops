@@ -1,6 +1,5 @@
 // @vitest-environment node
 import { loadPrompt } from "@server/services/prompts";
-import type { CvContent } from "@shared/types";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CvExtractError, extractCv } from "./llm-extract-cv";
 
@@ -26,13 +25,9 @@ vi.mock("@server/services/modelSelection", () => ({
   resolveLlmModel: vi.fn().mockResolvedValue("test-model"),
 }));
 
-const VALID_CONTENT: CvContent = {
+const SAMPLE_CONTENT = {
   basics: { name: "Ada", profiles: [] },
   experience: [],
-  education: [],
-  projects: [],
-  skillGroups: [],
-  custom: [],
 };
 
 beforeEach(() => {
@@ -45,7 +40,8 @@ describe("extractCv", () => {
       success: true,
       data: {
         template: "\\documentclass{article}",
-        content: VALID_CONTENT,
+        content: SAMPLE_CONTENT,
+        personalBrief: "I'm a mathematician.",
       },
     });
 
@@ -55,7 +51,27 @@ describe("extractCv", () => {
     });
 
     expect(result.template).toBe("\\documentclass{article}");
-    expect(result.content.basics.name).toBe("Ada");
+    expect(result.content).toEqual(SAMPLE_CONTENT);
+    expect(result.personalBrief).toBe("I'm a mathematician.");
+  });
+
+  it("accepts a content shape that doesn't match the legacy CvContent layout", async () => {
+    const exoticContent = {
+      profile: { fullName: "Ada" },
+      publications: [{ title: "Notes on the Engine" }],
+    };
+    callJsonMock.mockResolvedValue({
+      success: true,
+      data: {
+        template: "\\documentclass{article}",
+        content: exoticContent,
+        personalBrief: "I publish things.",
+      },
+    });
+
+    const result = await extractCv({ flattenedTex: "x", assetReferences: [] });
+    expect(result.content).toEqual(exoticContent);
+    expect(result.personalBrief).toBe("I publish things.");
   });
 
   it("throws CvExtractError when the LLM call fails", async () => {
@@ -72,7 +88,11 @@ describe("extractCv", () => {
   it("throws when the template is empty", async () => {
     callJsonMock.mockResolvedValue({
       success: true,
-      data: { template: "   ", content: VALID_CONTENT },
+      data: {
+        template: "   ",
+        content: SAMPLE_CONTENT,
+        personalBrief: "",
+      },
     });
 
     await expect(
@@ -80,12 +100,13 @@ describe("extractCv", () => {
     ).rejects.toMatchObject({ code: "EMPTY_TEMPLATE" });
   });
 
-  it("throws when the content fails CvContent validation", async () => {
+  it("throws INVALID_CONTENT when content is not a JSON object", async () => {
     callJsonMock.mockResolvedValue({
       success: true,
       data: {
         template: "\\documentclass{article}",
-        content: { basics: {}, experience: [] },
+        content: ["not", "an", "object"],
+        personalBrief: "",
       },
     });
 
@@ -94,12 +115,28 @@ describe("extractCv", () => {
     ).rejects.toMatchObject({ code: "INVALID_CONTENT" });
   });
 
+  it("throws INVALID_BRIEF when personalBrief is missing", async () => {
+    callJsonMock.mockResolvedValue({
+      success: true,
+      data: {
+        template: "\\documentclass{article}",
+        content: SAMPLE_CONTENT,
+        personalBrief: 42,
+      },
+    });
+
+    await expect(
+      extractCv({ flattenedTex: "x", assetReferences: [] }),
+    ).rejects.toMatchObject({ code: "INVALID_BRIEF" });
+  });
+
   it("formats the asset list as a newline-separated string when populated", async () => {
     callJsonMock.mockResolvedValue({
       success: true,
       data: {
         template: "\\documentclass{article}",
-        content: VALID_CONTENT,
+        content: SAMPLE_CONTENT,
+        personalBrief: "",
       },
     });
 
@@ -119,7 +156,8 @@ describe("extractCv", () => {
       success: true,
       data: {
         template: "\\documentclass{article}",
-        content: VALID_CONTENT,
+        content: SAMPLE_CONTENT,
+        personalBrief: "",
       },
     });
 

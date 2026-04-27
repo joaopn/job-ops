@@ -7,19 +7,16 @@ import {
   renderTemplate,
 } from "./render-template";
 
-function makeContent(overrides: Partial<CvContent> = {}): CvContent {
+function makeContent(overrides: Record<string, unknown> = {}): CvContent {
   return {
-    basics: {
-      name: "Ada Lovelace",
-      profiles: [],
-      ...overrides.basics,
-    },
-    summary: overrides.summary,
-    experience: overrides.experience ?? [],
-    education: overrides.education ?? [],
-    projects: overrides.projects ?? [],
-    skillGroups: overrides.skillGroups ?? [],
-    custom: overrides.custom ?? [],
+    basics: { name: "Ada Lovelace", profiles: [] },
+    summary: undefined,
+    experience: [],
+    education: [],
+    projects: [],
+    skillGroups: [],
+    custom: [],
+    ...overrides,
   };
 }
 

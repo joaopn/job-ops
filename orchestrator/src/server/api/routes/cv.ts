@@ -24,20 +24,27 @@ import {
   RunTectonicError,
   runTectonic,
 } from "@server/services/cv/run-tectonic";
-import { cvContentSchema } from "@shared/types";
 import busboy from "busboy";
 import type { Request, Response } from "express";
 import { Router } from "express";
 import { z } from "zod";
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const MAX_PERSONAL_BRIEF_BYTES = 50_000;
 
 export const cvRouter = Router();
+
+const cvContentObjectSchema = z
+  .record(z.unknown())
+  .refine((value) => !Array.isArray(value), {
+    message: "content must be a JSON object, not an array",
+  });
 
 const updateCvSchema = z.object({
   name: z.string().trim().min(1).max(100).optional(),
   template: z.string().min(1).optional(),
-  content: cvContentSchema.optional(),
+  content: cvContentObjectSchema.optional(),
+  personalBrief: z.string().max(MAX_PERSONAL_BRIEF_BYTES).optional(),
 });
 
 interface ParsedUpload {
@@ -71,6 +78,7 @@ cvRouter.post("/", async (req: Request, res: Response) => {
       flattenedTex: flattened.flattenedTex,
       template: extracted.template,
       content: extracted.content,
+      personalBrief: extracted.personalBrief,
     });
 
     logger.info("CV document created", {
@@ -134,6 +142,7 @@ cvRouter.post("/:id/re-extract", async (req: Request, res: Response) => {
       flattenedTex: flattened.flattenedTex,
       template: extracted.template,
       content: extracted.content,
+      personalBrief: extracted.personalBrief,
     });
     if (!updated) return fail(res, notFound("CV document not found."));
 

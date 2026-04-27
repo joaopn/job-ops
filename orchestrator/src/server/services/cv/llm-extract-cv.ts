@@ -1,9 +1,8 @@
-import { logger } from "@infra/logger";
 import { LlmService } from "@server/services/llm/service";
 import type { JsonSchemaDefinition } from "@server/services/llm/types";
 import { resolveLlmModel } from "@server/services/modelSelection";
 import { loadPrompt } from "@server/services/prompts";
-import { type CvContent, cvContentSchema } from "@shared/types";
+import type { CvContent } from "@shared/types";
 
 const EXTRACT_SCHEMA: JsonSchemaDefinition = {
   name: "cv_extract_result",
@@ -18,10 +17,15 @@ const EXTRACT_SCHEMA: JsonSchemaDefinition = {
       content: {
         type: "object",
         description:
-          "CvContent JSON describing the source CV. Shape documented in the system prompt.",
+          "Free-form JSON describing the source CV using whatever section names the source uses.",
+      },
+      personalBrief: {
+        type: "string",
+        description:
+          "First-person 100–400 word summary of the candidate drawn from the LaTeX prose.",
       },
     },
-    required: ["template", "content"],
+    required: ["template", "content", "personalBrief"],
     additionalProperties: false,
   },
 };
@@ -34,6 +38,7 @@ export interface ExtractCvArgs {
 export interface ExtractCvResult {
   template: string;
   content: CvContent;
+  personalBrief: string;
 }
 
 export class CvExtractError extends Error {
@@ -62,7 +67,11 @@ export async function extractCv(args: ExtractCvArgs): Promise<ExtractCvResult> {
   if (prompt.system) messages.push({ role: "system", content: prompt.system });
   messages.push({ role: "user", content: prompt.user });
 
-  const result = await llm.callJson<{ template: unknown; content: unknown }>({
+  const result = await llm.callJson<{
+    template: unknown;
+    content: unknown;
+    personalBrief: unknown;
+  }>({
     model,
     messages,
     jsonSchema: EXTRACT_SCHEMA,
@@ -76,7 +85,7 @@ export async function extractCv(args: ExtractCvArgs): Promise<ExtractCvResult> {
     );
   }
 
-  const { template, content } = result.data;
+  const { template, content, personalBrief } = result.data;
   if (typeof template !== "string" || template.trim().length === 0) {
     throw new CvExtractError(
       "LLM returned empty or non-string template.",
@@ -84,17 +93,27 @@ export async function extractCv(args: ExtractCvArgs): Promise<ExtractCvResult> {
     );
   }
 
-  const parsed = cvContentSchema.safeParse(content);
-  if (!parsed.success) {
-    logger.warn("CvContent validation failed", {
-      issues: parsed.error.issues.slice(0, 5),
-    });
+  if (
+    content === null ||
+    typeof content !== "object" ||
+    Array.isArray(content)
+  ) {
     throw new CvExtractError(
-      "LLM returned content that did not match CvContent schema.",
+      "LLM returned content that was not a JSON object.",
       "INVALID_CONTENT",
-      parsed.error.flatten(),
     );
   }
 
-  return { template, content: parsed.data };
+  if (typeof personalBrief !== "string") {
+    throw new CvExtractError(
+      "LLM returned a non-string personalBrief.",
+      "INVALID_BRIEF",
+    );
+  }
+
+  return {
+    template,
+    content: content as CvContent,
+    personalBrief,
+  };
 }

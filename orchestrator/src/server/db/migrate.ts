@@ -39,6 +39,7 @@ const migrations: string[] = [
     flattened_tex TEXT NOT NULL,
     template TEXT NOT NULL,
     content TEXT NOT NULL,
+    personal_brief TEXT NOT NULL DEFAULT '',
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
   )`,
@@ -219,6 +220,7 @@ const migrations: string[] = [
   `ALTER TABLE jobs ADD COLUMN cv_document_id TEXT REFERENCES cv_documents(id) ON DELETE SET NULL`,
   `ALTER TABLE job_chat_messages ADD COLUMN proposed_edit TEXT`,
   `ALTER TABLE job_chat_messages ADD COLUMN edit_status TEXT`,
+  `ALTER TABLE cv_documents ADD COLUMN personal_brief TEXT NOT NULL DEFAULT ''`,
 
   // Drop unused columns from legacy `jobs` (tailored_summary/headline/skills,
   // tracer_links_enabled, sponsor_match_*) by rebuilding the table. This is a

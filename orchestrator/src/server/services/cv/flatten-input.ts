@@ -66,7 +66,8 @@ function flattenSingleTex(buf: Buffer, filename: string): FlattenInputResult {
       "EMPTY_INPUT",
     );
   }
-  for (const _ of tex.matchAll(INPUT_PATTERN)) {
+  for (const match of tex.matchAll(INPUT_PATTERN)) {
+    if (isInLatexComment(tex, match.index ?? 0)) continue;
     throw new FlattenInputError(
       "Single-file upload contains \\input{}/\\include{}; upload as a zip with the referenced files.",
       "UNRESOLVED_INPUT",
@@ -142,6 +143,7 @@ function flattenZip(buf: Buffer): FlattenInputResult {
     let cursor = 0;
     for (const match of matches) {
       const start = match.index ?? 0;
+      if (isInLatexComment(source, start)) continue;
       expanded += source.slice(cursor, start);
       includeCount += 1;
       if (includeCount > MAX_INCLUDE_COUNT) {
@@ -221,8 +223,30 @@ function resolveInputPath(
 function collectAssets(source: string): string[] {
   const found = new Set<string>();
   for (const match of source.matchAll(ASSET_PATTERN)) {
+    if (isInLatexComment(source, match.index ?? 0)) continue;
     const ref = (match[1] ?? match[2] ?? "").trim();
     if (ref) found.add(ref);
   }
   return [...found];
+}
+
+/**
+ * Returns true when the character at `index` falls after an unescaped `%`
+ * on the same line — i.e. inside a LaTeX line comment. A `%` is unescaped
+ * when preceded by an even number of consecutive backslashes (zero counts).
+ */
+function isInLatexComment(source: string, index: number): boolean {
+  let lineStart = index;
+  while (lineStart > 0 && source[lineStart - 1] !== "\n") lineStart--;
+  let backslashes = 0;
+  for (let i = lineStart; i < index; i++) {
+    const ch = source[i];
+    if (ch === "\\") {
+      backslashes++;
+      continue;
+    }
+    if (ch === "%" && backslashes % 2 === 0) return true;
+    backslashes = 0;
+  }
+  return false;
 }

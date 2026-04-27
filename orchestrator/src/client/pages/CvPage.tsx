@@ -1,11 +1,10 @@
 import * as api from "@client/api";
 import { PageHeader } from "@client/components/layout";
 import { queryKeys } from "@client/lib/queryKeys";
-import {
-  cvContentSchema,
-  type CvContent,
-  type CvDocument,
-  type CvDocumentSummary,
+import type {
+  CvContent,
+  CvDocument,
+  CvDocumentSummary,
 } from "@shared/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -157,8 +156,9 @@ function UploadCard({ onUploaded }: { onUploaded: () => Promise<void> }) {
         <CardDescription>
           Drop a .tex file (single-file CV) or a .zip archive containing
           main.tex plus any included files, fonts, and images. The server
-          flattens it, extracts a structured CvContent JSON, and saves an
-          Eta template that re-renders your CV.
+          flattens it, extracts a free-form JSON of whatever sections your
+          CV uses, drafts a first-person personal brief, and saves an Eta
+          template that re-renders your CV.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -227,22 +227,40 @@ function CvEditor({ cv }: { cv: CvDocument }) {
     JSON.stringify(cv.content, null, 2),
   );
   const [template, setTemplate] = useState(cv.template);
+  const [personalBrief, setPersonalBrief] = useState(cv.personalBrief);
   const [contentError, setContentError] = useState<string | null>(null);
 
   useEffect(() => {
     setName(cv.name);
     setContentJson(JSON.stringify(cv.content, null, 2));
     setTemplate(cv.template);
+    setPersonalBrief(cv.personalBrief);
     setContentError(null);
-  }, [cv.id, cv.updatedAt, cv.name, cv.content, cv.template]);
+  }, [
+    cv.id,
+    cv.updatedAt,
+    cv.name,
+    cv.content,
+    cv.template,
+    cv.personalBrief,
+  ]);
 
-  const parsedContent = useMemo(() => {
+  const parsedContent = useMemo<
+    | { success: true; data: CvContent }
+    | { success: false; error: { message: string } }
+  >(() => {
     try {
       const raw = JSON.parse(contentJson);
-      return cvContentSchema.safeParse(raw);
+      if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+        return {
+          success: false,
+          error: { message: "content must be a JSON object" },
+        };
+      }
+      return { success: true, data: raw as CvContent };
     } catch (err) {
       return {
-        success: false as const,
+        success: false,
         error: { message: (err as Error).message },
       };
     }
@@ -251,6 +269,7 @@ function CvEditor({ cv }: { cv: CvDocument }) {
   const isDirty =
     name !== cv.name ||
     template !== cv.template ||
+    personalBrief !== cv.personalBrief ||
     contentJson !== JSON.stringify(cv.content, null, 2);
 
   const invalidateAll = useCallback(async () => {
@@ -264,6 +283,7 @@ function CvEditor({ cv }: { cv: CvDocument }) {
       name: string;
       template: string;
       content: CvContent;
+      personalBrief: string;
     }) => api.updateCvDocument(cv.id, input),
     onSuccess: async () => {
       toast.success("CV saved");
@@ -299,7 +319,7 @@ function CvEditor({ cv }: { cv: CvDocument }) {
   const handleSave = () => {
     if (!parsedContent.success) {
       setContentError(parsedContent.error.message);
-      toast.error("CvContent JSON is invalid; fix the errors first.");
+      toast.error("Content JSON is invalid; fix the errors first.");
       return;
     }
     setContentError(null);
@@ -307,6 +327,7 @@ function CvEditor({ cv }: { cv: CvDocument }) {
       name: name.trim() || cv.name,
       template,
       content: parsedContent.data,
+      personalBrief,
     });
   };
 
@@ -314,6 +335,7 @@ function CvEditor({ cv }: { cv: CvDocument }) {
     setName(cv.name);
     setContentJson(JSON.stringify(cv.content, null, 2));
     setTemplate(cv.template);
+    setPersonalBrief(cv.personalBrief);
     setContentError(null);
   };
 
@@ -373,10 +395,34 @@ function CvEditor({ cv }: { cv: CvDocument }) {
 
       <Card>
         <CardHeader>
+          <CardTitle>Personal brief</CardTitle>
+          <CardDescription>
+            Long-form, first-person background that powers per-job tailoring.
+            Paste in extra context the CV doesn't carry — side projects, tools
+            you've used in passing, transcripts of long-running chats. The
+            brief is the source of truth for tailoring; the CV JSON below is
+            just the render target.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Textarea
+            value={personalBrief}
+            onChange={(event) => setPersonalBrief(event.target.value)}
+            spellCheck
+            className="min-h-[260px] text-sm"
+            placeholder="I'm a …"
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Content</CardTitle>
           <CardDescription>
-            Structured CvContent JSON extracted from your CV. Edits here
-            change what gets rendered on tailored PDFs.
+            Free-form JSON whose shape mirrors your source CV's sections.
+            Edits here change what gets rendered on tailored PDFs. Only well
+            -formed JSON objects are accepted; otherwise the shape is up to
+            you.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -390,7 +436,7 @@ function CvEditor({ cv }: { cv: CvDocument }) {
           (!parsedContent.success && parsedContent.error?.message) ? (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Invalid CvContent JSON</AlertTitle>
+              <AlertTitle>Invalid content JSON</AlertTitle>
               <AlertDescription>
                 {contentError ??
                   (!parsedContent.success

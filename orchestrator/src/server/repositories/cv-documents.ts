@@ -23,6 +23,7 @@ function mapRow(row: typeof cvDocuments.$inferSelect): CvDocument {
     flattenedTex: row.flattenedTex,
     template: row.template,
     content: row.content as CvContent,
+    personalBrief: row.personalBrief ?? "",
     createdAt: new Date(row.createdAt).toISOString(),
     updatedAt: new Date(row.updatedAt).toISOString(),
   };
@@ -88,6 +89,7 @@ export async function createCvDocument(
     flattenedTex: input.flattenedTex,
     template: input.template,
     content: input.content,
+    personalBrief: input.personalBrief ?? "",
     createdAt: now,
     updatedAt: now,
   });
@@ -117,6 +119,9 @@ export async function updateCvDocument(
         : {}),
       ...(input.template !== undefined ? { template: input.template } : {}),
       ...(input.content !== undefined ? { content: input.content } : {}),
+      ...(input.personalBrief !== undefined
+        ? { personalBrief: input.personalBrief }
+        : {}),
       updatedAt: now,
     })
     .where(eq(cvDocuments.id, id));
