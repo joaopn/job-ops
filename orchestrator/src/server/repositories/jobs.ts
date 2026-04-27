@@ -643,7 +643,6 @@ function mapRowToJob(row: typeof jobs.$inferSelect): Job {
     tailoringMatched: parseStringList(row.tailoringMatched),
     tailoringSkipped: parseStringList(row.tailoringSkipped),
     cvDocumentId: row.cvDocumentId ?? null,
-    selectedProjectIds: row.selectedProjectIds ?? null,
     pdfPath: row.pdfPath,
     jobType: row.jobType ?? null,
     salarySource: row.salarySource ?? null,

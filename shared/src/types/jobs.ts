@@ -179,7 +179,6 @@ export interface Job {
   tailoringMatched: string[] | null; // ATS keywords surfaced in tailoredContent
   tailoringSkipped: string[] | null; // JD keywords dropped for lack of evidence
   cvDocumentId: string | null; // FK to cv_documents.id; pins which CV was tailored
-  selectedProjectIds: string | null; // Comma-separated IDs of selected projects
   pdfPath: string | null; // Path to generated PDF
   appliedDuplicateMatch?: AppliedDuplicateMatch | null; // Included on detail responses and may be omitted on list responses
 
@@ -338,7 +337,6 @@ export interface UpdateJobInput {
   tailoringMatched?: string[] | null;
   tailoringSkipped?: string[] | null;
   cvDocumentId?: string | null;
-  selectedProjectIds?: string;
   pdfPath?: string;
   readyAt?: string;
   appliedAt?: string;

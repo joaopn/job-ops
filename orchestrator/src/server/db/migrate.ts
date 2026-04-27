@@ -96,7 +96,6 @@ const migrations: string[] = [
     tailoring_matched TEXT,
     tailoring_skipped TEXT,
     cv_document_id TEXT REFERENCES cv_documents(id) ON DELETE SET NULL,
-    selected_project_ids TEXT,
     pdf_path TEXT,
     discovered_at TEXT NOT NULL DEFAULT (datetime('now')),
     processed_at TEXT,
@@ -284,7 +283,6 @@ const migrations: string[] = [
     tailoring_matched TEXT,
     tailoring_skipped TEXT,
     cv_document_id TEXT REFERENCES cv_documents(id) ON DELETE SET NULL,
-    selected_project_ids TEXT,
     pdf_path TEXT,
     discovered_at TEXT NOT NULL DEFAULT (datetime('now')),
     processed_at TEXT,
@@ -304,7 +302,7 @@ const migrations: string[] = [
     application_link, disciplines, deadline, salary, location,
     location_evidence, degree_required, starting, job_description, status,
     outcome, closed_at, suitability_score, suitability_reason, tailored_content,
-    tailoring_matched, tailoring_skipped, cv_document_id, selected_project_ids,
+    tailoring_matched, tailoring_skipped, cv_document_id,
     pdf_path, discovered_at, processed_at, ready_at, applied_at, created_at,
     updated_at
   )
@@ -319,7 +317,7 @@ const migrations: string[] = [
     application_link, disciplines, deadline, salary, location,
     location_evidence, degree_required, starting, job_description, status,
     outcome, closed_at, suitability_score, suitability_reason, tailored_content,
-    tailoring_matched, tailoring_skipped, cv_document_id, selected_project_ids,
+    tailoring_matched, tailoring_skipped, cv_document_id,
     pdf_path, discovered_at, processed_at, ready_at, applied_at, created_at,
     updated_at
   FROM jobs`,

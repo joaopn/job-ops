@@ -69,7 +69,6 @@ const updateJobSchema = z.object({
   jobDescription: z.string().trim().max(40000).nullable().optional(),
   suitabilityScore: z.number().min(0).max(100).optional(),
   suitabilityReason: z.string().optional(),
-  selectedProjectIds: z.string().optional(),
   pdfPath: z.string().optional(),
 });
 

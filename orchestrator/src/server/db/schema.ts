@@ -106,7 +106,6 @@ export const jobs = sqliteTable("jobs", {
   cvDocumentId: text("cv_document_id").references(() => cvDocuments.id, {
     onDelete: "set null",
   }),
-  selectedProjectIds: text("selected_project_ids"),
   pdfPath: text("pdf_path"),
 
   // Timestamps
