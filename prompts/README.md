@@ -23,10 +23,15 @@ prompts/
     writing-style.yaml      # partial: tone / formality / constraints / avoid-terms
 ```
 
-Files added later (Phase 3 / Phase 5):
-
 ```
   cv-extract.yaml           # extract CvContent JSON + Eta template from flattened LaTeX
+  fragments/
+    cv-content-schema.yaml  # partial: CvContent JSON shape, used by cv-extract / cv-adjust
+```
+
+Files added later (Phase 4 / Phase 5):
+
+```
   cv-adjust.yaml            # adjust CvContent JSON for a specific JD
   ghostwriter-cv-edit.yaml  # propose CV-bullet diffs from chat
 ```
@@ -78,7 +83,6 @@ These are auto-injected by the loader and can be overridden via the explicit
 | name             | populated by                                          |
 |------------------|-------------------------------------------------------|
 | `appVersion`     | orchestrator/package.json                              |
-| `cvContentSchema`| placeholder until Phase 3 adds the LaTeX CV pipeline   |
 | `outputLanguage` | call sites pass this from `resolveWritingOutputLanguage` |
 | `writingStyle`   | call sites pass this from `getWritingStyle`              |
 

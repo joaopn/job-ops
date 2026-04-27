@@ -29,10 +29,6 @@ function readPackageVersion(): string {
 
 export const APP_VERSION = readPackageVersion();
 
-// Filled in by Phase 3 when CvContent lands. Until then it is intentionally
-// blank so prompts that reference {{cvContentSchema}} render to empty.
-export const CV_CONTENT_SCHEMA_PLACEHOLDER = "";
-
 /**
  * Default values merged into every loadPrompt() call before the caller's
  * vars. The caller can override any of these by passing the same key.
@@ -44,7 +40,6 @@ export const CV_CONTENT_SCHEMA_PLACEHOLDER = "";
 export function getDefaultPromptVars(): Record<string, string> {
   return {
     appVersion: APP_VERSION,
-    cvContentSchema: CV_CONTENT_SCHEMA_PLACEHOLDER,
     outputLanguage: "",
     writingStyle: "",
   };

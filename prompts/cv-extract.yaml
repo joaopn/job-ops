@@ -1,0 +1,77 @@
+name: cv-extract
+description: |
+  Extracts structured CvContent JSON plus a generalised Eta template from a
+  flattened LaTeX CV. The template re-renders the original CV faithfully when
+  the extracted content is plugged back in, and stays correct when the content
+  is later swapped for a tailored version.
+variables:
+  - name: flattenedTex
+    description: The user's CV LaTeX, post-`\input{}` flattening, as a single string.
+  - name: assetReferencesList
+    description: |
+      Newline-separated list of `\includegraphics{...}` / font / class file
+      references discovered in the source. The template must preserve these
+      references verbatim. Empty string when no assets were detected.
+model:
+  preferStructuredOutput: true
+  temperature: 0.1
+  maxOutputTokens: 16000
+system: |
+  You convert a user's existing LaTeX CV into two artifacts:
+
+  1. `template` — an Eta-flavoured LaTeX template. Custom delimiters: `<%= %>`
+     for value substitutions, `<% %>` for control flow. The template must
+     re-render the original CV faithfully when filled with the extracted
+     content, and gracefully handle empty arrays / missing optional fields
+     once the content is replaced with a tailored variant.
+  2. `content` — a CvContent JSON object describing what is in the CV.
+
+  Hard rules for the template:
+
+  - Preserve every `\documentclass{...}`, `\usepackage{...}`, custom command
+    definition, font setup, and `\includegraphics{...}` reference exactly as
+    they appear in the source. Do not rename, add, or drop packages.
+  - Replace concrete data with Eta substitutions (`<%= basics.name %>`,
+    `<%= experience[0].position %>`, etc.). Plain text values must flow
+    through the LaTeX-escape filter `e` — write `<%= e(basics.name) %>`,
+    `<%= e(bullet) %>`, and so on. Skip `e()` only inside `\href{...}` URLs
+    where you specifically need raw characters; use `<%= basics.website %>`
+    in that one case.
+  - Replace each repeated section block (experience entries, education
+    entries, projects, skill groups, custom-section items, profiles, bullet
+    lists) with an Eta `<% for (...) { %> ... <% } %>` loop over the matching
+    array.
+  - Wrap optional fields in `<% if (...) { %> ... <% } %>` so they disappear
+    cleanly when the corresponding string is empty / undefined.
+  - Do not emit any new prose, comments, or sectioning the source CV did not
+    already contain. The template must be a structural generalisation of the
+    original, never an extension of it.
+  - Return the template as a single string with literal `\n` line breaks
+    preserved.
+
+  Hard rules for the content:
+
+  - Strings carry plain text only — strip every LaTeX command, brace, and
+    escape (`\textbf{X}` → `X`, `\&` → `&`, `\%` → `%`, `~` → ` `, etc.).
+  - Preserve the order and grouping used in the source CV.
+  - Anything that does not fit `basics` / `summary` / `experience` /
+    `education` / `projects` / `skillGroups` (publications, awards,
+    certifications, languages, talks, etc.) goes into `custom` with the
+    section heading as `title`.
+  - Empty array fields are required — emit `[]` rather than omitting them.
+
+  {{> cv-content-schema}}
+user: |
+  Asset references discovered in the source (must appear verbatim in the
+  template):
+  {{assetReferencesList}}
+
+  Source LaTeX CV (already flattened — `\input{}` directives have been
+  resolved into this single string):
+
+  ----- BEGIN CV -----
+  {{flattenedTex}}
+  ----- END CV -----
+
+  Return a JSON object with exactly two keys: `template` (string) and
+  `content` (CvContent object).

@@ -1,0 +1,77 @@
+name: cv-content-schema
+description: |
+  Partial that documents the CvContent JSON shape. Spliced into prompts that
+  read or produce CvContent (cv-extract, cv-adjust, etc.) via
+  `{{> cv-content-schema}}`. Mirrors `shared/src/types/cv-content.ts` — keep
+  the two in sync.
+template: |
+  CvContent JSON shape (all string values are plain text — no LaTeX commands):
+
+  {
+    "basics": {
+      "name": "<full name>",
+      "headline": "<optional one-line role/title>",
+      "email": "<optional>",
+      "phone": "<optional>",
+      "location": "<optional>",
+      "website": "<optional>",
+      "profiles": [
+        { "network": "<e.g. GitHub>", "username": "<handle>", "url": "<full url>" }
+      ]
+    },
+    "summary": "<optional summary paragraph>",
+    "experience": [
+      {
+        "company": "<employer>",
+        "position": "<role>",
+        "location": "<optional>",
+        "startDate": "<optional, free-form e.g. 2022-01 or Jan 2022>",
+        "endDate": "<optional, or 'Present'>",
+        "bullets": ["<bullet 1>", "<bullet 2>"]
+      }
+    ],
+    "education": [
+      {
+        "institution": "<school>",
+        "degree": "<optional>",
+        "field": "<optional>",
+        "location": "<optional>",
+        "startDate": "<optional>",
+        "endDate": "<optional>",
+        "bullets": ["<optional bullet 1>"]
+      }
+    ],
+    "projects": [
+      {
+        "name": "<project name>",
+        "role": "<optional>",
+        "url": "<optional>",
+        "bullets": ["<bullet 1>"]
+      }
+    ],
+    "skillGroups": [
+      { "name": "<category>", "keywords": ["<skill>", "..."] }
+    ],
+    "custom": [
+      {
+        "title": "<section heading from the source CV>",
+        "items": [
+          {
+            "title": "<optional>",
+            "subtitle": "<optional>",
+            "date": "<optional>",
+            "description": "<optional paragraph>",
+            "bullets": ["<optional bullet>"]
+          }
+        ]
+      }
+    ]
+  }
+
+  Rules:
+  - All array fields must be present; use [] when empty.
+  - Strings must not contain LaTeX commands (no leading backslashes, no
+    `\textbf{}`, no `\\`). Strip LaTeX markup as you extract.
+  - Dates are free-form strings — preserve the format used in the source CV.
+  - "custom" captures sections that don't fit the standard buckets
+    (publications, awards, talks, certifications, languages, etc.).
