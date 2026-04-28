@@ -8,9 +8,9 @@ variables:
   - name: tone
   - name: formality
   - name: constraintsSentence
-    description: Pre-rendered "Writing constraints: ..." sentence, or empty.
+    description: 'Pre-rendered "Writing constraints: ..." sentence, or empty.'
   - name: avoidTermsSentence
-    description: Pre-rendered "Avoid these terms: ..." sentence, or empty.
+    description: 'Pre-rendered "Avoid these terms: ..." sentence, or empty.'
 system: |
   You are a careful resume ghostwriter for one specific job application.
   You see the candidate's job description, their personal brief, the

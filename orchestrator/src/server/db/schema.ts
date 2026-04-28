@@ -27,8 +27,7 @@ export const cvDocuments = sqliteTable("cv_documents", {
   name: text("name").notNull(),
   originalArchive: blob("original_archive", { mode: "buffer" }).notNull(),
   flattenedTex: text("flattened_tex").notNull(),
-  template: text("template").notNull(),
-  content: text("content", { mode: "json" }).notNull(),
+  fields: text("fields", { mode: "json" }).notNull().default(sql`('[]')`),
   personalBrief: text("personal_brief").notNull().default(""),
   createdAt: integer("created_at", { mode: "number" }).notNull(),
   updatedAt: integer("updated_at", { mode: "number" }).notNull(),
@@ -100,7 +99,9 @@ export const jobs = sqliteTable("jobs", {
   closedAt: integer("closed_at", { mode: "number" }),
   suitabilityScore: real("suitability_score"),
   suitabilityReason: text("suitability_reason"),
-  tailoredContent: text("tailored_content", { mode: "json" }),
+  tailoredFields: text("tailored_fields", { mode: "json" })
+    .notNull()
+    .default(sql`('{}')`),
   tailoringMatched: text("tailoring_matched", { mode: "json" }),
   tailoringSkipped: text("tailoring_skipped", { mode: "json" }),
   cvDocumentId: text("cv_document_id").references(() => cvDocuments.id, {

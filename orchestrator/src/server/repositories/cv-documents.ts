@@ -1,14 +1,14 @@
 /**
  * Repository for cv_documents — the user-uploaded LaTeX CVs and their
- * extracted Eta template + structured CvContent.
+ * extracted CvField list (verbatim spans of the original `flattened_tex`).
  */
 
 import { randomUUID } from "node:crypto";
 import type {
   CreateCvDocumentInput,
-  CvContent,
   CvDocument,
   CvDocumentSummary,
+  CvField,
   UpdateCvDocumentInput,
 } from "@shared/types";
 import { desc, eq } from "drizzle-orm";
@@ -21,12 +21,16 @@ function mapRow(row: typeof cvDocuments.$inferSelect): CvDocument {
     id: row.id,
     name: row.name,
     flattenedTex: row.flattenedTex,
-    template: row.template,
-    content: row.content as CvContent,
+    fields: parseFields(row.fields),
     personalBrief: row.personalBrief ?? "",
     createdAt: new Date(row.createdAt).toISOString(),
     updatedAt: new Date(row.updatedAt).toISOString(),
   };
+}
+
+function parseFields(raw: unknown): CvField[] {
+  if (Array.isArray(raw)) return raw as CvField[];
+  return [];
 }
 
 function mapRowToSummary(
@@ -87,8 +91,7 @@ export async function createCvDocument(
     name: input.name,
     originalArchive: Buffer.from(input.originalArchive),
     flattenedTex: input.flattenedTex,
-    template: input.template,
-    content: input.content,
+    fields: input.fields,
     personalBrief: input.personalBrief ?? "",
     createdAt: now,
     updatedAt: now,
@@ -117,8 +120,7 @@ export async function updateCvDocument(
       ...(input.flattenedTex !== undefined
         ? { flattenedTex: input.flattenedTex }
         : {}),
-      ...(input.template !== undefined ? { template: input.template } : {}),
-      ...(input.content !== undefined ? { content: input.content } : {}),
+      ...(input.fields !== undefined ? { fields: input.fields } : {}),
       ...(input.personalBrief !== undefined
         ? { personalBrief: input.personalBrief }
         : {}),

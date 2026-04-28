@@ -32,6 +32,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   cn,
   copyTextToClipboard,
@@ -46,7 +47,7 @@ import {
 import { useActiveCv } from "../hooks/useActiveCv";
 import { useRescoreJob } from "../hooks/useRescoreJob";
 import { FitAssessment } from ".";
-import { GhostwriterDrawer } from "./ghostwriter/GhostwriterDrawer";
+import { UnifiedPanel } from "./ghostwriter/UnifiedPanel";
 import { JobDetailsEditDrawer } from "./JobDetailsEditDrawer";
 import { KbdHint } from "./KbdHint";
 import { OpenJobListingButton } from "./OpenJobListingButton";
@@ -253,16 +254,10 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
 
       {/* ─────────────────────────────────────────────────────────────────────
           PRIMARY ACTION CLUSTER
-          All actions in one line: View, Save, Open, and Mark Applied
+          Always-visible shipping actions: download, open, mark applied.
       ───────────────────────────────────────────────────────────────────── */}
       <div className="pb-4 border-b border-border/40">
-        <div className="grid gap-2 sm:grid-cols-2">
-          <GhostwriterDrawer
-            job={job}
-            triggerClassName="h-9 w-full justify-center gap-1 px-2 text-xs"
-          />
-
-          {/* Download PDF - primary artifact action */}
+        <div className="grid gap-2 sm:grid-cols-3">
           <Button
             asChild
             variant="outline"
@@ -278,14 +273,12 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
             </a>
           </Button>
 
-          {/* Open job - to verify before applying */}
           <OpenJobListingButton
             href={jobLink}
             className="h-9 w-full px-2 text-xs"
             shortcut="o"
           />
 
-          {/* Primary CTA: Mark Applied */}
           <Button
             onClick={handleMarkApplied}
             variant="default"
@@ -303,43 +296,56 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
         </div>
       </div>
 
-      <div className="flex-1 py-4 space-y-4">
-        <div className="space-y-3">
-          <FitAssessment job={job} />
+      <div className="flex-1 min-h-0 py-4">
+        <Tabs defaultValue="tailor" className="flex h-full min-h-0 flex-col">
+          <TabsList className="self-start">
+            <TabsTrigger value="tailor">Tailor</TabsTrigger>
+            <TabsTrigger value="details">Details</TabsTrigger>
+          </TabsList>
+          <TabsContent value="tailor" className="mt-3 flex min-h-0 flex-1">
+            <UnifiedPanel
+              job={job}
+              onJobUpdated={async () => {
+                await onJobUpdated();
+              }}
+            />
+          </TabsContent>
+          <TabsContent value="details" className="mt-3 space-y-3">
+            <FitAssessment job={job} />
 
-          {googleDorks.length > 0 ? (
-            <ReadySummaryAccordion
-              icon={ExternalLink}
-              summary={
-                <>
-                  {googleDorks.length}{" "}
-                  {googleDorks.length === 1 ? "search link" : "search links"}
-                </>
-              }
-              value="search-dorks"
-            >
-              <div className="text-muted-foreground flex flex-col items-start gap-2">
-                {googleDorks.map((dork) => (
-                  <a
-                    key={dork.query}
-                    href={dork.href}
-                    rel="noopener noreferrer"
-                    target="_blank"
-                    title={dork.query}
-                    className={cn(
-                      buttonVariants({ variant: "link", size: "sm" }),
-                      "justify-start w-fit h-fit gap-1 px-0 wrap-break-word",
-                    )}
-                  >
-                    {dork.label}
-                    <ExternalLink className="ml-1" />
-                  </a>
-                ))}
-              </div>
-            </ReadySummaryAccordion>
-          ) : null}
-
-        </div>
+            {googleDorks.length > 0 ? (
+              <ReadySummaryAccordion
+                icon={ExternalLink}
+                summary={
+                  <>
+                    {googleDorks.length}{" "}
+                    {googleDorks.length === 1 ? "search link" : "search links"}
+                  </>
+                }
+                value="search-dorks"
+              >
+                <div className="text-muted-foreground flex flex-col items-start gap-2">
+                  {googleDorks.map((dork) => (
+                    <a
+                      key={dork.query}
+                      href={dork.href}
+                      rel="noopener noreferrer"
+                      target="_blank"
+                      title={dork.query}
+                      className={cn(
+                        buttonVariants({ variant: "link", size: "sm" }),
+                        "justify-start w-fit h-fit gap-1 px-0 wrap-break-word",
+                      )}
+                    >
+                      {dork.label}
+                      <ExternalLink className="ml-1" />
+                    </a>
+                  ))}
+                </div>
+              </ReadySummaryAccordion>
+            ) : null}
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* ─────────────────────────────────────────────────────────────────────

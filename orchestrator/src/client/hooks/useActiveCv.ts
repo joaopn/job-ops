@@ -41,8 +41,9 @@ export function useActiveCv() {
 
 function readPersonName(cv: CvDocument | null): string {
   if (!cv) return "";
-  const basics = cv.content.basics;
-  if (!basics || typeof basics !== "object" || Array.isArray(basics)) return "";
-  const name = (basics as Record<string, unknown>).name;
-  return typeof name === "string" ? name.trim() : "";
+  // Pick the first field whose role is "name" — by convention the
+  // candidate's display name. Falls back to empty if no such field exists
+  // (extraction failure or pre-5d document).
+  const nameField = cv.fields.find((field) => field.role === "name");
+  return nameField?.value.trim() ?? "";
 }

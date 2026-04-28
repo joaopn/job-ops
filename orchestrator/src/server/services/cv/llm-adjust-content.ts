@@ -13,15 +13,23 @@ import {
   type CvContent,
 } from "@shared/types";
 
+/**
+ * `tailoredContentJson` is a JSON-encoded string instead of a nested
+ * object — strict structured-output mode (OpenAI) requires
+ * `additionalProperties: false` on every object schema, which is
+ * incompatible with the open-shape, source-CV-mirroring tailoredContent.
+ * Encoding it as a string lets the LLM emit arbitrary keys; the server
+ * parses it after the call.
+ */
 const ADJUST_SCHEMA: JsonSchemaDefinition = {
   name: "cv_adjust_result",
   schema: {
     type: "object",
     properties: {
-      tailoredContent: {
-        type: "object",
+      tailoredContentJson: {
+        type: "string",
         description:
-          "Same shape as the input content, with wording adjusted for the JD.",
+          "Stringified JSON object with the same shape as the input content. The wording is adjusted for the JD; keys must mirror the input. The server JSON.parses this.",
       },
       matched: {
         type: "array",
@@ -36,7 +44,7 @@ const ADJUST_SCHEMA: JsonSchemaDefinition = {
           "JD keywords considered but dropped because the brief lacks evidence.",
       },
     },
-    required: ["tailoredContent", "matched", "skipped"],
+    required: ["tailoredContentJson", "matched", "skipped"],
     additionalProperties: false,
   },
 };
@@ -77,7 +85,7 @@ export async function llmAdjustContent(
   messages.push({ role: "user", content: prompt.user });
 
   const result = await llm.callJson<{
-    tailoredContent: unknown;
+    tailoredContentJson: unknown;
     matched: unknown;
     skipped: unknown;
   }>({
@@ -91,7 +99,27 @@ export async function llmAdjustContent(
     return { success: false, error: `LLM call failed: ${result.error}` };
   }
 
-  const { tailoredContent, matched, skipped } = result.data;
+  const { tailoredContentJson, matched, skipped } = result.data;
+  if (
+    typeof tailoredContentJson !== "string" ||
+    tailoredContentJson.trim().length === 0
+  ) {
+    return {
+      success: false,
+      error: "LLM returned empty or non-string tailoredContentJson.",
+    };
+  }
+
+  let tailoredContent: unknown;
+  try {
+    tailoredContent = JSON.parse(tailoredContentJson);
+  } catch (error) {
+    return {
+      success: false,
+      error: `LLM returned tailoredContentJson that is not parseable JSON: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+
   if (
     tailoredContent === null ||
     typeof tailoredContent !== "object" ||

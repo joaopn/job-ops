@@ -9,7 +9,6 @@ import type {
   AppSettings,
   BranchInfo,
   CreateJobNoteInput,
-  CvContent,
   CvDocument,
   CvDocumentSummary,
   Job,
@@ -960,6 +959,42 @@ export async function generateJobPdf(id: string): Promise<Job> {
   });
 }
 
+export async function reTailorJob(id: string): Promise<Job> {
+  return fetchApi<Job>(`/jobs/${id}/re-tailor`, {
+    method: "POST",
+  });
+}
+
+export type AcceptEditResponse =
+  | { kind: "cv-edit"; message: JobChatMessage; job: Job }
+  | { kind: "brief-edit"; message: JobChatMessage; cv: CvDocument };
+
+export async function acceptJobChatEdit(
+  jobId: string,
+  messageId: string,
+): Promise<AcceptEditResponse> {
+  return fetchApi<AcceptEditResponse>(
+    `/jobs/${jobId}/chat/messages/${messageId}/accept-edit`,
+    {
+      method: "POST",
+      body: JSON.stringify({}),
+    },
+  );
+}
+
+export async function rejectJobChatEdit(
+  jobId: string,
+  messageId: string,
+): Promise<{ message: JobChatMessage }> {
+  return fetchApi<{ message: JobChatMessage }>(
+    `/jobs/${jobId}/chat/messages/${messageId}/reject-edit`,
+    {
+      method: "POST",
+      body: JSON.stringify({}),
+    },
+  );
+}
+
 export async function markAsApplied(id: string): Promise<Job> {
   return fetchApi<Job>(`/jobs/${id}/apply`, {
     method: "POST",
@@ -1146,8 +1181,6 @@ export async function updateCvDocument(
   id: string,
   input: Partial<{
     name: string;
-    template: string;
-    content: CvContent;
     personalBrief: string;
   }>,
 ): Promise<CvDocument> {

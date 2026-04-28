@@ -28,7 +28,6 @@ export type JobChatPromptContext = {
 
 const MAX_JOB_DESCRIPTION = 4000;
 const MAX_BRIEF_SNAPSHOT = 6000;
-const MAX_TEMPLATE_SNAPSHOT = 3000;
 const MAX_TAILORED_CONTENT = 6000;
 const MAX_COVER_LETTER = 8000;
 
@@ -67,26 +66,32 @@ function buildBriefSnapshot(brief: string): string {
 }
 
 function buildCvSnapshot(job: Job, cv: CvDocument | null): string {
-  const tailoredContentJson = job.tailoredContent
-    ? truncate(JSON.stringify(job.tailoredContent, null, 2), MAX_TAILORED_CONTENT)
-    : null;
+  const fields = cv?.fields ?? [];
+  const overrides = job.tailoredFields ?? {};
+
+  // Render each field with its CURRENT value (override or original).
+  const fieldsView = fields.map((field) => ({
+    id: field.id,
+    role: field.role,
+    value: overrides[field.id] ?? field.value,
+    overridden: Object.hasOwn(overrides, field.id),
+  }));
 
   const snapshot = {
     cv: cv
       ? {
           id: cv.id,
           name: cv.name,
-          template: truncate(cv.template, MAX_TEMPLATE_SNAPSHOT),
         }
       : null,
-    tailoredContent: tailoredContentJson,
+    fields: fieldsView,
     ats: {
       matched: job.tailoringMatched ?? [],
       skipped: job.tailoringSkipped ?? [],
     },
   };
 
-  return JSON.stringify(snapshot, null, 2);
+  return truncate(JSON.stringify(snapshot, null, 2), MAX_TAILORED_CONTENT);
 }
 
 function buildCoverLetterSnapshot(job: Job): string {

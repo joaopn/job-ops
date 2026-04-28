@@ -36,7 +36,7 @@ export class RunTectonicError extends Error {
 export async function runTectonic(
   args: RunTectonicArgs,
 ): Promise<RunTectonicResult> {
-  const entrypoint = args.entrypoint ?? "main.tex";
+  const entrypointName = args.entrypoint ?? "main.tex";
   const timeoutMs = args.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
   const tempDir = await fs.mkdtemp(path.join(tmpdir(), "cv-tectonic-"));
@@ -46,21 +46,77 @@ export async function runTectonic(
       zip.extractAllTo(tempDir, /* overwrite */ true);
     }
 
-    const entrypointPath = path.join(tempDir, entrypoint);
+    // Many CV zips wrap their assets in a single top-level folder
+    // (e.g. `awesome-cv-template/main.tex` + `awesome-cv-template/awesome-cv.cls`).
+    // Tectonic resolves `.cls` / `.sty` by looking next to the .tex it's
+    // compiling, so we need to write the rendered tex into whichever
+    // directory the original assets live in — not the tempDir root.
+    const workDir = await pickWorkDir(tempDir);
+    const entrypointPath = path.join(workDir, entrypointName);
     await fs.mkdir(path.dirname(entrypointPath), { recursive: true });
     await fs.writeFile(entrypointPath, args.renderedTex, "utf8");
 
-    const stderr = await spawnTectonic(entrypointPath, tempDir, timeoutMs);
+    const stderr = await spawnTectonic(entrypointPath, workDir, timeoutMs);
 
     const pdfPath = path.join(
       path.dirname(entrypointPath),
-      `${path.basename(entrypoint, ".tex")}.pdf`,
+      `${path.basename(entrypointName, ".tex")}.pdf`,
     );
     const pdf = await fs.readFile(pdfPath);
     return { pdf: new Uint8Array(pdf), log: stderr };
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true });
   }
+}
+
+/**
+ * Pick the directory inside the extracted tree where the rendered tex should
+ * be written and tectonic should run. Heuristic:
+ *
+ *   1. If a `.cls` or `.sty` file exists, return the directory containing
+ *      it (deepest match wins on tie).
+ *   2. Else if the tempDir contains exactly one subdirectory and no
+ *      sibling files, descend into it (handles the common
+ *      `archive-name/...` wrapper).
+ *   3. Else fall back to the tempDir root.
+ */
+async function pickWorkDir(tempDir: string): Promise<string> {
+  const classPath = await findFirst(tempDir, (name) =>
+    name.endsWith(".cls") || name.endsWith(".sty"),
+  );
+  if (classPath) return path.dirname(classPath);
+
+  const entries = await fs.readdir(tempDir, { withFileTypes: true });
+  if (entries.length === 1 && entries[0].isDirectory()) {
+    return path.join(tempDir, entries[0].name);
+  }
+  return tempDir;
+}
+
+async function findFirst(
+  root: string,
+  predicate: (name: string) => boolean,
+): Promise<string | null> {
+  const stack = [root];
+  while (stack.length > 0) {
+    const dir = stack.pop();
+    if (!dir) break;
+    let entries: import("node:fs").Dirent[];
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(full);
+        continue;
+      }
+      if (predicate(entry.name)) return full;
+    }
+  }
+  return null;
 }
 
 function looksLikeZip(buf: Uint8Array): boolean {

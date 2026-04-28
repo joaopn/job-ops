@@ -2,24 +2,19 @@
 import { promises as fs } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { CvContent, CvDocument } from "@shared/types";
+import type { CvDocument, CvField } from "@shared/types";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const SAMPLE_CONTENT: CvContent = {
-  basics: { name: "Ada Lovelace", profiles: [] },
-  experience: [],
-  education: [],
-  projects: [],
-  skillGroups: [],
-  custom: [],
-};
+const SAMPLE_FIELDS: CvField[] = [
+  { id: "basics.name", role: "name", value: "Ada Lovelace" },
+];
 
 const FAKE_CV: CvDocument = {
   id: "cv-1",
   name: "Ada CV",
-  flattenedTex: "\\documentclass{article}",
-  template: "\\documentclass{article}\n<%= e(basics.name) %>\n",
-  content: SAMPLE_CONTENT,
+  flattenedTex:
+    "\\documentclass{article}\n\\name{Ada Lovelace}\n",
+  fields: SAMPLE_FIELDS,
   personalBrief: "",
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
@@ -30,13 +25,13 @@ vi.mock("@server/repositories/cv-documents", () => ({
   getCvDocumentArchive: vi.fn(),
 }));
 
-vi.mock("@server/services/cv/render-template", async () => {
-  const actual = await vi.importActual<
-    typeof import("@server/services/cv/render-template")
-  >("@server/services/cv/render-template");
+vi.mock("@server/services/cv/render", async () => {
+  const actual = await vi.importActual<typeof import("@server/services/cv/render")>(
+    "@server/services/cv/render",
+  );
   return {
     ...actual,
-    renderTemplate: vi.fn(),
+    renderCv: vi.fn(),
   };
 });
 
@@ -51,7 +46,7 @@ vi.mock("@server/services/cv/run-tectonic", async () => {
 });
 
 import * as cvRepo from "@server/repositories/cv-documents";
-import { RenderTemplateError, renderTemplate } from "@server/services/cv/render-template";
+import { RenderCvError, renderCv } from "@server/services/cv/render";
 import { RunTectonicError, runTectonic } from "@server/services/cv/run-tectonic";
 import { generatePdf } from "./pdf";
 
@@ -64,9 +59,7 @@ beforeEach(async () => {
   vi.mocked(cvRepo.getCvDocumentArchive).mockResolvedValue(
     Buffer.from("\\documentclass{article}\n", "utf8"),
   );
-  vi.mocked(renderTemplate).mockReturnValue(
-    "\\documentclass{article}\nAda Lovelace\n",
-  );
+  vi.mocked(renderCv).mockReturnValue(FAKE_CV.flattenedTex);
   vi.mocked(runTectonic).mockResolvedValue({
     pdf: new Uint8Array([0x25, 0x50, 0x44, 0x46]),
     log: "",
@@ -79,11 +72,10 @@ afterEach(async () => {
 });
 
 describe("generatePdf", () => {
-  it("renders, compiles, and writes the PDF to <dataDir>/pdfs/resume_<jobId>.pdf", async () => {
+  it("renders the source verbatim and writes a PDF when no overrides are supplied", async () => {
     const result = await generatePdf({
       jobId: "job-42",
       cvDocumentId: "cv-1",
-      content: SAMPLE_CONTENT,
     });
 
     expect(result.success).toBe(true);
@@ -93,11 +85,24 @@ describe("generatePdf", () => {
     const written = await fs.readFile(expectedPath);
     expect(written.subarray(0, 4).toString("ascii")).toBe("%PDF");
 
-    expect(renderTemplate).toHaveBeenCalledWith(FAKE_CV.template, SAMPLE_CONTENT);
-    expect(runTectonic).toHaveBeenCalledWith(
-      expect.objectContaining({
-        renderedTex: "\\documentclass{article}\nAda Lovelace\n",
-      }),
+    expect(renderCv).toHaveBeenCalledWith(
+      FAKE_CV.flattenedTex,
+      SAMPLE_FIELDS,
+      {},
+    );
+  });
+
+  it("threads field overrides into the renderer", async () => {
+    await generatePdf({
+      jobId: "job-43",
+      cvDocumentId: "cv-1",
+      overrides: { "basics.name": "Ada L. Byron" },
+    });
+
+    expect(renderCv).toHaveBeenCalledWith(
+      FAKE_CV.flattenedTex,
+      SAMPLE_FIELDS,
+      { "basics.name": "Ada L. Byron" },
     );
   });
 
@@ -106,20 +111,18 @@ describe("generatePdf", () => {
     const result = await generatePdf({
       jobId: "job-1",
       cvDocumentId: "missing",
-      content: SAMPLE_CONTENT,
     });
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/CV document not found/);
   });
 
-  it("returns a failure when render-template throws", async () => {
-    vi.mocked(renderTemplate).mockImplementationOnce(() => {
-      throw new RenderTemplateError("forbidden", "FORBIDDEN_PATTERN");
+  it("returns a failure when the renderer throws", async () => {
+    vi.mocked(renderCv).mockImplementationOnce(() => {
+      throw new RenderCvError("forbidden", "FORBIDDEN_PATTERN");
     });
     const result = await generatePdf({
       jobId: "job-1",
       cvDocumentId: "cv-1",
-      content: SAMPLE_CONTENT,
     });
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/Template render failed/);
@@ -132,7 +135,6 @@ describe("generatePdf", () => {
     const result = await generatePdf({
       jobId: "job-1",
       cvDocumentId: "cv-1",
-      content: SAMPLE_CONTENT,
     });
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/LaTeX compile failed/);

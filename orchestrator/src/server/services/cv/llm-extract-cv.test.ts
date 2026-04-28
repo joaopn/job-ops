@@ -25,10 +25,16 @@ vi.mock("@server/services/modelSelection", () => ({
   resolveLlmModel: vi.fn().mockResolvedValue("test-model"),
 }));
 
-const SAMPLE_CONTENT = {
-  basics: { name: "Ada", profiles: [] },
-  experience: [],
-};
+const SOURCE_TEX = `\\name{Ada Lovelace}
+\\position{Engineer}
+\\experience{Engineer}{2020 -- 2024}
+`;
+
+const SAMPLE_FIELDS = [
+  { id: "basics.name", role: "name", value: "Ada Lovelace" },
+  { id: "basics.position", role: "title", value: "Engineer" },
+  { id: "experience.0.dates", role: "date", value: "2020 -- 2024" },
+];
 
 beforeEach(() => {
   callJsonMock.mockReset();
@@ -39,39 +45,18 @@ describe("extractCv", () => {
     callJsonMock.mockResolvedValue({
       success: true,
       data: {
-        template: "\\documentclass{article}",
-        content: SAMPLE_CONTENT,
+        fieldsJson: JSON.stringify(SAMPLE_FIELDS),
         personalBrief: "I'm a mathematician.",
       },
     });
 
     const result = await extractCv({
-      flattenedTex: "\\documentclass{article}",
+      flattenedTex: SOURCE_TEX,
       assetReferences: [],
     });
 
-    expect(result.template).toBe("\\documentclass{article}");
-    expect(result.content).toEqual(SAMPLE_CONTENT);
+    expect(result.fields).toEqual(SAMPLE_FIELDS);
     expect(result.personalBrief).toBe("I'm a mathematician.");
-  });
-
-  it("accepts a content shape that doesn't match the legacy CvContent layout", async () => {
-    const exoticContent = {
-      profile: { fullName: "Ada" },
-      publications: [{ title: "Notes on the Engine" }],
-    };
-    callJsonMock.mockResolvedValue({
-      success: true,
-      data: {
-        template: "\\documentclass{article}",
-        content: exoticContent,
-        personalBrief: "I publish things.",
-      },
-    });
-
-    const result = await extractCv({ flattenedTex: "x", assetReferences: [] });
-    expect(result.content).toEqual(exoticContent);
-    expect(result.personalBrief).toBe("I publish things.");
   });
 
   it("throws CvExtractError when the LLM call fails", async () => {
@@ -81,67 +66,118 @@ describe("extractCv", () => {
     });
 
     await expect(
-      extractCv({ flattenedTex: "x", assetReferences: [] }),
+      extractCv({ flattenedTex: SOURCE_TEX, assetReferences: [] }),
     ).rejects.toMatchObject({ name: "CvExtractError", code: "LLM_FAILED" });
   });
 
-  it("throws when the template is empty", async () => {
+  it("throws INVALID_FIELDS_JSON when fieldsJson is unparseable", async () => {
     callJsonMock.mockResolvedValue({
       success: true,
       data: {
-        template: "   ",
-        content: SAMPLE_CONTENT,
-        personalBrief: "",
+        fieldsJson: "not-json",
+        personalBrief: "x",
       },
     });
 
     await expect(
-      extractCv({ flattenedTex: "x", assetReferences: [] }),
-    ).rejects.toMatchObject({ code: "EMPTY_TEMPLATE" });
+      extractCv({ flattenedTex: SOURCE_TEX, assetReferences: [] }),
+    ).rejects.toMatchObject({ code: "INVALID_FIELDS_JSON" });
   });
 
-  it("throws INVALID_CONTENT when content is not a JSON object", async () => {
+  it("throws EMPTY_FIELDS when the array is empty", async () => {
     callJsonMock.mockResolvedValue({
       success: true,
       data: {
-        template: "\\documentclass{article}",
-        content: ["not", "an", "object"],
-        personalBrief: "",
+        fieldsJson: "[]",
+        personalBrief: "x",
       },
     });
 
     await expect(
-      extractCv({ flattenedTex: "x", assetReferences: [] }),
-    ).rejects.toMatchObject({ code: "INVALID_CONTENT" });
+      extractCv({ flattenedTex: SOURCE_TEX, assetReferences: [] }),
+    ).rejects.toMatchObject({ code: "EMPTY_FIELDS" });
   });
 
-  it("throws INVALID_BRIEF when personalBrief is missing", async () => {
+  it("rejects unknown roles", async () => {
     callJsonMock.mockResolvedValue({
       success: true,
       data: {
-        template: "\\documentclass{article}",
-        content: SAMPLE_CONTENT,
-        personalBrief: 42,
+        fieldsJson: JSON.stringify([
+          { id: "x", role: "not-a-role", value: "Ada Lovelace" },
+        ]),
+        personalBrief: "x",
       },
     });
 
     await expect(
-      extractCv({ flattenedTex: "x", assetReferences: [] }),
-    ).rejects.toMatchObject({ code: "INVALID_BRIEF" });
+      extractCv({ flattenedTex: SOURCE_TEX, assetReferences: [] }),
+    ).rejects.toMatchObject({ code: "INVALID_FIELD_ROLE" });
+  });
+
+  it("rejects duplicate field ids", async () => {
+    callJsonMock.mockResolvedValue({
+      success: true,
+      data: {
+        fieldsJson: JSON.stringify([
+          { id: "a", role: "name", value: "Ada Lovelace" },
+          { id: "a", role: "title", value: "Engineer" },
+        ]),
+        personalBrief: "x",
+      },
+    });
+
+    await expect(
+      extractCv({ flattenedTex: SOURCE_TEX, assetReferences: [] }),
+    ).rejects.toMatchObject({ code: "DUPLICATE_FIELD_ID" });
+  });
+
+  it("rejects fields whose value cannot be located in the source", async () => {
+    callJsonMock.mockResolvedValue({
+      success: true,
+      data: {
+        fieldsJson: JSON.stringify([
+          { id: "a", role: "name", value: "Ada Lovelace" },
+          { id: "b", role: "title", value: "DOES_NOT_EXIST_IN_SOURCE" },
+        ]),
+        personalBrief: "x",
+      },
+    });
+
+    await expect(
+      extractCv({ flattenedTex: SOURCE_TEX, assetReferences: [] }),
+    ).rejects.toMatchObject({ code: "FIELD_NOT_FOUND" });
+  });
+
+  it("rejects out-of-document-order fields", async () => {
+    callJsonMock.mockResolvedValue({
+      success: true,
+      data: {
+        // basics.position appears in source AFTER basics.name. Listing
+        // them in reverse order moves the cursor past basics.name first.
+        fieldsJson: JSON.stringify([
+          { id: "basics.position", role: "title", value: "Engineer" },
+          { id: "basics.name", role: "name", value: "Ada Lovelace" },
+        ]),
+        personalBrief: "x",
+      },
+    });
+
+    await expect(
+      extractCv({ flattenedTex: SOURCE_TEX, assetReferences: [] }),
+    ).rejects.toMatchObject({ code: "FIELD_NOT_FOUND" });
   });
 
   it("formats the asset list as a newline-separated string when populated", async () => {
     callJsonMock.mockResolvedValue({
       success: true,
       data: {
-        template: "\\documentclass{article}",
-        content: SAMPLE_CONTENT,
-        personalBrief: "",
+        fieldsJson: JSON.stringify(SAMPLE_FIELDS),
+        personalBrief: "x",
       },
     });
 
     await extractCv({
-      flattenedTex: "x",
+      flattenedTex: SOURCE_TEX,
       assetReferences: ["photo.jpg", "logo.png"],
     });
 
@@ -155,21 +191,16 @@ describe("extractCv", () => {
     callJsonMock.mockResolvedValue({
       success: true,
       data: {
-        template: "\\documentclass{article}",
-        content: SAMPLE_CONTENT,
-        personalBrief: "",
+        fieldsJson: JSON.stringify(SAMPLE_FIELDS),
+        personalBrief: "x",
       },
     });
 
-    await extractCv({ flattenedTex: "x", assetReferences: [] });
+    await extractCv({ flattenedTex: SOURCE_TEX, assetReferences: [] });
 
     expect(loadPrompt).toHaveBeenCalledWith(
       "cv-extract",
       expect.objectContaining({ assetReferencesList: "(none)" }),
     );
-  });
-
-  it("exports CvExtractError as a named class", () => {
-    expect(new CvExtractError("x", "Y").code).toBe("Y");
   });
 });

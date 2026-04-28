@@ -26,9 +26,15 @@ import { MessageList } from "./MessageList";
 
 type GhostwriterPanelProps = {
   job: Job;
+  onJobUpdated?: () => void | Promise<void>;
+  onUseAsCoverLetter?: (content: string) => void;
 };
 
-export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
+export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({
+  job,
+  onJobUpdated,
+  onUseAsCoverLetter,
+}) => {
   const [messages, setMessages] = useState<JobChatMessage[]>([]);
   const [branches, setBranches] = useState<BranchInfo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -397,9 +403,16 @@ export const GhostwriterPanel: React.FC<GhostwriterPanelProps> = ({ job }) => {
             branches={branches}
             isStreaming={isStreaming}
             streamingMessageId={streamingMessageId}
+            jobId={job.id}
             onRegenerate={regenerate}
             onEdit={editMessage}
             onSwitchBranch={switchBranch}
+            onEditAccepted={async () => {
+              await loadMessages();
+              await onJobUpdated?.();
+            }}
+            onEditRejected={loadMessages}
+            onUseAsCoverLetter={onUseAsCoverLetter}
           />
         )}
       </div>

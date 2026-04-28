@@ -1,5 +1,5 @@
 import type { BranchInfo, JobChatMessage } from "@shared/types";
-import { Check, Copy, Pencil, RefreshCcw } from "lucide-react";
+import { Check, Copy, FileText, Pencil, RefreshCcw } from "lucide-react";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { BranchNavigator } from "./BranchNavigator";
+import { EditDiffCard } from "./EditDiffCard";
 import { StreamingMessage } from "./StreamingMessage";
 
 type MessageListProps = {
@@ -15,9 +16,13 @@ type MessageListProps = {
   branches: BranchInfo[];
   isStreaming: boolean;
   streamingMessageId: string | null;
+  jobId: string;
   onRegenerate: (messageId: string) => void;
   onEdit: (messageId: string, content: string) => void;
   onSwitchBranch: (messageId: string) => void;
+  onEditAccepted?: () => void | Promise<void>;
+  onEditRejected?: () => void | Promise<void>;
+  onUseAsCoverLetter?: (content: string) => void;
 };
 
 export const MessageList: React.FC<MessageListProps> = ({
@@ -25,9 +30,13 @@ export const MessageList: React.FC<MessageListProps> = ({
   branches,
   isStreaming,
   streamingMessageId,
+  jobId,
   onRegenerate,
   onEdit,
   onSwitchBranch,
+  onEditAccepted,
+  onEditRejected,
+  onUseAsCoverLetter,
 }) => {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
@@ -200,11 +209,40 @@ export const MessageList: React.FC<MessageListProps> = ({
               ) : isActiveStreaming ? (
                 <StreamingMessage content={message.content} />
               ) : message.role === "assistant" ? (
-                <div className="text-sm leading-relaxed text-foreground [&_a]:text-primary [&_a]:underline [&_blockquote]:border-l [&_blockquote]:border-border [&_blockquote]:pl-3 [&_code]:rounded [&_code]:bg-muted/40 [&_code]:px-1 [&_h1]:mt-4 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:mt-4 [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:mt-3 [&_h3]:text-sm [&_h3]:font-semibold [&_li]:my-1 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-2 [&_pre]:my-3 [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-muted/40 [&_pre]:p-3 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {message.content || "..."}
-                  </ReactMarkdown>
-                </div>
+                <>
+                  <div className="text-sm leading-relaxed text-foreground [&_a]:text-primary [&_a]:underline [&_blockquote]:border-l [&_blockquote]:border-border [&_blockquote]:pl-3 [&_code]:rounded [&_code]:bg-muted/40 [&_code]:px-1 [&_h1]:mt-4 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:mt-4 [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:mt-3 [&_h3]:text-sm [&_h3]:font-semibold [&_li]:my-1 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-2 [&_pre]:my-3 [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-muted/40 [&_pre]:p-3 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {message.content || "..."}
+                    </ReactMarkdown>
+                  </div>
+                  {message.proposedEdit ? (
+                    <EditDiffCard
+                      jobId={jobId}
+                      message={message}
+                      proposedEdit={message.proposedEdit}
+                      isStreaming={isStreaming}
+                      onAccepted={onEditAccepted}
+                      onRejected={onEditRejected}
+                      onRegenerate={onRegenerate}
+                    />
+                  ) : null}
+                  {!message.proposedEdit &&
+                  message.status === "complete" &&
+                  message.content.trim().length > 0 &&
+                  onUseAsCoverLetter ? (
+                    <div className="mt-2 flex justify-end">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 gap-1 px-2 text-xs text-muted-foreground"
+                        onClick={() => onUseAsCoverLetter(message.content)}
+                      >
+                        <FileText className="h-3 w-3" />
+                        Use as cover-letter draft
+                      </Button>
+                    </div>
+                  ) : null}
+                </>
               ) : (
                 <div className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
                   {message.content}

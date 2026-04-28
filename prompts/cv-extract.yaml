@@ -1,7 +1,8 @@
 name: cv-extract
 description: |
-  Extracts a free-form JSON content object plus a generalised Eta template
-  from a flattened LaTeX CV, and drafts a first-person personal brief that
+  Extracts a list of typed value fields from a flattened LaTeX CV — verbatim
+  spans of the source that the renderer can substitute without ever rewriting
+  the surrounding LaTeX. Also drafts a first-person personal brief that
   later powers per-job tailoring.
 variables:
   - name: flattenedTex
@@ -9,64 +10,56 @@ variables:
   - name: assetReferencesList
     description: |
       Newline-separated list of `\includegraphics{...}` / font / class file
-      references discovered in the source. The template must preserve these
-      references verbatim. Empty string when no assets were detected.
+      references discovered in the source. Listed for context; you do not
+      need to emit fields for them. Empty string when no assets were detected.
 model:
   preferStructuredOutput: true
-  temperature: 0.1
+  temperature: 0.0
   maxOutputTokens: 16000
 system: |
-  You convert a user's existing LaTeX CV into three artifacts:
+  You read a user's existing LaTeX CV and produce two artifacts:
 
-  1. `template` — an Eta-flavoured LaTeX template. Custom delimiters: `<%= %>`
-     for value substitutions, `<% %>` for control flow. The template must
-     re-render the original CV faithfully when filled with the extracted
-     content, and gracefully handle empty arrays / missing optional fields
-     once the content is replaced with a tailored variant.
-  2. `content` — a JSON object that captures the source CV's data. Use the
-     section names and structure that match the source CV. Do not invent
-     sections, do not force keys the CV doesn't have, and do not impose any
-     fixed schema. Mirror what is on the page.
-  3. `personalBrief` — a 100–400 word first-person summary of the candidate,
-     drawn from the LaTeX prose. Cover background, focus areas, notable
-     work, and tools they've used. This is a starting point: the user will
-     paste in extra context (long-running chats, side projects, things they
-     mention in passing) on top of it. Keep it factual and grounded in the
-     CV; do not embellish or invent.
+  1. `fieldsJson` — a STRINGIFIED JSON array of `CvField` entries in
+     DOCUMENT ORDER. Each entry is `{ id, role, value }` where `value` is a
+     verbatim substring of the source LaTeX. The renderer locates each
+     `value` by sequential `indexOf` from a running cursor; emit fields in
+     the order they appear.
+  2. `personalBrief` — a 100–400 word first-person summary of the
+     candidate, drawn from the LaTeX prose. Cover background, focus areas,
+     notable work, and tools they've used. Keep it factual and grounded in
+     the CV; do not embellish or invent.
 
-  Hard rules for the template:
+  Hard rules for fields:
 
-  - Preserve every `\documentclass{...}`, `\usepackage{...}`, custom command
-    definition, font setup, and `\includegraphics{...}` reference exactly as
-    they appear in the source. Do not rename, add, or drop packages.
-  - Replace concrete data with Eta substitutions whose paths match the keys
-    you used in `content` (e.g. `<%= e(basics.name) %>`, `<%= e(bullet) %>`).
-    Plain text values must flow through the LaTeX-escape filter `e`. Skip
-    `e()` only inside `\href{...}` URLs where you specifically need raw
-    characters.
-  - Replace each repeated section block (experience entries, education
-    entries, projects, skill groups, custom-section items, profiles, bullet
-    lists) with an Eta `<% for (...) { %> ... <% } %>` loop over the matching
-    array.
-  - Wrap optional fields in `<% if (...) { %> ... <% } %>` so they disappear
-    cleanly when the corresponding string is empty / undefined.
-  - Do not emit any new prose, comments, or sectioning the source CV did not
-    already contain. The template must be a structural generalisation of the
-    original, never an extension of it.
-  - Return the template as a single string with literal `\n` line breaks
-    preserved.
-
-  Hard rules for the content:
-
-  - Use the section names and key names that match the source CV. If the CV
-    has "Publications" and "Consulting", emit `publications` and `consulting`
-    keys. If it has neither, do not emit them.
-  - Strings carry plain text only — strip every LaTeX command, brace, and
-    escape (`\textbf{X}` → `X`, `\&` → `&`, `\%` → `%`, `~` → ` `, etc.).
-  - Preserve the order and grouping used in the source CV.
-  - The whole `content` value must be a JSON object (not an array, not a
-    string). Inside the object, arrays and nested objects are encouraged
-    wherever the source CV has repeating items.
+  - `value` MUST be byte-for-byte present in the source LaTeX. Do not
+    paraphrase, normalise whitespace, strip LaTeX commands, or change
+    escapes. If the source has `Ada \& Co.`, emit `value: "Ada \\& Co."`
+    (the JSON-encoded form of `Ada \& Co.`).
+  - `value` should typically be the smallest "data" span: a name, a job
+    title, a date range, a single bullet, a section heading. Do NOT include
+    the surrounding LaTeX command — emit "Engineer" not "\position{Engineer}".
+  - If the same plain-text value appears more than once in the source
+    (e.g. two roles both titled "Engineer"), emit one field per occurrence
+    with distinct ids. Order the fields exactly as they appear in the
+    source — the renderer relies on a left-to-right cursor walk.
+  - If a value would otherwise be ambiguous because it appears earlier as
+    well, expand it to include enough surrounding text to be locatable in
+    document order. Prefer expanding the value over emitting a non-unique
+    fragment.
+  - `id`s MUST be unique across the array. Use `basics.name`,
+    `experience.0.title`, `experience.0.bullets.2`, `education.1.degree`,
+    `skills.languages`, etc. — stable, human-readable, dot-separated.
+  - `role` MUST be one of: name, title, company, location, date, bullet,
+    summary, skill, publication, url, email, phone, education,
+    section-heading, other. Pick the closest fit.
+  - Cover every piece of data the user might want to tailor: bullets,
+    titles, dates, locations, skill keywords, summary sentences. Skip
+    purely structural text (section names like "Experience" or "Education"
+    don't usually need to be tailored — but emit them as
+    `section-heading` if the user has rephrased them).
+  - Do NOT emit `\documentclass`, `\usepackage`, `\photo{...}`,
+    `\includegraphics{...}`, or any other structural / preamble command as
+    a field. They render as part of the source unchanged.
 
   Hard rules for the personal brief:
 
@@ -74,9 +67,13 @@ system: |
   - 100–400 words. No bullet lists, no headings; flowing prose.
   - Stay grounded in what the CV actually says. Do not fabricate experience,
     titles, or numbers. If the CV is sparse, the brief is short.
+
+  Output format reminder: `fieldsJson` is a JSON-encoded STRING
+  (the string field in the response JSON contains a serialised JSON array,
+  with quotes escaped as \"). The server runs `JSON.parse` on it.
 user: |
-  Asset references discovered in the source (must appear verbatim in the
-  template):
+  Asset references discovered in the source (for context — do not emit
+  fields for these):
   {{assetReferencesList}}
 
   Source LaTeX CV (already flattened — `\input{}` directives have been
@@ -86,6 +83,6 @@ user: |
   {{flattenedTex}}
   ----- END CV -----
 
-  Return a JSON object with exactly three keys: `template` (string),
-  `content` (object whose shape mirrors the source CV), and `personalBrief`
+  Return a JSON object with exactly two keys: `fieldsJson` (JSON-encoded
+  string of the CvField array in document order) and `personalBrief`
   (string).

@@ -17,7 +17,6 @@ import * as jobsRepo from "../repositories/jobs";
 import * as pipelineRepo from "../repositories/pipeline";
 import * as settingsRepo from "../repositories/settings";
 import { getActiveCvDocument } from "../services/cv-active";
-import { llmAdjustContent } from "../services/cv/llm-adjust-content";
 import { generatePdf } from "../services/pdf";
 import { progressHelpers, resetProgress } from "./progress";
 import {
@@ -308,9 +307,10 @@ export type ProcessJobOptions = {
 };
 
 /**
- * Step 1: Tailor the active CV's content to this job's description via the
- * cv-adjust LLM call. On LLM failure the job is pinned with the untouched
- * content so the PDF still renders — better than no PDF.
+ * Step 1: Pin the active CV to this job. The cv-adjust LLM call is paused
+ * during the 5d substrate migration — the job is pinned with no per-field
+ * overrides, so `generateFinalPdf` renders the original CV byte-for-byte.
+ * 5d.2 reintroduces cv-adjust against the new field-based substrate.
  */
 export async function summarizeJob(
   jobId: string,
@@ -321,7 +321,7 @@ export async function summarizeJob(
 }> {
   return runWithRequestContext({ jobId }, async () => {
     const jobLogger = logger.child({ jobId });
-    jobLogger.info("Summarizing job");
+    jobLogger.info("Pinning job to active CV");
     try {
       const job = await jobsRepo.getJobById(jobId);
       if (!job) return { success: false, error: "Job not found" };
@@ -334,36 +334,17 @@ export async function summarizeJob(
         };
       }
 
-      const adjusted = await llmAdjustContent({
-        personalBrief: cv.personalBrief,
-        jobDescription: job.jobDescription ?? "",
-        currentContent: cv.content,
-      });
-
-      if (!adjusted.success) {
-        jobLogger.warn("Tailoring fell back to untouched CV content", {
-          reason: adjusted.error,
-        });
-        await jobsRepo.updateJob(job.id, {
-          cvDocumentId: cv.id,
-          tailoredContent: cv.content,
-          tailoringMatched: [],
-          tailoringSkipped: [],
-        });
-        return { success: true };
-      }
-
       await jobsRepo.updateJob(job.id, {
         cvDocumentId: cv.id,
-        tailoredContent: adjusted.tailoredContent,
-        tailoringMatched: adjusted.matched,
-        tailoringSkipped: adjusted.skipped,
+        tailoredFields: {},
+        tailoringMatched: [],
+        tailoringSkipped: [],
       });
 
       return { success: true };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
-      jobLogger.error("Summarization failed", error);
+      jobLogger.error("Pinning failed", error);
       return { success: false, error: message };
     }
   });
@@ -387,12 +368,11 @@ export async function generateFinalPdf(
       if (!job) return { success: false, error: "Job not found" };
 
       const cvDocumentId = job.cvDocumentId;
-      const tailoredContent = job.tailoredContent;
-      if (!cvDocumentId || !tailoredContent) {
+      if (!cvDocumentId) {
         return {
           success: false,
           error:
-            "Job is missing tailored CV content. Run summarizeJob first.",
+            "Job is not pinned to a CV document. Run summarizeJob first.",
         };
       }
 
@@ -401,7 +381,7 @@ export async function generateFinalPdf(
       const pdfResult = await generatePdf({
         jobId: job.id,
         cvDocumentId,
-        content: tailoredContent,
+        overrides: job.tailoredFields,
       });
 
       if (!pdfResult.success) {

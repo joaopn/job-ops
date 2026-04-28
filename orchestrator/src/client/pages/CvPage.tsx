@@ -1,11 +1,7 @@
 import * as api from "@client/api";
 import { PageHeader } from "@client/components/layout";
 import { queryKeys } from "@client/lib/queryKeys";
-import type {
-  CvContent,
-  CvDocument,
-  CvDocumentSummary,
-} from "@shared/types";
+import type { CvDocument, CvDocumentSummary } from "@shared/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
@@ -17,7 +13,7 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -156,9 +152,10 @@ function UploadCard({ onUploaded }: { onUploaded: () => Promise<void> }) {
         <CardDescription>
           Drop a .tex file (single-file CV) or a .zip archive containing
           main.tex plus any included files, fonts, and images. The server
-          flattens it, extracts a free-form JSON of whatever sections your
-          CV uses, drafts a first-person personal brief, and saves an Eta
-          template that re-renders your CV.
+          flattens it, extracts a list of typed value fields it can later
+          override during per-job tailoring, and drafts a first-person
+          personal brief. The renderer never rewrites your LaTeX — it only
+          substitutes overrides into the marked spans.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -223,54 +220,15 @@ function UploadCard({ onUploaded }: { onUploaded: () => Promise<void> }) {
 function CvEditor({ cv }: { cv: CvDocument }) {
   const queryClient = useQueryClient();
   const [name, setName] = useState(cv.name);
-  const [contentJson, setContentJson] = useState(() =>
-    JSON.stringify(cv.content, null, 2),
-  );
-  const [template, setTemplate] = useState(cv.template);
   const [personalBrief, setPersonalBrief] = useState(cv.personalBrief);
-  const [contentError, setContentError] = useState<string | null>(null);
 
   useEffect(() => {
     setName(cv.name);
-    setContentJson(JSON.stringify(cv.content, null, 2));
-    setTemplate(cv.template);
     setPersonalBrief(cv.personalBrief);
-    setContentError(null);
-  }, [
-    cv.id,
-    cv.updatedAt,
-    cv.name,
-    cv.content,
-    cv.template,
-    cv.personalBrief,
-  ]);
-
-  const parsedContent = useMemo<
-    | { success: true; data: CvContent }
-    | { success: false; error: { message: string } }
-  >(() => {
-    try {
-      const raw = JSON.parse(contentJson);
-      if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
-        return {
-          success: false,
-          error: { message: "content must be a JSON object" },
-        };
-      }
-      return { success: true, data: raw as CvContent };
-    } catch (err) {
-      return {
-        success: false,
-        error: { message: (err as Error).message },
-      };
-    }
-  }, [contentJson]);
+  }, [cv.id, cv.updatedAt, cv.name, cv.personalBrief]);
 
   const isDirty =
-    name !== cv.name ||
-    template !== cv.template ||
-    personalBrief !== cv.personalBrief ||
-    contentJson !== JSON.stringify(cv.content, null, 2);
+    name !== cv.name || personalBrief !== cv.personalBrief;
 
   const invalidateAll = useCallback(async () => {
     await queryClient.invalidateQueries({
@@ -279,12 +237,8 @@ function CvEditor({ cv }: { cv: CvDocument }) {
   }, [queryClient]);
 
   const saveMutation = useMutation({
-    mutationFn: async (input: {
-      name: string;
-      template: string;
-      content: CvContent;
-      personalBrief: string;
-    }) => api.updateCvDocument(cv.id, input),
+    mutationFn: async (input: { name: string; personalBrief: string }) =>
+      api.updateCvDocument(cv.id, input),
     onSuccess: async () => {
       toast.success("CV saved");
       await invalidateAll();
@@ -317,26 +271,15 @@ function CvEditor({ cv }: { cv: CvDocument }) {
   });
 
   const handleSave = () => {
-    if (!parsedContent.success) {
-      setContentError(parsedContent.error.message);
-      toast.error("Content JSON is invalid; fix the errors first.");
-      return;
-    }
-    setContentError(null);
     saveMutation.mutate({
       name: name.trim() || cv.name,
-      template,
-      content: parsedContent.data,
       personalBrief,
     });
   };
 
   const handleDiscard = () => {
     setName(cv.name);
-    setContentJson(JSON.stringify(cv.content, null, 2));
-    setTemplate(cv.template);
     setPersonalBrief(cv.personalBrief);
-    setContentError(null);
   };
 
   return (
@@ -417,52 +360,44 @@ function CvEditor({ cv }: { cv: CvDocument }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Content</CardTitle>
+          <CardTitle>Extracted fields ({cv.fields.length})</CardTitle>
           <CardDescription>
-            Free-form JSON whose shape mirrors your source CV's sections.
-            Edits here change what gets rendered on tailored PDFs. Only well
-            -formed JSON objects are accepted; otherwise the shape is up to
-            you.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <Textarea
-            value={contentJson}
-            onChange={(event) => setContentJson(event.target.value)}
-            spellCheck={false}
-            className="min-h-[420px] font-mono text-xs"
-          />
-          {contentError ||
-          (!parsedContent.success && parsedContent.error?.message) ? (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Invalid content JSON</AlertTitle>
-              <AlertDescription>
-                {contentError ??
-                  (!parsedContent.success
-                    ? parsedContent.error.message
-                    : null)}
-              </AlertDescription>
-            </Alert>
-          ) : null}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Eta template</CardTitle>
-          <CardDescription>
-            LaTeX template the server renders with your tailored content. Edit
-            sparingly — large changes can break round-trip fidelity.
+            Verbatim spans of the source LaTeX that per-job tailoring can
+            override. The renderer only touches these spans — everything
+            else in your CV is preserved byte-for-byte. To re-extract, click
+            "Re-extract" above.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Textarea
-            value={template}
-            onChange={(event) => setTemplate(event.target.value)}
-            spellCheck={false}
-            className="min-h-[420px] font-mono text-xs"
-          />
+          {cv.fields.length === 0 ? (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>No fields extracted</AlertTitle>
+              <AlertDescription>
+                The CV is uploaded but extraction returned no fields. Click
+                "Re-extract" above to retry.
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <div className="max-h-[480px] space-y-2 overflow-y-auto rounded border border-border/60 p-3 font-mono text-xs">
+              {cv.fields.map((field) => (
+                <div
+                  key={field.id}
+                  className="flex flex-col gap-1 border-b border-border/40 pb-2 last:border-b-0 last:pb-0"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-sm bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                      {field.role}
+                    </span>
+                    <span className="text-muted-foreground">{field.id}</span>
+                  </div>
+                  <div className="whitespace-pre-wrap text-foreground">
+                    {field.value}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -520,9 +455,9 @@ function DeleteCvButton({
         <AlertDialogHeader>
           <AlertDialogTitle>Delete this CV?</AlertDialogTitle>
           <AlertDialogDescription>
-            The original archive, extracted content, and Eta template will be
-            removed. Jobs that already reference this CV keep their pinned
-            tailored content but cannot be re-rendered.
+            The original archive, extracted fields, and personal brief will
+            be removed. Jobs that already reference this CV keep their
+            tailored field overrides but cannot be re-rendered.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

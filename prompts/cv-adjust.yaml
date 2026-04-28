@@ -16,9 +16,9 @@ variables:
   - name: tone
   - name: formality
   - name: constraintsSentence
-    description: Pre-rendered "Writing constraints: ..." sentence, or empty.
+    description: 'Pre-rendered "Writing constraints: ..." sentence, or empty.'
   - name: avoidTermsSentence
-    description: Pre-rendered "Avoid these terms: ..." sentence, or empty.
+    description: 'Pre-rendered "Avoid these terms: ..." sentence, or empty.'
 model:
   preferStructuredOutput: true
   temperature: 0.1
@@ -51,9 +51,12 @@ system: |
     - When in doubt, drop the keyword and add it to `skipped`.
 
   Output:
-    - `tailoredContent`: the same shape as the input content, with adjusted
-      wording. Empty string fields stay empty; arrays keep their length and
-      order unless the source data was empty (then leave them empty).
+    - `tailoredContentJson`: a STRINGIFIED JSON object — the same shape as
+      the input content, with adjusted wording. (It is returned as a JSON
+      string, not a nested object, because strict structured-output
+      validators reject open-shape objects. The server parses it.) Empty
+      string fields stay empty; arrays keep their length and order unless
+      the source data was empty (then leave them empty).
     - `matched`: list of JD keywords / phrases you actually surfaced in
       tailoredContent with backing evidence in the brief.
     - `skipped`: list of JD keywords / phrases you considered but dropped
@@ -74,6 +77,6 @@ user: |
   {{contentJson}}
   ===== END CURRENT CV CONTENT =====
 
-  Return a JSON object with exactly three keys: `tailoredContent` (object,
-  same shape as the input), `matched` (array of strings), and `skipped`
-  (array of strings).
+  Return a JSON object with exactly three keys: `tailoredContentJson` (a
+  JSON-encoded string whose parsed object mirrors the input content's
+  shape), `matched` (array of strings), and `skipped` (array of strings).

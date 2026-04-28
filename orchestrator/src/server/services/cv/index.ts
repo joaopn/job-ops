@@ -16,10 +16,10 @@ export {
   type AdjustContentResult,
 } from "./llm-adjust-content";
 export {
-  latexEscape,
-  renderTemplate,
-  RenderTemplateError,
-} from "./render-template";
+  findUnreachableField,
+  renderCv,
+  RenderCvError,
+} from "./render";
 export {
   runTectonic,
   RunTectonicError,

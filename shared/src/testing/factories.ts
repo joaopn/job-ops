@@ -31,7 +31,7 @@ export const createJob = (overrides: Partial<Job> = {}): Job => ({
   closedAt: null,
   suitabilityScore: 90,
   suitabilityReason: "Strong fit",
-  tailoredContent: null,
+  tailoredFields: {},
   tailoringMatched: null,
   tailoringSkipped: null,
   cvDocumentId: null,

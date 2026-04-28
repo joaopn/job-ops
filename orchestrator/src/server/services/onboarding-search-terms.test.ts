@@ -1,4 +1,4 @@
-import type { CvDocument } from "@shared/types";
+import type { CvDocument, CvField } from "@shared/types";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const callJsonMock = vi.fn();
@@ -32,14 +32,13 @@ import { getActiveCvDocument } from "./cv-active";
 
 function makeCv(overrides: {
   personalBrief?: string;
-  content?: Record<string, unknown>;
+  fields?: CvField[];
 }): CvDocument {
   return {
     id: "cv-1",
     name: "cv.tex",
     flattenedTex: "",
-    template: "",
-    content: (overrides.content ?? {}) as CvDocument["content"],
+    fields: overrides.fields ?? [],
     personalBrief: overrides.personalBrief ?? "",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -55,10 +54,10 @@ describe("suggestOnboardingSearchTerms", () => {
     vi.mocked(getActiveCvDocument).mockResolvedValue(
       makeCv({
         personalBrief: "Backend platform engineer with API and infra experience.",
-        content: {
-          basics: { headline: "Senior Backend Engineer" },
-          experience: [{ position: "Platform Engineer" }],
-        },
+        fields: [
+          { id: "summary.0", role: "summary", value: "Senior Backend Engineer" },
+          { id: "experience.0.title", role: "title", value: "Platform Engineer" },
+        ],
       }),
     );
     callJsonMock.mockResolvedValue({
@@ -81,14 +80,14 @@ describe("suggestOnboardingSearchTerms", () => {
     });
   });
 
-  it("falls back to headline and experience positions when AI generation fails", async () => {
+  it("falls back to headline and title hints when AI generation fails", async () => {
     vi.mocked(getActiveCvDocument).mockResolvedValue(
       makeCv({
         personalBrief: "Staff engineer focused on platform tooling.",
-        content: {
-          basics: { headline: "Staff Software Engineer" },
-          experience: [{ position: "Platform Engineer" }],
-        },
+        fields: [
+          { id: "summary.0", role: "summary", value: "Staff Software Engineer" },
+          { id: "experience.0.title", role: "title", value: "Platform Engineer" },
+        ],
       }),
     );
     callJsonMock.mockResolvedValue({
@@ -104,19 +103,15 @@ describe("suggestOnboardingSearchTerms", () => {
     });
   });
 
-  it("falls back to project and skill hints when no headline or positions exist", async () => {
+  it("falls back to publication and skill hints when no headline or titles exist", async () => {
     vi.mocked(getActiveCvDocument).mockResolvedValue(
       makeCv({
         personalBrief: "Backend platform engineer focused on distributed systems.",
-        content: {
-          projects: [{ name: "Developer Platform" }],
-          skillGroups: [
-            {
-              name: "Site Reliability Engineering",
-              keywords: ["Distributed Systems"],
-            },
-          ],
-        },
+        fields: [
+          { id: "publications.0", role: "publication", value: "Developer Platform" },
+          { id: "skills.0", role: "skill", value: "Site Reliability Engineering" },
+          { id: "skills.1", role: "skill", value: "Distributed Systems" },
+        ],
       }),
     );
     callJsonMock.mockResolvedValue({
@@ -148,7 +143,7 @@ describe("suggestOnboardingSearchTerms", () => {
 
   it("throws a conflict when the CV has no usable hints or brief", async () => {
     vi.mocked(getActiveCvDocument).mockResolvedValue(
-      makeCv({ personalBrief: "", content: {} }),
+      makeCv({ personalBrief: "", fields: [] }),
     );
 
     await expect(suggestOnboardingSearchTerms()).rejects.toMatchObject({

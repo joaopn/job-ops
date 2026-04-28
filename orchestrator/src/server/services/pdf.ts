@@ -2,20 +2,21 @@ import { promises as fs } from "node:fs";
 import { join } from "node:path";
 import { getDataDir } from "@server/config/dataDir";
 import * as cvRepo from "@server/repositories/cv-documents";
-import {
-  RenderTemplateError,
-  renderTemplate,
-} from "@server/services/cv/render-template";
+import { renderCv, RenderCvError } from "@server/services/cv/render";
 import {
   RunTectonicError,
   runTectonic,
 } from "@server/services/cv/run-tectonic";
-import type { CvContent } from "@shared/types";
+import type { CvFieldOverrides } from "@shared/types";
 
 export interface GeneratePdfArgs {
   jobId: string;
   cvDocumentId: string;
-  content: CvContent;
+  /**
+   * Per-field overrides. Empty/missing → render the original `flattened_tex`
+   * byte-for-byte.
+   */
+  overrides?: CvFieldOverrides;
 }
 
 export interface PdfResult {
@@ -36,9 +37,13 @@ export async function generatePdf(args: GeneratePdfArgs): Promise<PdfResult> {
 
   let renderedTex: string;
   try {
-    renderedTex = renderTemplate(document.template, args.content);
+    renderedTex = renderCv(
+      document.flattenedTex,
+      document.fields,
+      args.overrides ?? {},
+    );
   } catch (error) {
-    if (error instanceof RenderTemplateError) {
+    if (error instanceof RenderCvError) {
       return { success: false, error: `Template render failed: ${error.message}` };
     }
     throw error;

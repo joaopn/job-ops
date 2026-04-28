@@ -1,5 +1,5 @@
 import type { ExtractorSourceId } from "../extractors";
-import type { CvContent } from "./cv-content";
+import type { CvFieldOverrides } from "./cv-content";
 import type { LocationEvidence, LocationMatchResult } from "./location";
 
 export type { LocationEvidenceQuality } from "./location";
@@ -175,8 +175,8 @@ export interface Job {
   closedAt: number | null;
   suitabilityScore: number | null; // 0-100 AI-generated score
   suitabilityReason: string | null; // AI explanation
-  tailoredContent: CvContent | null; // LLM-adjusted CvContent for this job
-  tailoringMatched: string[] | null; // ATS keywords surfaced in tailoredContent
+  tailoredFields: CvFieldOverrides; // Per-field override map; absent ids fall back to the field's original value
+  tailoringMatched: string[] | null; // ATS keywords surfaced in tailoredFields
   tailoringSkipped: string[] | null; // JD keywords dropped for lack of evidence
   cvDocumentId: string | null; // FK to cv_documents.id; pins which CV was tailored
   pdfPath: string | null; // Path to generated PDF
@@ -334,7 +334,7 @@ export interface UpdateJobInput {
   locationEvidence?: JobLocationEvidence | null;
   suitabilityScore?: number;
   suitabilityReason?: string;
-  tailoredContent?: CvContent | null;
+  tailoredFields?: CvFieldOverrides;
   tailoringMatched?: string[] | null;
   tailoringSkipped?: string[] | null;
   cvDocumentId?: string | null;

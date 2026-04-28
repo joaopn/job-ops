@@ -9,17 +9,14 @@ import { fail, ok } from "@infra/http";
 import { logger } from "@infra/logger";
 import * as cvRepo from "@server/repositories/cv-documents";
 import {
-  CvExtractError,
-  extractCv,
-} from "@server/services/cv/llm-extract-cv";
-import {
   FlattenInputError,
   flattenInput,
 } from "@server/services/cv/flatten-input";
 import {
-  RenderTemplateError,
-  renderTemplate,
-} from "@server/services/cv/render-template";
+  CvExtractError,
+  extractCv,
+} from "@server/services/cv/llm-extract-cv";
+import { RenderCvError, renderCv } from "@server/services/cv/render";
 import {
   RunTectonicError,
   runTectonic,
@@ -34,16 +31,8 @@ const MAX_PERSONAL_BRIEF_BYTES = 50_000;
 
 export const cvRouter = Router();
 
-const cvContentObjectSchema = z
-  .record(z.unknown())
-  .refine((value) => !Array.isArray(value), {
-    message: "content must be a JSON object, not an array",
-  });
-
 const updateCvSchema = z.object({
   name: z.string().trim().min(1).max(100).optional(),
-  template: z.string().min(1).optional(),
-  content: cvContentObjectSchema.optional(),
   personalBrief: z.string().max(MAX_PERSONAL_BRIEF_BYTES).optional(),
 });
 
@@ -76,8 +65,7 @@ cvRouter.post("/", async (req: Request, res: Response) => {
         "CV",
       originalArchive: upload.bytes,
       flattenedTex: flattened.flattenedTex,
-      template: extracted.template,
-      content: extracted.content,
+      fields: extracted.fields,
       personalBrief: extracted.personalBrief,
     });
 
@@ -85,6 +73,7 @@ cvRouter.post("/", async (req: Request, res: Response) => {
       cvDocumentId: document.id,
       filename: upload.filename,
       assetCount: flattened.assetReferences.length,
+      fieldCount: extracted.fields.length,
     });
 
     ok(res, document, 201);
@@ -140,20 +129,22 @@ cvRouter.post("/:id/re-extract", async (req: Request, res: Response) => {
     });
     const updated = await cvRepo.updateCvDocument(req.params.id, {
       flattenedTex: flattened.flattenedTex,
-      template: extracted.template,
-      content: extracted.content,
+      fields: extracted.fields,
       personalBrief: extracted.personalBrief,
     });
     if (!updated) return fail(res, notFound("CV document not found."));
 
-    logger.info("CV document re-extracted", { cvDocumentId: req.params.id });
+    logger.info("CV document re-extracted", {
+      cvDocumentId: req.params.id,
+      fieldCount: extracted.fields.length,
+    });
     ok(res, updated);
   } catch (error) {
     handleCvError(res, error);
   }
 });
 
-cvRouter.post("/:id/render-preview", async (req: Request, res: Response) => {
+cvRouter.get("/:id/render-preview", async (req: Request, res: Response) => {
   try {
     const archive = await cvRepo.getCvDocumentArchive(req.params.id);
     const document = await cvRepo.getCvDocumentById(req.params.id);
@@ -161,7 +152,8 @@ cvRouter.post("/:id/render-preview", async (req: Request, res: Response) => {
       return fail(res, notFound("CV document not found."));
     }
 
-    const tex = renderTemplate(document.template, document.content);
+    // No overrides — render the source verbatim.
+    const tex = renderCv(document.flattenedTex, document.fields, {});
     const result = await runTectonic({
       renderedTex: tex,
       archive: new Uint8Array(archive),
@@ -248,7 +240,7 @@ function handleCvError(res: Response, error: unknown): void {
     fail(res, badRequest(error.message, { code: error.code }));
     return;
   }
-  if (error instanceof RenderTemplateError) {
+  if (error instanceof RenderCvError) {
     fail(res, badRequest(error.message, { code: error.code }));
     return;
   }

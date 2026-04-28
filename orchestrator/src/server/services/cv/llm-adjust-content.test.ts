@@ -53,7 +53,10 @@ describe("llmAdjustContent", () => {
     callJsonMock.mockResolvedValue({
       success: true,
       data: {
-        tailoredContent: { ...SAMPLE_CONTENT, summary: "Tailored." },
+        tailoredContentJson: JSON.stringify({
+          ...SAMPLE_CONTENT,
+          summary: "Tailored.",
+        }),
         matched: ["algorithms", "python"],
         skipped: ["kubernetes"],
       },
@@ -89,7 +92,11 @@ describe("llmAdjustContent", () => {
   it("substitutes placeholders for empty brief and JD", async () => {
     callJsonMock.mockResolvedValue({
       success: true,
-      data: { tailoredContent: SAMPLE_CONTENT, matched: [], skipped: [] },
+      data: {
+        tailoredContentJson: JSON.stringify(SAMPLE_CONTENT),
+        matched: [],
+        skipped: [],
+      },
     });
 
     await llmAdjustContent({
@@ -125,7 +132,11 @@ describe("llmAdjustContent", () => {
   it("returns failure when tailoredContent is not a JSON object", async () => {
     callJsonMock.mockResolvedValue({
       success: true,
-      data: { tailoredContent: ["not", "an", "object"], matched: [], skipped: [] },
+      data: {
+        tailoredContentJson: JSON.stringify(["not", "an", "object"]),
+        matched: [],
+        skipped: [],
+      },
     });
 
     const result = await llmAdjustContent({
@@ -144,7 +155,7 @@ describe("llmAdjustContent", () => {
     callJsonMock.mockResolvedValue({
       success: true,
       data: {
-        tailoredContent: SAMPLE_CONTENT,
+        tailoredContentJson: JSON.stringify(SAMPLE_CONTENT),
         matched: ["python", 42, "rust"],
         skipped: null,
       },

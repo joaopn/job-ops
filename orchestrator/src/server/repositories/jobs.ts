@@ -7,7 +7,7 @@ import { buildLocationEvidence } from "@shared/location-domain.js";
 import type {
   CreateJobInput,
   CreateJobNoteInput,
-  CvContent,
+  CvFieldOverrides,
   Job,
   JobListItem,
   JobLocationEvidence,
@@ -63,6 +63,15 @@ function parseLocationEvidence(
 function parseStringList(raw: unknown): string[] | null {
   if (!Array.isArray(raw)) return null;
   return raw.filter((entry): entry is string => typeof entry === "string");
+}
+
+function parseFieldOverrides(raw: unknown): CvFieldOverrides {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: CvFieldOverrides = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof value === "string") out[key] = value;
+  }
+  return out;
 }
 
 function serializeLocationEvidence(
@@ -485,7 +494,7 @@ export async function updateJob(
   const now = new Date().toISOString();
   const {
     locationEvidence,
-    tailoredContent,
+    tailoredFields,
     tailoringMatched,
     tailoringSkipped,
     ...updateFields
@@ -510,7 +519,7 @@ export async function updateJob(
       ...(locationEvidence !== undefined
         ? { locationEvidence: serializeLocationEvidence(locationEvidence) }
         : {}),
-      ...(tailoredContent !== undefined ? { tailoredContent } : {}),
+      ...(tailoredFields !== undefined ? { tailoredFields } : {}),
       ...(tailoringMatched !== undefined ? { tailoringMatched } : {}),
       ...(tailoringSkipped !== undefined ? { tailoringSkipped } : {}),
       updatedAt: now,
@@ -639,7 +648,7 @@ function mapRowToJob(row: typeof jobs.$inferSelect): Job {
     closedAt: row.closedAt ?? null,
     suitabilityScore: row.suitabilityScore,
     suitabilityReason: row.suitabilityReason,
-    tailoredContent: (row.tailoredContent ?? null) as CvContent | null,
+    tailoredFields: parseFieldOverrides(row.tailoredFields),
     tailoringMatched: parseStringList(row.tailoringMatched),
     tailoringSkipped: parseStringList(row.tailoringSkipped),
     cvDocumentId: row.cvDocumentId ?? null,

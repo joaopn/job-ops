@@ -1,7 +1,7 @@
 import { conflict } from "@infra/errors";
 import { logger } from "@infra/logger";
 import { resolveLlmModel } from "@server/services/modelSelection";
-import type { SearchTermsSuggestionResponse } from "@shared/types";
+import type { CvField, SearchTermsSuggestionResponse } from "@shared/types";
 import {
   MAX_SEARCH_TERM_LENGTH,
   MAX_SEARCH_TERMS,
@@ -48,60 +48,28 @@ function dedupe(values: Array<string | undefined>, maxItems = MAX_SEARCH_TERMS):
   );
 }
 
-function readString(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
-}
-
-function readArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
-}
-
 /**
- * Pull a few flat hints out of whatever shape the extracted CV happens to
- * use: a top-level headline (`basics.headline`/`basics.label`), positions
- * from an `experience` array, project names, and skill names. Missing keys
- * are skipped — different templates use different shapes.
+ * Pull a few flat hints out of the extracted CvField list by role: titles
+ * (positions), publications (project-name-like), skills, and a headline
+ * derived from the first summary-role field. Roles the LLM never tagged
+ * are simply absent from the result.
  */
-function collectCvHints(content: unknown): {
+function collectCvHints(fields: CvField[]): {
   headline: string | undefined;
   positions: string[];
   projectNames: string[];
   skillNames: string[];
 } {
-  if (!content || typeof content !== "object") {
-    return { headline: undefined, positions: [], projectNames: [], skillNames: [] };
-  }
-
-  const root = content as Record<string, unknown>;
-  const basics = (root.basics ?? {}) as Record<string, unknown>;
-  const headline = readString(basics.headline) ?? readString(basics.label);
-
-  const positions = readArray(root.experience)
-    .map((entry) =>
-      entry && typeof entry === "object"
-        ? readString((entry as Record<string, unknown>).position)
-        : undefined,
-    )
-    .filter((value): value is string => Boolean(value));
-
-  const projectNames = readArray(root.projects)
-    .map((entry) =>
-      entry && typeof entry === "object"
-        ? readString((entry as Record<string, unknown>).name)
-        : undefined,
-    )
-    .filter((value): value is string => Boolean(value));
-
-  const skillNames = readArray(root.skillGroups)
-    .flatMap((entry) => {
-      if (!entry || typeof entry !== "object") return [];
-      const group = entry as Record<string, unknown>;
-      const name = readString(group.name);
-      const keywords = readArray(group.keywords)
-        .map((k) => readString(k))
-        .filter((value): value is string => Boolean(value));
-      return name ? [name, ...keywords] : keywords;
-    });
+  const headline = fields.find((field) => field.role === "summary")?.value;
+  const positions = fields
+    .filter((field) => field.role === "title")
+    .map((field) => field.value);
+  const projectNames = fields
+    .filter((field) => field.role === "publication")
+    .map((field) => field.value);
+  const skillNames = fields
+    .filter((field) => field.role === "skill")
+    .map((field) => field.value);
 
   return { headline, positions, projectNames, skillNames };
 }
@@ -177,7 +145,7 @@ export async function suggestOnboardingSearchTerms(): Promise<SearchTermsSuggest
     throw conflict("Resume must be configured before suggesting search terms.");
   }
 
-  const hints = collectCvHints(cv.content);
+  const hints = collectCvHints(cv.fields);
   const context: OnboardingSearchTermContext = {
     brief: cv.personalBrief ?? "",
     headline: hints.headline,
