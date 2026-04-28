@@ -40,6 +40,10 @@ function makeCv(overrides: {
     flattenedTex: "",
     fields: overrides.fields ?? [],
     personalBrief: overrides.personalBrief ?? "",
+    templatedTex: "",
+    defaultFieldValues: {},
+    lastCompileStderr: null,
+    compileAttempts: 0,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };

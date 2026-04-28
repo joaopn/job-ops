@@ -29,6 +29,15 @@ export const cvDocuments = sqliteTable("cv_documents", {
   flattenedTex: text("flattened_tex").notNull(),
   fields: text("fields", { mode: "json" }).notNull().default(sql`('[]')`),
   personalBrief: text("personal_brief").notNull().default(""),
+  // 5e substrate columns. Empty defaults so existing 5d-era rows survive the
+  // ALTER. Render path still uses `flattened_tex` + `fields` until 5e.4
+  // cuts over.
+  templatedTex: text("templated_tex").notNull().default(""),
+  defaultFieldValues: text("default_field_values", { mode: "json" })
+    .notNull()
+    .default(sql`('{}')`),
+  lastCompileStderr: text("last_compile_stderr"),
+  compileAttempts: integer("compile_attempts").notNull().default(0),
   createdAt: integer("created_at", { mode: "number" }).notNull(),
   updatedAt: integer("updated_at", { mode: "number" }).notNull(),
 });

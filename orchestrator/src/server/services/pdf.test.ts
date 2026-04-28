@@ -16,6 +16,10 @@ const FAKE_CV: CvDocument = {
     "\\documentclass{article}\n\\name{Ada Lovelace}\n",
   fields: SAMPLE_FIELDS,
   personalBrief: "",
+  templatedTex: "",
+  defaultFieldValues: {},
+  lastCompileStderr: null,
+  compileAttempts: 0,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };

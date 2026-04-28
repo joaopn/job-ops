@@ -16,12 +16,16 @@ ENV PATH=/root/.local/bin:${PATH}
 ARG CODEX_CLI_VERSION=0.120.0
 
 # Install runtime dependencies shared by build and production stages.
+# poppler-utils provides `pdftotext`, used by services/cv/pdftotext-diff.ts to
+# verify content equivalence between the original CV PDF and the templated PDF
+# at upload time (5e CV substrate gate).
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     python3 python3-minimal libpython3.11-minimal \
     python3-pip \
     libgtk-3-0 libgtk-3-common \
     libdbus-glib-1-2 libxt6 libx11-xcb1 libasound2 \
+    poppler-utils \
     curl && \
     rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 

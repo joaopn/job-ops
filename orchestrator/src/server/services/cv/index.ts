@@ -22,6 +22,19 @@ export {
   RenderCvError,
 } from "./render";
 export {
+  extractMarkerIds,
+  markerFor,
+  renderTemplate,
+  RenderTemplateError,
+} from "./render-template";
+export {
+  comparePdftotextOutput,
+  pdftotextDiff,
+  PdftotextDiffError,
+  type PdftotextDiffArgs,
+  type PdftotextDiffResult,
+} from "./pdftotext-diff";
+export {
   runTectonic,
   RunTectonicError,
   type RunTectonicArgs,

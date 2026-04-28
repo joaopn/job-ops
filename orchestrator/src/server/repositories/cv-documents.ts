@@ -9,6 +9,7 @@ import type {
   CvDocument,
   CvDocumentSummary,
   CvField,
+  CvFieldOverrides,
   UpdateCvDocumentInput,
 } from "@shared/types";
 import { desc, eq } from "drizzle-orm";
@@ -23,6 +24,10 @@ function mapRow(row: typeof cvDocuments.$inferSelect): CvDocument {
     flattenedTex: row.flattenedTex,
     fields: parseFields(row.fields),
     personalBrief: row.personalBrief ?? "",
+    templatedTex: row.templatedTex ?? "",
+    defaultFieldValues: parseDefaultFieldValues(row.defaultFieldValues),
+    lastCompileStderr: row.lastCompileStderr ?? null,
+    compileAttempts: row.compileAttempts ?? 0,
     createdAt: new Date(row.createdAt).toISOString(),
     updatedAt: new Date(row.updatedAt).toISOString(),
   };
@@ -31,6 +36,15 @@ function mapRow(row: typeof cvDocuments.$inferSelect): CvDocument {
 function parseFields(raw: unknown): CvField[] {
   if (Array.isArray(raw)) return raw as CvField[];
   return [];
+}
+
+function parseDefaultFieldValues(raw: unknown): CvFieldOverrides {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: CvFieldOverrides = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof value === "string") out[key] = value;
+  }
+  return out;
 }
 
 function mapRowToSummary(
@@ -93,6 +107,10 @@ export async function createCvDocument(
     flattenedTex: input.flattenedTex,
     fields: input.fields,
     personalBrief: input.personalBrief ?? "",
+    templatedTex: input.templatedTex ?? "",
+    defaultFieldValues: input.defaultFieldValues ?? {},
+    lastCompileStderr: input.lastCompileStderr ?? null,
+    compileAttempts: input.compileAttempts ?? 0,
     createdAt: now,
     updatedAt: now,
   });
@@ -123,6 +141,18 @@ export async function updateCvDocument(
       ...(input.fields !== undefined ? { fields: input.fields } : {}),
       ...(input.personalBrief !== undefined
         ? { personalBrief: input.personalBrief }
+        : {}),
+      ...(input.templatedTex !== undefined
+        ? { templatedTex: input.templatedTex }
+        : {}),
+      ...(input.defaultFieldValues !== undefined
+        ? { defaultFieldValues: input.defaultFieldValues }
+        : {}),
+      ...(input.lastCompileStderr !== undefined
+        ? { lastCompileStderr: input.lastCompileStderr }
+        : {}),
+      ...(input.compileAttempts !== undefined
+        ? { compileAttempts: input.compileAttempts }
         : {}),
       updatedAt: now,
     })

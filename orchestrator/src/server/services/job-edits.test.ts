@@ -85,6 +85,10 @@ const baseCvDocument: CvDocument = {
   flattenedTex: "...",
   fields: baseFields,
   personalBrief: "First paragraph.",
+  templatedTex: "",
+  defaultFieldValues: {},
+  lastCompileStderr: null,
+  compileAttempts: 0,
   createdAt: "2026-04-26T00:00:00Z",
   updatedAt: "2026-04-26T00:00:00Z",
 };

@@ -392,6 +392,14 @@ const migrations: string[] = [
    ON job_chat_runs(thread_id)
    WHERE status = 'running'`,
 
+  // 5e CV substrate columns. Additive, idempotent via duplicate-column-name
+  // skip below. The runtime path still uses flattened_tex + fields for
+  // rendering until 5e.4 cuts over.
+  `ALTER TABLE cv_documents ADD COLUMN templated_tex TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE cv_documents ADD COLUMN default_field_values TEXT NOT NULL DEFAULT '{}'`,
+  `ALTER TABLE cv_documents ADD COLUMN last_compile_stderr TEXT`,
+  `ALTER TABLE cv_documents ADD COLUMN compile_attempts INTEGER NOT NULL DEFAULT 0`,
+
   // Drop legacy settings keys that are no longer read by the app.
   `DELETE FROM settings WHERE key IN (
      'jobspyHoursOld',
