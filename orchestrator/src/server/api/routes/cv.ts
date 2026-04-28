@@ -21,6 +21,7 @@ import {
   RunTectonicError,
   runTectonic,
 } from "@server/services/cv/run-tectonic";
+import { runUploadPipeline } from "@server/services/cv/upload-pipeline";
 import busboy from "busboy";
 import type { Request, Response } from "express";
 import { Router } from "express";
@@ -77,6 +78,96 @@ cvRouter.post("/", async (req: Request, res: Response) => {
     });
 
     ok(res, document, 201);
+  } catch (error) {
+    handleCvError(res, error);
+  }
+});
+
+/**
+ * 5e gated upload: runs the templated-tex pipeline (compile original →
+ * LLM template-extract loop → compile templated → pdftotext diff). On
+ * accept, persists the CV with the new substrate columns populated; on
+ * reject, returns 502 with the per-attempt log so the UI can surface
+ * tectonic stderr / pdftotext diff to the user. The 5d POST `/` route
+ * stays untouched until 5e.4 cuts over.
+ */
+cvRouter.post("/upload-template", async (req: Request, res: Response) => {
+  try {
+    const upload = await parseUpload(req);
+    if (!upload) {
+      return fail(res, badRequest("No file uploaded."));
+    }
+
+    const maxRetriesRaw = upload.fields.maxRetries;
+    const maxRetries = maxRetriesRaw ? Number(maxRetriesRaw) : undefined;
+
+    const result = await runUploadPipeline({
+      archive: upload.bytes,
+      filename: upload.filename,
+      maxRetries,
+    });
+
+    if (!result.ok) {
+      logger.warn("CV upload-template rejected", {
+        filename: upload.filename,
+        stage: result.stage,
+        attempts: result.attempts?.length ?? 0,
+      });
+      const status = result.stage === "flatten" ? 400 : 502;
+      return fail(
+        res,
+        new AppError({
+          status,
+          code:
+            result.stage === "flatten"
+              ? "INVALID_REQUEST"
+              : result.stage === "compile-original"
+                ? "UNPROCESSABLE_ENTITY"
+                : "UPSTREAM_ERROR",
+          message: result.message,
+          details: {
+            stage: result.stage,
+            ...(result.flattenCode ? { flattenCode: result.flattenCode } : {}),
+            ...(result.originalCompileStderr
+              ? { originalCompileStderr: result.originalCompileStderr.slice(-2000) }
+              : {}),
+            ...(result.attempts ? { attempts: result.attempts } : {}),
+          },
+        }),
+      );
+    }
+
+    const document = await cvRepo.createCvDocument({
+      name:
+        upload.fields.name?.trim() ||
+        upload.filename.replace(/\.[^.]+$/, "") ||
+        "CV",
+      originalArchive: upload.bytes,
+      flattenedTex: result.flattenedTex,
+      fields: result.fields,
+      personalBrief: result.personalBrief,
+      templatedTex: result.templatedTex,
+      defaultFieldValues: result.defaultFieldValues,
+      lastCompileStderr: result.compileStderr,
+      compileAttempts: result.compileAttempts,
+    });
+
+    logger.info("CV document created via upload-template", {
+      cvDocumentId: document.id,
+      filename: upload.filename,
+      assetCount: result.assetReferences.length,
+      fieldCount: result.fields.length,
+      compileAttempts: result.compileAttempts,
+    });
+
+    ok(
+      res,
+      {
+        cv: document,
+        attempts: result.attempts,
+      },
+      201,
+    );
   } catch (error) {
     handleCvError(res, error);
   }

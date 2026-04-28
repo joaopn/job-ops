@@ -35,6 +35,22 @@ export {
   type PdftotextDiffResult,
 } from "./pdftotext-diff";
 export {
+  buildPreviousAttemptBlock,
+  llmTemplateExtract,
+  TemplateExtractError,
+  type TemplateExtractArgs,
+  type TemplateExtractPreviousAttempt,
+  type TemplateExtractResult,
+} from "./llm-template-extract";
+export {
+  runUploadPipeline,
+  type UploadPipelineArgs,
+  type UploadPipelineAttempt,
+  type UploadPipelineFailure,
+  type UploadPipelineResult,
+  type UploadPipelineSuccess,
+} from "./upload-pipeline";
+export {
   runTectonic,
   RunTectonicError,
   type RunTectonicArgs,

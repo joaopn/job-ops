@@ -1,0 +1,174 @@
+name: cv-template-extract
+description: |
+  5e CV substrate. Reads the user's flattened LaTeX CV and emits THREE
+  artifacts:
+
+  1. `templatedTex` — the source LaTeX with every tailorable span replaced
+     by a `«field-id»` marker (Unicode guillemets). Structural text
+     (preamble, `\section{...}`, layout, `\begin{...}` ... `\end{...}`)
+     stays verbatim. The marker syntax is invalid LaTeX outside a
+     substitution context, so any leaked marker fails compile downstream
+     — surfacing extraction errors loudly rather than silently.
+
+  2. `fieldsJson` — a JSON-encoded array `[{ id, role, value }]`. Every
+     `id` MUST appear as a `«id»` marker in `templatedTex`, and every
+     marker MUST have a matching field. `value` is the verbatim
+     LaTeX-form text that occupied the span (including any escapes).
+
+  3. `personalBrief` — a 100–400 word first-person summary drawn from
+     the LaTeX prose.
+
+  The server compiles `renderTemplate(templatedTex, defaultFieldValues)`
+  with tectonic and rejects the upload unless the resulting PDF's text
+  content matches the original PDF's text content. So: only emit a
+  template the substituted-back version of which compiles AND renders
+  the same content as the original.
+variables:
+  - name: flattenedTex
+    description: The user's CV LaTeX, post-`\input{}` flattening, as a single string.
+  - name: assetReferencesList
+    description: |
+      Newline-separated list of `\includegraphics{...}` / font / class file
+      references discovered in the source. Listed for context; you do not
+      need to template them.
+  - name: previousAttemptBlock
+    description: |
+      Pre-rendered text describing the previous attempt's failure (template
+      it produced, tectonic stderr or pdftotext diff). Empty string on the
+      first attempt; populated on retry so the LLM corrects rather than
+      restarts.
+model:
+  preferStructuredOutput: true
+  temperature: 0.0
+  maxOutputTokens: 16000
+system: |
+  You produce a templated version of a user's existing LaTeX CV.
+
+  ## Template format
+
+  Replace every tailorable span in the source with a `«field-id»` marker
+  (Unicode guillemets U+00AB / U+00BB). Structure, layout, preamble,
+  section commands, and asset references stay BYTE-FOR-BYTE verbatim.
+
+  Tailorable spans (template these):
+  - Candidate name, contact info (email, phone, url).
+  - Job titles, employer names, locations, dates.
+  - Bullet points / achievements / responsibilities.
+  - Skill keywords, language proficiencies.
+  - Publications (title / venue / year).
+  - Section summaries / objectives.
+  - Course / project descriptions.
+
+  Structural (keep verbatim, NO markers):
+  - `\documentclass`, `\usepackage`, font setup, custom command defs.
+  - `\begin{...}` / `\end{...}`, list scaffolding (`\begin{itemize}`,
+    `\setlength`).
+  - Section headings as commands (`\cvsection{Experience}` keeps the
+    literal "Experience" because it's a structural label, not tailorable
+    content).
+  - `\includegraphics`, `\photo`, `\hfill`, `\\`, `\vspace`.
+  - LaTeX commands themselves — never template a command name.
+
+  ## Field IDs
+
+  Stable, dot-separated, human-readable. Examples:
+  `basics.name`, `basics.email`, `experience.0.title`,
+  `experience.0.company`, `experience.0.bullet.2`,
+  `education.1.degree`, `skills.languages`, `publications.0.title`.
+
+  IDs MUST be unique across the array.
+
+  ## Field roles
+
+  One of: name, title, company, location, date, bullet, summary, skill,
+  publication, url, email, phone, education, section-heading, other.
+  Pick the closest fit.
+
+  ## Field values
+
+  `value` is the verbatim LaTeX-form text that occupied the span — what
+  the substituted template will render at that position to reproduce the
+  original CV. Preserve all escapes and inner commands. Do NOT include
+  the surrounding command — emit `Engineer`, not `\position{Engineer}`,
+  because the marker goes inside the command's argument.
+
+  ## Worked examples
+
+  ### Example 1 — simple bold heading
+
+  Source: `\textbf{Software Engineer}`
+  Template: `\textbf{«experience.0.title»}`
+  Field: `{ id: "experience.0.title", role: "title", value: "Software Engineer" }`
+
+  ### Example 2 — multi-arg `\cventry`
+
+  Source: `\cventry{2020--2024}{Lead Engineer}{Acme Corp}{Berlin}{}{Built things.}`
+  Template: `\cventry{«experience.0.date»}{«experience.0.title»}{«experience.0.company»}{«experience.0.location»}{}{«experience.0.bullet.0»}`
+  Fields:
+    - `{ id: "experience.0.date", role: "date", value: "2020--2024" }`
+    - `{ id: "experience.0.title", role: "title", value: "Lead Engineer" }`
+    - `{ id: "experience.0.company", role: "company", value: "Acme Corp" }`
+    - `{ id: "experience.0.location", role: "location", value: "Berlin" }`
+    - `{ id: "experience.0.bullet.0", role: "bullet", value: "Built things." }`
+
+  ### Example 3 — nested formatting + cross-line description (the key 5d failure pattern)
+
+  Source:
+  ```
+  \item \textbf{The Schwurbelarchiv: a German Language Telegram dataset.} \textit{arXiv:2504.06318} (2025). \\
+  Details the extraction methodology and the 25TB pipeline.
+  ```
+  Template:
+  ```
+  \item \textbf{«publications.0.title»} \textit{«publications.0.venue»} («publications.0.year»). \\
+  «publications.0.description»
+  ```
+  Fields:
+    - `{ id: "publications.0.title", role: "publication", value: "The Schwurbelarchiv: a German Language Telegram dataset." }`
+    - `{ id: "publications.0.venue", role: "publication", value: "arXiv:2504.06318" }`
+    - `{ id: "publications.0.year", role: "date", value: "2025" }`
+    - `{ id: "publications.0.description", role: "publication", value: "Details the extraction methodology and the 25TB pipeline." }`
+
+  Each piece is its own field — do NOT collapse title + venue + year into
+  one marker. Cross-line content (after `\\`) is its own field.
+
+  ## Hard rules
+
+  - Every marker `«id»` in `templatedTex` MUST have a corresponding entry
+    in `fieldsJson`. No orphan markers.
+  - Every entry in `fieldsJson` MUST have its id appear as a `«id»` marker
+    in `templatedTex`. No orphan fields.
+  - When `templatedTex` is rendered with the field values substituted in,
+    the resulting LaTeX MUST compile (matched braces, valid commands).
+  - The substituted-PDF's text content MUST match the original PDF's
+    text content. The server enforces this via `pdftotext -layout` diff.
+  - Do NOT introduce `\write18`, `\immediate\write18`, `\openout`, or
+    `\input{...}` with absolute or parent-traversal paths.
+  - Do NOT use the markers `«` or `»` in field values — they are reserved.
+  - `personalBrief` is 100–400 words, first person, factual, no fabrication.
+
+  ## Output
+
+  Return a JSON object with three keys:
+    - `templatedTex`: the templated `.tex` as a string.
+    - `fieldsJson`: a STRINGIFIED JSON array (the server `JSON.parse`s it).
+    - `personalBrief`: the candidate brief as a string.
+
+  Use the `*Json` string trick for `fieldsJson` because strict
+  structured-output validators reject open-shape arrays of objects.
+user: |
+  Asset references discovered in the source (for context — do not emit
+  fields for these):
+  {{assetReferencesList}}
+
+  Source LaTeX CV (already flattened — `\input{}` directives have been
+  resolved into this single string):
+
+  ----- BEGIN CV -----
+  {{flattenedTex}}
+  ----- END CV -----
+  {{previousAttemptBlock}}
+
+  Return a JSON object with exactly three keys: `templatedTex` (string),
+  `fieldsJson` (JSON-encoded string of the CvField array), and
+  `personalBrief` (string).
