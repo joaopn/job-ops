@@ -1,5 +1,9 @@
 import * as api from "@client/api";
-import type { JobChatMessage, JobChatProposedEdit } from "@shared/types";
+import type {
+  CvFieldRole,
+  JobChatMessage,
+  JobChatProposedEdit,
+} from "@shared/types";
 import { useMutation } from "@tanstack/react-query";
 import { Check, Loader2, RefreshCcw, X } from "lucide-react";
 import type React from "react";
@@ -10,6 +14,12 @@ type EditDiffCardProps = {
   jobId: string;
   message: JobChatMessage;
   proposedEdit: JobChatProposedEdit;
+  /**
+   * Map of CvField id → role for the active CV. Used to surface a role hint
+   * next to each fieldId so reviewers can see "this is a `bullet` change vs.
+   * a `title` change" without cross-referencing the CV.
+   */
+  fieldRolesById?: Record<string, CvFieldRole>;
   onAccepted?: () => void | Promise<void>;
   onRejected?: () => void | Promise<void>;
   onRegenerate?: (messageId: string) => void;
@@ -25,6 +35,7 @@ export const EditDiffCard: React.FC<EditDiffCardProps> = ({
   jobId,
   message,
   proposedEdit,
+  fieldRolesById,
   onAccepted,
   onRejected,
   onRegenerate,
@@ -83,22 +94,30 @@ export const EditDiffCard: React.FC<EditDiffCardProps> = ({
 
       {proposedEdit.kind === "cv-edit" ? (
         <ul className="space-y-2">
-          {proposedEdit.edits.map((op, index) => (
-            <li
-              key={`${op.fieldId}-${index}`}
-              className="space-y-1 text-xs"
-            >
-              <div className="font-mono text-[11px] text-muted-foreground">
-                {op.fieldId}
-              </div>
-              <div className="rounded-sm border border-rose-200 bg-rose-50 px-2 py-1 text-rose-900 line-through">
-                {op.from}
-              </div>
-              <div className="rounded-sm border border-emerald-200 bg-emerald-50 px-2 py-1 text-emerald-900">
-                {op.to}
-              </div>
-            </li>
-          ))}
+          {proposedEdit.edits.map((op, index) => {
+            const role = fieldRolesById?.[op.fieldId];
+            return (
+              <li
+                key={`${op.fieldId}-${index}`}
+                className="space-y-1 text-xs"
+              >
+                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                  {role ? (
+                    <span className="rounded-sm bg-muted/60 px-1.5 py-0.5 font-medium uppercase tracking-wide">
+                      {role}
+                    </span>
+                  ) : null}
+                  <span className="font-mono">{op.fieldId}</span>
+                </div>
+                <div className="rounded-sm border border-rose-200 bg-rose-50 px-2 py-1 text-rose-900 line-through">
+                  {op.from}
+                </div>
+                <div className="rounded-sm border border-emerald-200 bg-emerald-50 px-2 py-1 text-emerald-900">
+                  {op.to}
+                </div>
+              </li>
+            );
+          })}
         </ul>
       ) : (
         <div className="space-y-1 text-xs">

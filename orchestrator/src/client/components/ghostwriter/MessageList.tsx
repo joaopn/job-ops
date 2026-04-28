@@ -1,7 +1,12 @@
-import type { BranchInfo, JobChatMessage } from "@shared/types";
+import { useActiveCv } from "@client/hooks/useActiveCv";
+import type {
+  BranchInfo,
+  CvFieldRole,
+  JobChatMessage,
+} from "@shared/types";
 import { Check, Copy, FileText, Pencil, RefreshCcw } from "lucide-react";
 import type React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
@@ -42,6 +47,15 @@ export const MessageList: React.FC<MessageListProps> = ({
   const [editContent, setEditContent] = useState("");
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const copiedTimeoutRef = useRef<number | null>(null);
+
+  const { cv } = useActiveCv();
+  const fieldRolesById = useMemo(() => {
+    const map: Record<string, CvFieldRole> = {};
+    for (const field of cv?.fields ?? []) {
+      map[field.id] = field.role;
+    }
+    return map;
+  }, [cv]);
 
   const branchMap = new Map<string, BranchInfo>();
   for (const branch of branches) {
@@ -220,6 +234,7 @@ export const MessageList: React.FC<MessageListProps> = ({
                       jobId={jobId}
                       message={message}
                       proposedEdit={message.proposedEdit}
+                      fieldRolesById={fieldRolesById}
                       isStreaming={isStreaming}
                       onAccepted={onEditAccepted}
                       onRejected={onEditRejected}
