@@ -14,6 +14,7 @@ export {
   llmAdjustContent,
   type AdjustContentArgs,
   type AdjustContentResult,
+  type AdjustFieldPatch,
 } from "./llm-adjust-content";
 export {
   findUnreachableField,

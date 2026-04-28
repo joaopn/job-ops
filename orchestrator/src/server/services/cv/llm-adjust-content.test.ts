@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { loadPrompt } from "@server/services/prompts";
+import type { CvField } from "@shared/types";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { llmAdjustContent } from "./llm-adjust-content";
 
@@ -39,24 +40,31 @@ vi.mock("@server/services/writing-style", () => ({
   stripLanguageDirectivesFromConstraints: (s: string) => s,
 }));
 
-const SAMPLE_CONTENT = {
-  basics: { name: "Ada Lovelace" },
-  experience: [{ company: "Analytical", bullets: ["Wrote algorithms."] }],
-};
+const SAMPLE_FIELDS: CvField[] = [
+  { id: "basics.name", role: "name", value: "Ada Lovelace" },
+  { id: "experience.0.company", role: "company", value: "Analytical" },
+  {
+    id: "experience.0.bullet.0",
+    role: "bullet",
+    value: "Wrote algorithms.",
+  },
+];
 
 beforeEach(() => {
   callJsonMock.mockReset();
 });
 
 describe("llmAdjustContent", () => {
-  it("threads inputs into the prompt and returns the LLM result", async () => {
+  it("threads inputs into the prompt and returns parsed patches", async () => {
     callJsonMock.mockResolvedValue({
       success: true,
       data: {
-        tailoredContentJson: JSON.stringify({
-          ...SAMPLE_CONTENT,
-          summary: "Tailored.",
-        }),
+        patchesJson: JSON.stringify([
+          {
+            fieldId: "experience.0.bullet.0",
+            newValue: "Wrote algorithms in Python.",
+          },
+        ]),
         matched: ["algorithms", "python"],
         skipped: ["kubernetes"],
       },
@@ -65,12 +73,18 @@ describe("llmAdjustContent", () => {
     const result = await llmAdjustContent({
       personalBrief: "I'm Ada — I write algorithms in Python.",
       jobDescription: "Hiring a Python engineer who can write algorithms.",
-      currentContent: SAMPLE_CONTENT,
+      currentFields: SAMPLE_FIELDS,
+      currentOverrides: {},
     });
 
     expect(result).toEqual({
       success: true,
-      tailoredContent: { ...SAMPLE_CONTENT, summary: "Tailored." },
+      patches: [
+        {
+          fieldId: "experience.0.bullet.0",
+          newValue: "Wrote algorithms in Python.",
+        },
+      ],
       matched: ["algorithms", "python"],
       skipped: ["kubernetes"],
     });
@@ -81,7 +95,7 @@ describe("llmAdjustContent", () => {
         personalBrief: "I'm Ada — I write algorithms in Python.",
         jobDescription:
           "Hiring a Python engineer who can write algorithms.",
-        contentJson: expect.stringContaining("Analytical"),
+        fieldsJson: expect.stringContaining("Analytical"),
         outputLanguage: "English",
         tone: "professional",
         formality: "neutral",
@@ -89,11 +103,35 @@ describe("llmAdjustContent", () => {
     );
   });
 
+  it("uses overrides as the effective field value in the prompt", async () => {
+    callJsonMock.mockResolvedValue({
+      success: true,
+      data: {
+        patchesJson: JSON.stringify([]),
+        matched: [],
+        skipped: [],
+      },
+    });
+
+    await llmAdjustContent({
+      personalBrief: "x",
+      jobDescription: "y",
+      currentFields: SAMPLE_FIELDS,
+      currentOverrides: { "basics.name": "Ada L." },
+    });
+
+    const calls = (loadPrompt as unknown as ReturnType<typeof vi.fn>).mock
+      .calls;
+    const call = calls[calls.length - 1][1];
+    expect(call.fieldsJson).toContain("Ada L.");
+    expect(call.fieldsJson).not.toContain("Ada Lovelace");
+  });
+
   it("substitutes placeholders for empty brief and JD", async () => {
     callJsonMock.mockResolvedValue({
       success: true,
       data: {
-        tailoredContentJson: JSON.stringify(SAMPLE_CONTENT),
+        patchesJson: JSON.stringify([]),
         matched: [],
         skipped: [],
       },
@@ -102,7 +140,8 @@ describe("llmAdjustContent", () => {
     await llmAdjustContent({
       personalBrief: "",
       jobDescription: "",
-      currentContent: SAMPLE_CONTENT,
+      currentFields: SAMPLE_FIELDS,
+      currentOverrides: {},
     });
 
     expect(loadPrompt).toHaveBeenCalledWith(
@@ -120,7 +159,8 @@ describe("llmAdjustContent", () => {
     const result = await llmAdjustContent({
       personalBrief: "x",
       jobDescription: "y",
-      currentContent: SAMPLE_CONTENT,
+      currentFields: SAMPLE_FIELDS,
+      currentOverrides: {},
     });
 
     expect(result).toEqual({
@@ -129,11 +169,11 @@ describe("llmAdjustContent", () => {
     });
   });
 
-  it("returns failure when tailoredContent is not a JSON object", async () => {
+  it("returns failure when patchesJson is not a JSON array", async () => {
     callJsonMock.mockResolvedValue({
       success: true,
       data: {
-        tailoredContentJson: JSON.stringify(["not", "an", "object"]),
+        patchesJson: JSON.stringify({ fieldId: "x", newValue: "y" }),
         matched: [],
         skipped: [],
       },
@@ -142,20 +182,26 @@ describe("llmAdjustContent", () => {
     const result = await llmAdjustContent({
       personalBrief: "x",
       jobDescription: "y",
-      currentContent: SAMPLE_CONTENT,
+      currentFields: SAMPLE_FIELDS,
+      currentOverrides: {},
     });
 
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error).toMatch(/not a JSON object/);
+      expect(result.error).toMatch(/not a JSON array/);
     }
   });
 
-  it("coerces non-string entries out of matched/skipped arrays", async () => {
+  it("drops patches with unknown fieldIds, non-string newValue, or forbidden patterns", async () => {
     callJsonMock.mockResolvedValue({
       success: true,
       data: {
-        tailoredContentJson: JSON.stringify(SAMPLE_CONTENT),
+        patchesJson: JSON.stringify([
+          { fieldId: "unknown.id", newValue: "ignored" },
+          { fieldId: "basics.name", newValue: 42 },
+          { fieldId: "basics.name", newValue: "evil \\write18 stuff" },
+          { fieldId: "basics.name", newValue: "Ada (verified)" },
+        ]),
         matched: ["python", 42, "rust"],
         skipped: null,
       },
@@ -164,11 +210,13 @@ describe("llmAdjustContent", () => {
     const result = await llmAdjustContent({
       personalBrief: "x",
       jobDescription: "y",
-      currentContent: SAMPLE_CONTENT,
+      currentFields: SAMPLE_FIELDS,
+      currentOverrides: {},
     });
 
     expect(result).toMatchObject({
       success: true,
+      patches: [{ fieldId: "basics.name", newValue: "Ada (verified)" }],
       matched: ["python", "rust"],
       skipped: [],
     });

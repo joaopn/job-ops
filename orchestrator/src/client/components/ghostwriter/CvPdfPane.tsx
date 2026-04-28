@@ -10,8 +10,7 @@ type CvPdfPaneProps = {
 /**
  * Embedded PDF preview that cache-busts on `job.updatedAt`. Re-renders
  * automatically when the server overwrites the PDF after an accepted CV edit
- * or a re-tailor. Robust to arbitrary CvContent shapes — we just show the
- * compiled output.
+ * or a re-tailor.
  */
 export const CvPdfPane: React.FC<CvPdfPaneProps> = ({ job }) => {
   const pdfHref = `/pdfs/resume_${job.id}.pdf?v=${encodeURIComponent(job.updatedAt)}`;

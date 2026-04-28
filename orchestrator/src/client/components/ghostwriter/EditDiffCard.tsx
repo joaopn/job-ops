@@ -85,11 +85,11 @@ export const EditDiffCard: React.FC<EditDiffCardProps> = ({
         <ul className="space-y-2">
           {proposedEdit.edits.map((op, index) => (
             <li
-              key={`${op.path.join(".")}-${index}`}
+              key={`${op.fieldId}-${index}`}
               className="space-y-1 text-xs"
             >
               <div className="font-mono text-[11px] text-muted-foreground">
-                {op.path.join(" → ")}
+                {op.fieldId}
               </div>
               <div className="rounded-sm border border-rose-200 bg-rose-50 px-2 py-1 text-rose-900 line-through">
                 {op.from}

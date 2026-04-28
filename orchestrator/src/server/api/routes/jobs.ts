@@ -1172,8 +1172,8 @@ jobsRouter.post("/:id/generate-pdf", async (req: Request, res: Response) => {
 
 /**
  * POST /api/jobs/:id/re-tailor - Re-run cv-adjust against the current
- * personal_brief + JD + active CV content, re-render the PDF, and update
- * tailoredContent + tailoringMatched/Skipped + pdfPath in place.
+ * personal_brief + JD + active CV fields, re-render the PDF, and update
+ * tailoredFields + tailoringMatched/Skipped + pdfPath in place.
  */
 jobsRouter.post("/:id/re-tailor", async (req: Request, res: Response) => {
   try {

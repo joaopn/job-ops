@@ -10,32 +10,32 @@ import {
 import {
   CHAT_STYLE_MANUAL_LANGUAGE_LABELS,
   type ChatStyleManualLanguage,
-  type CvContent,
+  type CvField,
+  type CvFieldOverrides,
 } from "@shared/types";
 
 /**
- * `tailoredContentJson` is a JSON-encoded string instead of a nested
- * object — strict structured-output mode (OpenAI) requires
- * `additionalProperties: false` on every object schema, which is
- * incompatible with the open-shape, source-CV-mirroring tailoredContent.
- * Encoding it as a string lets the LLM emit arbitrary keys; the server
- * parses it after the call.
+ * `patchesJson` is a JSON-encoded string instead of an array of objects —
+ * strict structured-output mode (OpenAI) requires `additionalProperties:
+ * false` on every object schema, which interacts poorly when patches share
+ * the same flat shape. Encoding as a JSON string sidesteps the constraint;
+ * the server validates each entry after parsing.
  */
 const ADJUST_SCHEMA: JsonSchemaDefinition = {
   name: "cv_adjust_result",
   schema: {
     type: "object",
     properties: {
-      tailoredContentJson: {
+      patchesJson: {
         type: "string",
         description:
-          "Stringified JSON object with the same shape as the input content. The wording is adjusted for the JD; keys must mirror the input. The server JSON.parses this.",
+          "Stringified JSON array of patches: [{ fieldId, newValue }]. Each fieldId must reference a CvField in the input list. The server JSON.parses this and validates each entry.",
       },
       matched: {
         type: "array",
         items: { type: "string" },
         description:
-          "JD keywords actually surfaced in tailoredContent with backing evidence in the brief.",
+          "JD keywords actually surfaced via the proposed patches with backing evidence in the brief.",
       },
       skipped: {
         type: "array",
@@ -44,25 +44,55 @@ const ADJUST_SCHEMA: JsonSchemaDefinition = {
           "JD keywords considered but dropped because the brief lacks evidence.",
       },
     },
-    required: ["tailoredContentJson", "matched", "skipped"],
+    required: ["patchesJson", "matched", "skipped"],
     additionalProperties: false,
   },
 };
 
+export interface AdjustFieldPatch {
+  fieldId: string;
+  newValue: string;
+}
+
 export interface AdjustContentArgs {
   personalBrief: string;
   jobDescription: string;
-  currentContent: CvContent;
+  currentFields: CvField[];
+  currentOverrides: CvFieldOverrides;
 }
 
 export type AdjustContentResult =
   | {
       success: true;
-      tailoredContent: CvContent;
+      patches: AdjustFieldPatch[];
       matched: string[];
       skipped: string[];
     }
   | { success: false; error: string };
+
+const FORBIDDEN_PATTERNS: Array<{ pattern: RegExp; description: string }> = [
+  {
+    pattern: /\\(?:immediate\s*)?write18\b/,
+    description: "\\write18 (shell-escape)",
+  },
+  { pattern: /\\openout\b/, description: "\\openout (file write)" },
+  { pattern: /\\input\s*\{\s*\//, description: "\\input{} with absolute path" },
+  {
+    pattern: /\\input\s*\{\s*\.\.\//,
+    description: "\\input{} with parent-traversal path",
+  },
+];
+
+function buildFieldsView(
+  fields: CvField[],
+  overrides: CvFieldOverrides,
+): Array<{ id: string; role: string; value: string }> {
+  return fields.map((field) => ({
+    id: field.id,
+    role: field.role,
+    value: overrides[field.id] ?? field.value,
+  }));
+}
 
 export async function llmAdjustContent(
   args: AdjustContentArgs,
@@ -72,10 +102,12 @@ export async function llmAdjustContent(
     getWritingStyle(),
   ]);
 
+  const fieldsView = buildFieldsView(args.currentFields, args.currentOverrides);
+
   const prompt = await loadPrompt("cv-adjust", {
     personalBrief: args.personalBrief || "(empty — no candidate brief on file)",
     jobDescription: args.jobDescription || "(empty)",
-    contentJson: JSON.stringify(args.currentContent, null, 2),
+    fieldsJson: JSON.stringify(fieldsView, null, 2),
     ...buildWritingStyleVars(writingStyle),
   });
 
@@ -85,7 +117,7 @@ export async function llmAdjustContent(
   messages.push({ role: "user", content: prompt.user });
 
   const result = await llm.callJson<{
-    tailoredContentJson: unknown;
+    patchesJson: unknown;
     matched: unknown;
     skipped: unknown;
   }>({
@@ -99,41 +131,49 @@ export async function llmAdjustContent(
     return { success: false, error: `LLM call failed: ${result.error}` };
   }
 
-  const { tailoredContentJson, matched, skipped } = result.data;
-  if (
-    typeof tailoredContentJson !== "string" ||
-    tailoredContentJson.trim().length === 0
-  ) {
+  const { patchesJson, matched, skipped } = result.data;
+  if (typeof patchesJson !== "string" || patchesJson.trim().length === 0) {
     return {
       success: false,
-      error: "LLM returned empty or non-string tailoredContentJson.",
+      error: "LLM returned empty or non-string patchesJson.",
     };
   }
 
-  let tailoredContent: unknown;
+  let parsed: unknown;
   try {
-    tailoredContent = JSON.parse(tailoredContentJson);
+    parsed = JSON.parse(patchesJson);
   } catch (error) {
     return {
       success: false,
-      error: `LLM returned tailoredContentJson that is not parseable JSON: ${error instanceof Error ? error.message : String(error)}`,
+      error: `LLM returned patchesJson that is not parseable JSON: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
 
-  if (
-    tailoredContent === null ||
-    typeof tailoredContent !== "object" ||
-    Array.isArray(tailoredContent)
-  ) {
+  if (!Array.isArray(parsed)) {
     return {
       success: false,
-      error: "LLM returned tailoredContent that was not a JSON object.",
+      error: "LLM returned patchesJson that is not a JSON array.",
     };
+  }
+
+  const fieldIds = new Set(args.currentFields.map((field) => field.id));
+  const patches: AdjustFieldPatch[] = [];
+  for (const entry of parsed) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+    const record = entry as Record<string, unknown>;
+    const fieldId = record.fieldId;
+    const newValue = record.newValue;
+    if (typeof fieldId !== "string" || !fieldIds.has(fieldId)) continue;
+    if (typeof newValue !== "string") continue;
+    if (FORBIDDEN_PATTERNS.some((guard) => guard.pattern.test(newValue))) {
+      continue;
+    }
+    patches.push({ fieldId, newValue });
   }
 
   return {
     success: true,
-    tailoredContent: tailoredContent as CvContent,
+    patches,
     matched: stringArray(matched),
     skipped: stringArray(skipped),
   };

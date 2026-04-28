@@ -36,9 +36,11 @@ const abortControllers = new Map<string, AbortController>();
  *
  *  - `text`: a free-form chat reply (renders directly to the cover-letter
  *    pane or as a normal chat message).
- *  - `cv-edit`: a structured proposal to edit `jobs.tailoredContent`. The
- *    `rationale` becomes the chat-pane text; the structured payload is
- *    persisted in `job_chat_messages.proposed_edit` for the user to accept.
+ *  - `cv-edit`: a structured proposal to replace one or more CvField values.
+ *    Each edit references a field by `fieldId`; `from`/`to` carry the
+ *    current and proposed verbatim LaTeX. The `rationale` becomes the
+ *    chat-pane text; the structured payload is persisted in
+ *    `job_chat_messages.proposed_edit` for the user to accept.
  *  - `brief-edit`: a structured proposal to edit `cv_documents.personal_brief`.
  *
  * We use a single object schema with optional fields rather than a JSON Schema
@@ -70,16 +72,22 @@ const CHAT_RESPONSE_SCHEMA: JsonSchemaDefinition = {
         items: {
           type: "object",
           properties: {
-            path: {
-              type: "array",
+            fieldId: {
+              type: "string",
               description:
-                "Path into tailoredContent. Numeric indices are encoded as strings (e.g. ['experience', '2', 'bullets', '0']).",
-              items: { type: "string" },
+                "The id of the CvField being replaced. Must match an id in the CV State 'fields' list.",
             },
-            from: { type: "string" },
-            to: { type: "string" },
+            from: {
+              type: "string",
+              description:
+                "The current value of the field (must match the field's effective value verbatim, including LaTeX commands).",
+            },
+            to: {
+              type: "string",
+              description: "The replacement value (verbatim LaTeX).",
+            },
           },
-          required: ["path", "from", "to"],
+          required: ["fieldId", "from", "to"],
           additionalProperties: false,
         },
       },
@@ -103,7 +111,7 @@ type ChatResponse = {
   response?: string;
   rationale?: string;
   edits?: Array<{
-    path: string[];
+    fieldId: string;
     from: string;
     to: string;
   }>;
@@ -118,17 +126,15 @@ type DispatchedReply = {
   proposedEdit: JobChatProposedEdit | null;
 };
 
-function coercePathSegment(segment: string): string | number {
-  if (/^[0-9]+$/.test(segment)) {
-    const parsed = Number(segment);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return segment;
-}
-
 function dispatchChatResponse(raw: ChatResponse): DispatchedReply {
   if (raw.kind === "cv-edit") {
-    const edits = raw.edits ?? [];
+    const edits = (raw.edits ?? []).filter(
+      (op): op is { fieldId: string; from: string; to: string } =>
+        typeof op?.fieldId === "string" &&
+        op.fieldId.length > 0 &&
+        typeof op?.from === "string" &&
+        typeof op?.to === "string",
+    );
     if (edits.length === 0) {
       return {
         text: (raw.rationale ?? raw.response ?? "").trim(),
@@ -139,7 +145,7 @@ function dispatchChatResponse(raw: ChatResponse): DispatchedReply {
       kind: "cv-edit",
       rationale: (raw.rationale ?? "").trim(),
       edits: edits.map<JobChatProposedCvEditOp>((op) => ({
-        path: op.path.map(coercePathSegment),
+        fieldId: op.fieldId,
         from: op.from,
         to: op.to,
       })),

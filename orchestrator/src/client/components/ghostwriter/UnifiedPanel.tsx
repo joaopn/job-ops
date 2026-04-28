@@ -21,9 +21,9 @@ type UnifiedPanelProps = {
  * accept/reject diff cards below.
  *
  * The layout is shape-agnostic — the PDF iframe sidesteps the question of
- * how to render arbitrary CvContent shapes inline, matches the recruiter
- * view, and refreshes via cache-bust whenever the server overwrites the
- * artifact (after an accepted CV edit or a re-tailor).
+ * how to render the source LaTeX inline, matches the recruiter view, and
+ * refreshes via cache-bust whenever the server overwrites the artifact
+ * (after an accepted CV edit or a re-tailor).
  */
 export const UnifiedPanel: React.FC<UnifiedPanelProps> = ({
   job,

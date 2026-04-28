@@ -16,6 +16,7 @@ import { getDataDir } from "../config/dataDir";
 import * as jobsRepo from "../repositories/jobs";
 import * as pipelineRepo from "../repositories/pipeline";
 import * as settingsRepo from "../repositories/settings";
+import { llmAdjustContent } from "../services/cv";
 import { getActiveCvDocument } from "../services/cv-active";
 import { generatePdf } from "../services/pdf";
 import { progressHelpers, resetProgress } from "./progress";
@@ -307,10 +308,10 @@ export type ProcessJobOptions = {
 };
 
 /**
- * Step 1: Pin the active CV to this job. The cv-adjust LLM call is paused
- * during the 5d substrate migration — the job is pinned with no per-field
- * overrides, so `generateFinalPdf` renders the original CV byte-for-byte.
- * 5d.2 reintroduces cv-adjust against the new field-based substrate.
+ * Step 1: Pin the active CV to this job, then run cv-adjust to populate
+ * `tailoredFields` and the ATS sidecar columns. The override map and the
+ * matched/skipped lists are stored in place; `generateFinalPdf` then renders
+ * the CV with those overrides applied.
  */
 export async function summarizeJob(
   jobId: string,
@@ -334,11 +335,39 @@ export async function summarizeJob(
         };
       }
 
+      const adjust = await llmAdjustContent({
+        personalBrief: cv.personalBrief,
+        jobDescription: job.jobDescription ?? "",
+        currentFields: cv.fields,
+        currentOverrides: {},
+      });
+
+      if (!adjust.success) {
+        jobLogger.warn("cv-adjust failed; pinning CV with no overrides", {
+          error: adjust.error,
+        });
+        await jobsRepo.updateJob(job.id, {
+          cvDocumentId: cv.id,
+          tailoredFields: {},
+          tailoringMatched: [],
+          tailoringSkipped: [],
+        });
+        return { success: true };
+      }
+
+      const fieldIds = new Set(cv.fields.map((field) => field.id));
+      const overrides: Record<string, string> = {};
+      for (const patch of adjust.patches) {
+        if (fieldIds.has(patch.fieldId)) {
+          overrides[patch.fieldId] = patch.newValue;
+        }
+      }
+
       await jobsRepo.updateJob(job.id, {
         cvDocumentId: cv.id,
-        tailoredFields: {},
-        tailoringMatched: [],
-        tailoringSkipped: [],
+        tailoredFields: overrides,
+        tailoringMatched: adjust.matched,
+        tailoringSkipped: adjust.skipped,
       });
 
       return { success: true };
@@ -351,7 +380,9 @@ export async function summarizeJob(
 }
 
 /**
- * Step 2: Render the pinned CV through Eta + Tectonic to a PDF.
+ * Step 2: Render the pinned CV through the verbatim overrides + Tectonic
+ * pass to a PDF. Reads the job again so cv-adjust's tailoredFields are
+ * picked up.
  */
 export async function generateFinalPdf(
   jobId: string,

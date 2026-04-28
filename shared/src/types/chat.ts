@@ -30,7 +30,7 @@ export const JOB_CHAT_EDIT_STATUSES = [
 export type JobChatEditStatus = (typeof JOB_CHAT_EDIT_STATUSES)[number];
 
 export interface JobChatProposedCvEditOp {
-  path: Array<string | number>;
+  fieldId: string;
   from: string;
   to: string;
 }

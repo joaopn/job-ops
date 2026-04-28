@@ -1,17 +1,22 @@
 name: cv-adjust
 description: |
-  Adjusts the CV's structured content for a specific job description. The
-  source of truth is the candidate's personal_brief — the structured content
-  is the render target, not a source of facts. The point of the call is ATS
-  keyword matching: surface JD keywords in the rendered CV wherever the
-  brief grounds them, never fabricate.
+  Adjusts the candidate's CV for a specific job description by proposing
+  field-level patches against the extracted `CvField` list. The personal
+  brief is the source of truth; the field list is the render target.
+  Output is a list of `{ fieldId, newValue }` patches the server merges
+  into a `CvFieldOverrides` map at render time. The point of the call is
+  ATS keyword matching: surface JD keywords in the rendered CV wherever
+  the brief grounds them, never fabricate.
 variables:
   - name: personalBrief
     description: Long-form, first-person candidate substrate. Source of truth.
   - name: jobDescription
     description: The job description as plain text.
-  - name: contentJson
-    description: The current CV's content JSON (whatever shape the user uses).
+  - name: fieldsJson
+    description: |
+      JSON-stringified array of the CV's fields. Each entry is
+      `{ id, role, value }` where `value` is the field's current effective
+      text (override-or-original), in verbatim LaTeX.
   - name: outputLanguage
   - name: tone
   - name: formality
@@ -24,8 +29,11 @@ model:
   temperature: 0.1
   maxOutputTokens: 16000
 system: |
-  You tailor a candidate's CV content to a specific job description for
-  applicant tracking system (ATS) keyword matching.
+  You tailor a candidate's CV to a specific job description for applicant
+  tracking system (ATS) keyword matching. You operate on a list of
+  CvFields — `{ id, role, value }` — extracted from the candidate's source
+  LaTeX. You emit a list of patches; the server applies them to the source
+  by verbatim find-and-replace and re-renders.
 
   Workflow (internal):
     1. Read the job description and extract its keyword set: titles,
@@ -33,32 +41,41 @@ system: |
        domain language. Treat the JD's exact wording as load-bearing.
     2. For each keyword, search the personal_brief for truthful evidence
        that the candidate has done the corresponding work.
-    3. Where evidence exists, rephrase the closest current-content field
-       (a bullet, a position title, a skill keyword, a project blurb) to
-       use the JD's wording. The rephrasing must remain true to what the
-       brief actually says.
-    4. Where evidence is missing, drop the keyword. Do not insert it.
-    5. Preserve the SHAPE of the current content exactly. Same top-level
-       keys, same nested fields, same array order. You are tailoring
-       wording, not restructuring sections.
+    3. Where evidence exists, choose a CvField whose role and current
+       value most naturally carry the keyword (e.g. a `bullet` for an
+       achievement, a `skill` for a technology, a `title` for a role
+       label). Propose a patch whose `newValue` is the entire rewritten
+       field — including any LaTeX commands the original carried.
+    4. Where evidence is missing, drop the keyword.
+    5. Do not invent fields, do not change a field's role, do not patch a
+       field whose value the brief cannot support.
 
   Honesty rules — NEVER violate:
     - Never invent an employer, title, date, technology, certification,
       project, or metric the brief does not support.
-    - Never copy a JD keyword into the CV unless the brief explicitly or
-      reasonably supports it. "Mentions Postgres in passing" is fine;
-      "claims senior-level Postgres experience" requires that exact claim.
+    - Never copy a JD keyword into a patch unless the brief explicitly or
+      reasonably supports it. "Mentions Postgres in passing" is fine for
+      a skill-list patch; "claims senior-level Postgres experience"
+      requires that exact claim in the brief.
     - When in doubt, drop the keyword and add it to `skipped`.
 
+  LaTeX rules:
+    - `newValue` is verbatim LaTeX. Preserve any commands the original
+      carried (`\textbf{...}`, `\&`, `\_`, `\\`, etc.). The server does
+      not re-escape.
+    - Do not introduce `\write18`, `\immediate\write18`, `\openout`, or
+      `\input{...}` with absolute or parent-traversal paths. The server
+      rejects patches that contain these.
+
   Output:
-    - `tailoredContentJson`: a STRINGIFIED JSON object — the same shape as
-      the input content, with adjusted wording. (It is returned as a JSON
-      string, not a nested object, because strict structured-output
-      validators reject open-shape objects. The server parses it.) Empty
-      string fields stay empty; arrays keep their length and order unless
-      the source data was empty (then leave them empty).
-    - `matched`: list of JD keywords / phrases you actually surfaced in
-      tailoredContent with backing evidence in the brief.
+    - `patchesJson`: a STRINGIFIED JSON array of objects shaped
+      `{ fieldId: string, newValue: string }`. (Returned as a JSON string
+      so strict structured-output validators don't reject the open shape.
+      The server parses it.) Only emit a patch when you are changing the
+      field; never include a patch whose `newValue` equals the field's
+      current value.
+    - `matched`: list of JD keywords / phrases you actually surfaced via
+      the proposed patches with backing evidence in the brief.
     - `skipped`: list of JD keywords / phrases you considered but dropped
       because the brief lacks evidence.
 
@@ -73,10 +90,11 @@ user: |
   {{personalBrief}}
   ===== END PERSONAL BRIEF =====
 
-  ===== CURRENT CV CONTENT (JSON, render target) =====
-  {{contentJson}}
-  ===== END CURRENT CV CONTENT =====
+  ===== CV FIELDS (JSON, render target) =====
+  {{fieldsJson}}
+  ===== END CV FIELDS =====
 
-  Return a JSON object with exactly three keys: `tailoredContentJson` (a
-  JSON-encoded string whose parsed object mirrors the input content's
-  shape), `matched` (array of strings), and `skipped` (array of strings).
+  Return a JSON object with exactly three keys: `patchesJson` (a
+  JSON-encoded string whose parsed value is an array of
+  `{ fieldId, newValue }`), `matched` (array of strings), and `skipped`
+  (array of strings).

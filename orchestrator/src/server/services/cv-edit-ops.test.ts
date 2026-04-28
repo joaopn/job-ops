@@ -1,65 +1,67 @@
 // @vitest-environment node
-import type { CvContent } from "@shared/types";
+import type { CvField, CvFieldOverrides } from "@shared/types";
 import { describe, expect, it } from "vitest";
 import { applyBriefEdit, applyCvEditOps } from "./cv-edit-ops";
 
-describe("applyCvEditOps", () => {
-  it("replaces a leaf value when `from` matches", () => {
-    const content: CvContent = {
-      experience: [
-        {
-          bullets: ["Built X", "Built Y"],
-        },
-        {
-          bullets: ["Shipped Z"],
-        },
-      ],
-    } as CvContent;
+const fields: CvField[] = [
+  { id: "basics.name", role: "name", value: "Alice" },
+  { id: "experience.0.title", role: "title", value: "Engineer" },
+  { id: "experience.0.bullet.0", role: "bullet", value: "Built foo" },
+  { id: "experience.1.bullet.0", role: "bullet", value: "Shipped bar" },
+];
 
-    const next = applyCvEditOps(content, [
+describe("applyCvEditOps", () => {
+  it("merges patches into a copy of currentOverrides when `from` matches", () => {
+    const overrides: CvFieldOverrides = {};
+    const next = applyCvEditOps(fields, overrides, [
       {
-        path: ["experience", 1, "bullets", 0],
-        from: "Shipped Z",
-        to: "Shipped Z+, owning the rollout",
+        fieldId: "experience.1.bullet.0",
+        from: "Shipped bar",
+        to: "Shipped bar end-to-end",
       },
     ]);
 
-    expect((next as any).experience[1].bullets[0]).toBe(
-      "Shipped Z+, owning the rollout",
-    );
-    // Original is not mutated.
-    expect((content as any).experience[1].bullets[0]).toBe("Shipped Z");
+    expect(next).toEqual({
+      "experience.1.bullet.0": "Shipped bar end-to-end",
+    });
+    // Original overrides map is not mutated.
+    expect(overrides).toEqual({});
   });
 
-  it("supports string-encoded numeric path segments", () => {
-    const content = { items: ["a", "b", "c"] } as unknown as CvContent;
-    const next = applyCvEditOps(content, [
-      { path: ["items", "1"], from: "b", to: "B" },
+  it("uses the existing override as the `from` baseline when present", () => {
+    const overrides: CvFieldOverrides = {
+      "basics.name": "Alice (PhD)",
+    };
+    const next = applyCvEditOps(fields, overrides, [
+      {
+        fieldId: "basics.name",
+        from: "Alice (PhD)",
+        to: "Dr. Alice",
+      },
     ]);
-    expect((next as any).items).toEqual(["a", "B", "c"]);
+    expect(next["basics.name"]).toBe("Dr. Alice");
   });
 
-  it("throws conflict when `from` no longer matches", () => {
-    const content = { name: "Alice" } as unknown as CvContent;
+  it("throws conflict when `from` no longer matches the effective value", () => {
     expect(() =>
-      applyCvEditOps(content, [{ path: ["name"], from: "Bob", to: "Charlie" }]),
+      applyCvEditOps(fields, {}, [
+        { fieldId: "basics.name", from: "Bob", to: "Charlie" },
+      ]),
     ).toThrow(/no longer matches/i);
   });
 
-  it("throws conflict when path resolves through null", () => {
-    const content = { obj: null } as unknown as CvContent;
+  it("throws conflict for an unknown fieldId", () => {
     expect(() =>
-      applyCvEditOps(content, [
-        { path: ["obj", "nested"], from: "x", to: "y" },
+      applyCvEditOps(fields, {}, [
+        { fieldId: "experience.99.bullet.0", from: "x", to: "y" },
       ]),
-    ).toThrow(/cannot be resolved/i);
+    ).toThrow(/unknown fieldId/i);
   });
 
-  it("rejects empty edit lists and empty paths", () => {
-    const content = { name: "Alice" } as unknown as CvContent;
-    expect(() => applyCvEditOps(content, [])).toThrow(/no edits/i);
+  it("rejects empty edit lists and empty fieldIds", () => {
+    expect(() => applyCvEditOps(fields, {}, [])).toThrow(/no edits/i);
     expect(() =>
-      applyCvEditOps(content, [{ path: [], from: "x", to: "y" }]),
+      applyCvEditOps(fields, {}, [{ fieldId: "", from: "x", to: "y" }]),
     ).toThrow(/empty/i);
   });
 });

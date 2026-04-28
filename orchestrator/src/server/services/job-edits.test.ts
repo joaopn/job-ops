@@ -1,7 +1,8 @@
 // @vitest-environment node
 import type {
-  CvContent,
   CvDocument,
+  CvField,
+  CvFieldOverrides,
   Job,
   JobChatMessage,
   JobChatProposedBriefEdit,
@@ -15,6 +16,7 @@ const mocks = vi.hoisted(() => ({
     updateJob: vi.fn(),
   },
   cvRepo: {
+    getCvDocumentById: vi.fn(),
     updateCvDocument: vi.fn(),
   },
   jobChatRepo: {
@@ -43,6 +45,7 @@ vi.mock("../repositories/jobs", () => ({
 }));
 
 vi.mock("../repositories/cv-documents", () => ({
+  getCvDocumentById: mocks.cvRepo.getCvDocumentById,
   updateCvDocument: mocks.cvRepo.updateCvDocument,
 }));
 
@@ -59,23 +62,20 @@ vi.mock("./pdf", () => ({
   generatePdf: mocks.pdf.generatePdf,
 }));
 
-import {
-  acceptEditForJob,
-  rejectEditForJob,
-} from "./job-edits";
+import { acceptEditForJob, rejectEditForJob } from "./job-edits";
 
-const baseTailoredContent: CvContent = {
-  basics: { name: "Alice" },
-  experience: [
-    { bullets: ["Built foo"] },
-    { bullets: ["Shipped bar"] },
-  ],
-} as unknown as CvContent;
+const baseFields: CvField[] = [
+  { id: "basics.name", role: "name", value: "Alice" },
+  { id: "experience.0.bullet.0", role: "bullet", value: "Built foo" },
+  { id: "experience.1.bullet.0", role: "bullet", value: "Shipped bar" },
+];
+
+const baseOverrides: CvFieldOverrides = {};
 
 const baseJob: Job = {
   id: "job-1",
   cvDocumentId: "cv-1",
-  tailoredContent: baseTailoredContent,
+  tailoredFields: baseOverrides,
   pdfPath: "/data/pdfs/resume_job-1.pdf",
 } as unknown as Job;
 
@@ -83,8 +83,7 @@ const baseCvDocument: CvDocument = {
   id: "cv-1",
   name: "alice.tex",
   flattenedTex: "...",
-  template: "...",
-  content: {} as CvContent,
+  fields: baseFields,
   personalBrief: "First paragraph.",
   createdAt: "2026-04-26T00:00:00Z",
   updatedAt: "2026-04-26T00:00:00Z",
@@ -120,6 +119,7 @@ describe("acceptEditForJob: cv-edit", () => {
     vi.clearAllMocks();
     mocks.jobsRepo.updateJob.mockResolvedValue(baseJob);
     mocks.jobsRepo.getJobById.mockResolvedValue(baseJob);
+    mocks.cvRepo.getCvDocumentById.mockResolvedValue(baseCvDocument);
     mocks.pdf.generatePdf.mockResolvedValue({
       success: true,
       pdfPath: "/data/pdfs/resume_job-1.pdf",
@@ -130,13 +130,13 @@ describe("acceptEditForJob: cv-edit", () => {
     vi.useRealTimers();
   });
 
-  it("applies the patch, re-renders the PDF, and marks the message accepted", async () => {
+  it("merges the patch into tailoredFields, re-renders, and accepts the message", async () => {
     const proposed: JobChatProposedCvEdit = {
       kind: "cv-edit",
       rationale: "Tighten phrasing",
       edits: [
         {
-          path: ["experience", 1, "bullets", 0],
+          fieldId: "experience.1.bullet.0",
           from: "Shipped bar",
           to: "Shipped bar end-to-end",
         },
@@ -153,19 +153,16 @@ describe("acceptEditForJob: cv-edit", () => {
     });
 
     expect(result.kind).toBe("cv-edit");
-    expect(mocks.jobsRepo.updateJob).toHaveBeenCalledWith(
-      "job-1",
-      expect.objectContaining({
-        tailoredContent: expect.any(Object),
-      }),
-    );
-    const patchedContent = mocks.jobsRepo.updateJob.mock.calls[0][1]
-      .tailoredContent as CvContent;
-    expect((patchedContent as any).experience[1].bullets[0]).toBe(
-      "Shipped bar end-to-end",
-    );
+    const firstUpdate = mocks.jobsRepo.updateJob.mock.calls[0][1];
+    expect(firstUpdate.tailoredFields).toEqual({
+      "experience.1.bullet.0": "Shipped bar end-to-end",
+    });
     expect(mocks.pdf.generatePdf).toHaveBeenCalledWith(
-      expect.objectContaining({ jobId: "job-1", cvDocumentId: "cv-1" }),
+      expect.objectContaining({
+        jobId: "job-1",
+        cvDocumentId: "cv-1",
+        overrides: { "experience.1.bullet.0": "Shipped bar end-to-end" },
+      }),
     );
     expect(mocks.jobChatRepo.setMessageEditStatus).toHaveBeenCalledWith(
       "msg-1",
@@ -173,12 +170,12 @@ describe("acceptEditForJob: cv-edit", () => {
     );
   });
 
-  it("rolls back tailoredContent when PDF render fails", async () => {
+  it("rolls back tailoredFields when PDF render fails", async () => {
     const proposed: JobChatProposedCvEdit = {
       kind: "cv-edit",
       rationale: "Tweak",
       edits: [
-        { path: ["basics", "name"], from: "Alice", to: "Alice (PhD)" },
+        { fieldId: "basics.name", from: "Alice", to: "Alice (PhD)" },
       ],
     };
     mocks.jobChatRepo.getMessageById.mockResolvedValue(makeMessage(proposed));
@@ -191,14 +188,12 @@ describe("acceptEditForJob: cv-edit", () => {
       acceptEditForJob({ jobId: "job-1", messageId: "msg-1" }),
     ).rejects.toMatchObject({ code: "INVALID_REQUEST" });
 
-    // First call applies the patched content; second restores the original.
-    expect(mocks.jobsRepo.updateJob.mock.calls[0][1].tailoredContent).toEqual(
-      expect.objectContaining({
-        basics: expect.objectContaining({ name: "Alice (PhD)" }),
-      }),
-    );
-    expect(mocks.jobsRepo.updateJob.mock.calls[1][1].tailoredContent).toBe(
-      baseTailoredContent,
+    // First call applies the patched overrides; second restores the original.
+    expect(mocks.jobsRepo.updateJob.mock.calls[0][1].tailoredFields).toEqual({
+      "basics.name": "Alice (PhD)",
+    });
+    expect(mocks.jobsRepo.updateJob.mock.calls[1][1].tailoredFields).toBe(
+      baseOverrides,
     );
     expect(mocks.jobChatRepo.setMessageEditStatus).not.toHaveBeenCalled();
   });
@@ -207,7 +202,7 @@ describe("acceptEditForJob: cv-edit", () => {
     const proposed: JobChatProposedCvEdit = {
       kind: "cv-edit",
       rationale: "any",
-      edits: [{ path: ["x"], from: "a", to: "b" }],
+      edits: [{ fieldId: "basics.name", from: "Alice", to: "Bob" }],
     };
     mocks.jobChatRepo.getMessageById.mockResolvedValue(
       makeMessage(proposed, { editStatus: "accepted" }),
@@ -265,7 +260,7 @@ describe("rejectEditForJob", () => {
     const proposed: JobChatProposedCvEdit = {
       kind: "cv-edit",
       rationale: "any",
-      edits: [{ path: ["x"], from: "a", to: "b" }],
+      edits: [{ fieldId: "basics.name", from: "Alice", to: "Bob" }],
     };
     const rejectedMessage = makeMessage(proposed, { editStatus: "rejected" });
 
@@ -290,7 +285,7 @@ describe("rejectEditForJob", () => {
         {
           kind: "cv-edit",
           rationale: "any",
-          edits: [{ path: ["x"], from: "a", to: "b" }],
+          edits: [{ fieldId: "basics.name", from: "Alice", to: "Bob" }],
         },
         { jobId: "other-job" },
       ),

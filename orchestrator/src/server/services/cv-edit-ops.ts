@@ -1,49 +1,44 @@
 import { badRequest, conflict } from "@infra/errors";
 import type {
-  CvContent,
+  CvField,
+  CvFieldOverrides,
   JobChatProposedBriefEdit,
   JobChatProposedCvEditOp,
 } from "@shared/types";
 
 /**
- * Apply a list of cv-edit operations to a CvContent tree. Each op is a
- * `{ path, from, to }` triplet: walk the path; verify the leaf value matches
- * `from` exactly; replace it with `to`. Numeric path segments index into
- * arrays; string segments index into objects. Pure, no I/O.
- *
- * Throws `conflict` when `from` no longer matches — surfacing stale-edit
- * collisions so the client can roll back its optimistic update.
+ * Merge a list of `{ fieldId, from, to }` ops into a copy of `currentOverrides`.
+ * For each op, the current effective value (override-or-original) must equal
+ * `from`; otherwise we raise `conflict` so the client can roll back its
+ * optimistic update. Pure, no I/O.
  */
 export function applyCvEditOps(
-  content: CvContent,
+  fields: CvField[],
+  currentOverrides: CvFieldOverrides,
   ops: JobChatProposedCvEditOp[],
-): CvContent {
+): CvFieldOverrides {
   if (ops.length === 0) {
     throw badRequest("No edits to apply");
   }
-  const next = structuredClone(content);
+  const fieldsById = new Map<string, CvField>();
+  for (const field of fields) fieldsById.set(field.id, field);
+
+  const next: CvFieldOverrides = { ...currentOverrides };
   for (const op of ops) {
-    if (op.path.length === 0) {
-      throw badRequest("Edit path is empty");
+    if (!op.fieldId) {
+      throw badRequest("Edit fieldId is empty");
     }
-    let cursor: unknown = next;
-    for (let i = 0; i < op.path.length - 1; i++) {
-      const segment = op.path[i];
-      cursor = readSegment(cursor, segment);
-      if (cursor === null || cursor === undefined) {
-        throw conflict(
-          `Edit path cannot be resolved against current content (path: ${JSON.stringify(op.path)})`,
-        );
-      }
+    const field = fieldsById.get(op.fieldId);
+    if (!field) {
+      throw conflict(`Edit references unknown fieldId '${op.fieldId}'`);
     }
-    const last = op.path[op.path.length - 1];
-    const currentValue = readSegment(cursor, last);
+    const currentValue = next[op.fieldId] ?? field.value;
     if (currentValue !== op.from) {
       throw conflict(
-        `Edit's \`from\` value no longer matches current content (path: ${JSON.stringify(op.path)})`,
+        `Edit's \`from\` value no longer matches current field value (fieldId: ${op.fieldId})`,
       );
     }
-    writeSegment(cursor, last, op.to);
+    next[op.fieldId] = op.to;
   }
   return next;
 }
@@ -65,42 +60,4 @@ export function applyBriefEdit(
     return edit.replace.trim();
   }
   return currentBrief;
-}
-
-function readSegment(target: unknown, segment: string | number): unknown {
-  if (target === null || target === undefined) return undefined;
-  if (Array.isArray(target)) {
-    const index = typeof segment === "number" ? segment : Number(segment);
-    if (!Number.isInteger(index)) return undefined;
-    return target[index];
-  }
-  if (typeof target === "object") {
-    return (target as Record<string, unknown>)[String(segment)];
-  }
-  return undefined;
-}
-
-function writeSegment(
-  target: unknown,
-  segment: string | number,
-  value: unknown,
-): void {
-  if (target === null || target === undefined) {
-    throw conflict("Cannot write to null/undefined parent");
-  }
-  if (Array.isArray(target)) {
-    const index = typeof segment === "number" ? segment : Number(segment);
-    if (!Number.isInteger(index)) {
-      throw badRequest(`Array path segment '${segment}' is not an integer`);
-    }
-    target[index] = value;
-    return;
-  }
-  if (typeof target === "object") {
-    (target as Record<string, unknown>)[String(segment)] = value;
-    return;
-  }
-  throw conflict(
-    `Cannot write segment '${segment}' to non-object parent (${typeof target})`,
-  );
 }

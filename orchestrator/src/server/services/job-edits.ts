@@ -2,8 +2,8 @@ import { badRequest, conflict, notFound } from "@infra/errors";
 import { logger } from "@infra/logger";
 import { sanitizeUnknown } from "@infra/sanitize";
 import type {
-  CvContent,
   CvDocument,
+  CvFieldOverrides,
   Job,
   JobChatMessage,
 } from "@shared/types";
@@ -50,27 +50,32 @@ export async function acceptEditForJob(input: {
   if (proposed.kind === "cv-edit") {
     const job = await jobsRepo.getJobById(input.jobId);
     if (!job) throw notFound("Job not found");
-    if (!job.tailoredContent) {
-      throw badRequest("Job has no tailored content to edit");
-    }
     if (!job.cvDocumentId) {
       throw badRequest("Job is not pinned to a CV document");
     }
+    const cv = await cvRepo.getCvDocumentById(job.cvDocumentId);
+    if (!cv) {
+      throw notFound("Pinned CV document not found");
+    }
 
-    const previousContent = job.tailoredContent as CvContent;
-    const next = applyCvEditOps(previousContent, proposed.edits);
+    const previousOverrides: CvFieldOverrides = job.tailoredFields ?? {};
+    const nextOverrides = applyCvEditOps(
+      cv.fields,
+      previousOverrides,
+      proposed.edits,
+    );
 
-    await jobsRepo.updateJob(job.id, { tailoredContent: next });
+    await jobsRepo.updateJob(job.id, { tailoredFields: nextOverrides });
 
     const pdf = await generatePdf({
       jobId: job.id,
       cvDocumentId: job.cvDocumentId,
-      content: next,
+      overrides: nextOverrides,
     });
     if (!pdf.success) {
-      // Roll back the content update so a render failure doesn't desync
-      // the persisted tailoredContent from the PDF on disk.
-      await jobsRepo.updateJob(job.id, { tailoredContent: previousContent });
+      // Roll back the override map so a render failure doesn't desync the
+      // persisted tailoredFields from the PDF on disk.
+      await jobsRepo.updateJob(job.id, { tailoredFields: previousOverrides });
       logger.warn("PDF render failed during accept-edit; rolled back", {
         jobId: job.id,
         messageId: message.id,
