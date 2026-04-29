@@ -1,6 +1,10 @@
 import { logger } from "@infra/logger";
 import { sanitizeUnknown } from "@infra/sanitize";
-import type { CvField, CvFieldOverrides } from "@shared/types";
+import type {
+  CvField,
+  CvFieldOverrides,
+  CvUploadPipelineAttempt,
+} from "@shared/types";
 import { FlattenInputError, flattenInput } from "./flatten-input";
 import {
   llmTemplateExtract,
@@ -41,16 +45,12 @@ export interface UploadPipelineArgs {
   maxRetries?: number;
 }
 
-export interface UploadPipelineAttempt {
-  attempt: number;
-  templatedTex: string;
-  fields: CvField[];
-  /** What the gate rejected on this attempt. `null` on the accepted attempt. */
-  failureKind: "llm" | "render" | "compile" | "content-diff" | null;
-  failureMessage: string | null;
-  compileStderr: string | null;
-  contentDiff: string | null;
-}
+/**
+ * Server-side alias for the shared `CvUploadPipelineAttempt` shape. Kept
+ * as a re-export so call sites inside the server can keep using the
+ * shorter name without the shared/ prefix in every signature.
+ */
+export type UploadPipelineAttempt = CvUploadPipelineAttempt;
 
 export type UploadPipelineResult =
   | UploadPipelineSuccess

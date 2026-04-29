@@ -34,6 +34,32 @@ export interface CvDocumentSummary {
   updatedAt: string;
 }
 
+/**
+ * One pass through the 5e upload pipeline: an LLM template-extract call
+ * plus the gates the result faces (render → tectonic → pdftotext diff).
+ * Mirrored in shared types so the verification UI / failed-upload modal
+ * can render the log without re-deriving the shape from the server.
+ */
+export interface CvUploadPipelineAttempt {
+  attempt: number;
+  templatedTex: string;
+  fields: CvField[];
+  failureKind: "llm" | "render" | "compile" | "content-diff" | null;
+  failureMessage: string | null;
+  compileStderr: string | null;
+  contentDiff: string | null;
+}
+
+/**
+ * Successful upload via POST /api/cv/upload-template (or re-extract):
+ * the persisted CV plus the attempt log so the verification view can
+ * surface "compiled in N attempts".
+ */
+export interface CvUploadTemplateResponse {
+  cv: CvDocument;
+  attempts: CvUploadPipelineAttempt[];
+}
+
 export interface CreateCvDocumentInput {
   name: string;
   originalArchive: Uint8Array;

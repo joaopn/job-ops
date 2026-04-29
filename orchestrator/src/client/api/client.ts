@@ -11,6 +11,7 @@ import type {
   CreateJobNoteInput,
   CvDocument,
   CvDocumentSummary,
+  CvUploadTemplateResponse,
   Job,
   JobActionRequest,
   JobActionResponse,
@@ -39,14 +40,21 @@ import type {
 
 const API_BASE = "/api";
 
-class ApiClientError extends Error {
+export class ApiClientError extends Error {
   requestId?: string;
   status?: number;
   code?: string;
+  /** Server-supplied `error.details` payload from `{ ok: false }` responses. */
+  details?: unknown;
 
   constructor(
     message: string,
-    options?: { requestId?: string; status?: number; code?: string },
+    options?: {
+      requestId?: string;
+      status?: number;
+      code?: string;
+      details?: unknown;
+    },
   ) {
     const requestId = options?.requestId;
     super(requestId ? `${message} (requestId: ${requestId})` : message);
@@ -54,6 +62,7 @@ class ApiClientError extends Error {
     this.requestId = requestId;
     this.status = options?.status;
     this.code = options?.code;
+    this.details = options?.details;
   }
 }
 
@@ -380,6 +389,7 @@ function toApiError<T>(
         requestId: parsed.meta?.requestId,
         status: response.status,
         code: parsed.error.code,
+        details: parsed.error.details,
       });
     }
     return new ApiClientError("API request failed", {
@@ -396,6 +406,7 @@ function toApiError<T>(
     parsed.error || parsed.message || "API request failed",
     {
       status: response.status,
+      details: parsed.details,
     },
   );
 }
@@ -1198,6 +1209,44 @@ export async function deleteCvDocument(
 
 export async function reExtractCvDocument(id: string): Promise<CvDocument> {
   return fetchApi<CvDocument>(`/cv/${id}/re-extract`, { method: "POST" });
+}
+
+/**
+ * 5e gated upload: POSTs the file to /api/cv/upload-template, which runs
+ * the templated-tex pipeline (compile original → LLM extract loop →
+ * compile substituted → pdftotext diff) and only persists if every gate
+ * passes. Returns the persisted CV + per-attempt log on success; rejects
+ * with the per-attempt log in `details.attempts` on failure.
+ */
+export async function uploadCvDocumentTemplate(args: {
+  file: Blob;
+  filename: string;
+  name?: string;
+  maxRetries?: number;
+}): Promise<CvUploadTemplateResponse> {
+  const form = new FormData();
+  form.append("file", args.file, args.filename);
+  if (args.name) form.append("name", args.name);
+  if (args.maxRetries !== undefined) {
+    form.append("maxRetries", String(args.maxRetries));
+  }
+  return fetchApi<CvUploadTemplateResponse>("/cv/upload-template", {
+    method: "POST",
+    body: form,
+  });
+}
+
+export async function reExtractCvDocumentTemplate(
+  id: string,
+  options?: { maxRetries?: number },
+): Promise<CvUploadTemplateResponse> {
+  return fetchApi<CvUploadTemplateResponse>(
+    `/cv/${id}/re-extract-template`,
+    {
+      method: "POST",
+      body: JSON.stringify(options ?? {}),
+    },
+  );
 }
 
 export async function validateLlm(input: {

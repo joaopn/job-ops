@@ -46,15 +46,19 @@ export async function runTectonic(
       zip.extractAllTo(tempDir, /* overwrite */ true);
     }
 
-    // Many CV zips wrap their assets in a single top-level folder
-    // (e.g. `awesome-cv-template/main.tex` + `awesome-cv-template/awesome-cv.cls`).
     // Tectonic resolves `.cls` / `.sty` by looking next to the .tex it's
-    // compiling, so we need to write the rendered tex into whichever
-    // directory the original assets live in — not the tempDir root.
-    const workDir = await pickWorkDir(tempDir);
-    const entrypointPath = path.join(workDir, entrypointName);
+    // compiling. When the caller provided an explicit `entrypoint`, that
+    // path is already relative to the zip root (e.g.
+    // `awesome-cv-template/main.tex`), so resolve it directly against
+    // `tempDir`. When no entrypoint is given we fall back to the
+    // `pickWorkDir` heuristic — used by the 5d render-preview path which
+    // doesn't carry an entrypoint through.
+    const entrypointPath = args.entrypoint
+      ? path.join(tempDir, entrypointName)
+      : path.join(await pickWorkDir(tempDir), entrypointName);
     await fs.mkdir(path.dirname(entrypointPath), { recursive: true });
     await fs.writeFile(entrypointPath, args.renderedTex, "utf8");
+    const workDir = path.dirname(entrypointPath);
 
     const stderr = await spawnTectonic(entrypointPath, workDir, timeoutMs);
 

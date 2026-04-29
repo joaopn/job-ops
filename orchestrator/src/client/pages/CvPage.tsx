@@ -1,11 +1,19 @@
 import * as api from "@client/api";
+import { ApiClientError } from "@client/api";
+import { CompileLogViewer, AttemptLogViewer } from "@client/components/cv/CompileLogViewer";
 import { PageHeader } from "@client/components/layout";
 import { queryKeys } from "@client/lib/queryKeys";
-import type { CvDocument, CvDocumentSummary } from "@shared/types";
+import type {
+  CvDocument,
+  CvDocumentSummary,
+  CvUploadPipelineAttempt,
+} from "@shared/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
+  CheckCircle2,
   Download,
+  ExternalLink,
   FileText,
   Loader2,
   RefreshCw,
@@ -40,6 +48,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
 const ACCEPTED_EXTENSIONS = [".tex", ".zip"];
+
+type UploadFailureDetails = {
+  stage: "flatten" | "compile-original" | "extract-loop";
+  flattenCode?: string;
+  originalCompileStderr?: string;
+  attempts?: CvUploadPipelineAttempt[];
+};
 
 export function CvPage() {
   const queryClient = useQueryClient();
@@ -98,40 +113,71 @@ function LoadingShell() {
   );
 }
 
+function extractFailureDetails(error: unknown): UploadFailureDetails | null {
+  if (!(error instanceof ApiClientError) || !error.details) return null;
+  const details = error.details as Record<string, unknown>;
+  if (typeof details.stage !== "string") return null;
+  return {
+    stage: details.stage as UploadFailureDetails["stage"],
+    flattenCode:
+      typeof details.flattenCode === "string" ? details.flattenCode : undefined,
+    originalCompileStderr:
+      typeof details.originalCompileStderr === "string"
+        ? details.originalCompileStderr
+        : undefined,
+    attempts: Array.isArray(details.attempts)
+      ? (details.attempts as CvUploadPipelineAttempt[])
+      : undefined,
+  };
+}
+
 function UploadCard({ onUploaded }: { onUploaded: () => Promise<void> }) {
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorDetails, setErrorDetails] =
+    useState<UploadFailureDetails | null>(null);
+  const [latestAttempts, setLatestAttempts] =
+    useState<CvUploadPipelineAttempt[] | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [dragOver, setDragOver] = useState(false);
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
       const baseName = file.name.replace(/\.[^.]+$/, "") || "CV";
-      return api.uploadCvDocument({
+      return api.uploadCvDocumentTemplate({
         file,
         filename: file.name,
         name: baseName,
       });
     },
-    onSuccess: async () => {
-      toast.success("CV extracted");
+    onSuccess: async (result) => {
+      const attemptsCount = result.attempts.length;
+      toast.success(
+        attemptsCount === 1
+          ? "CV accepted on the first attempt"
+          : `CV accepted after ${attemptsCount} attempts`,
+      );
+      setLatestAttempts(result.attempts);
       await onUploaded();
     },
     onError: (err: unknown) => {
       const message =
         err instanceof Error ? err.message : "Failed to upload CV";
-      setError(message);
+      setErrorMessage(message);
+      setErrorDetails(extractFailureDetails(err));
       toast.error(message);
     },
   });
 
   const handleFile = useCallback(
     async (file: File) => {
-      setError(null);
+      setErrorMessage(null);
+      setErrorDetails(null);
+      setLatestAttempts(null);
       const ext = `.${file.name.split(".").pop()?.toLowerCase() ?? ""}`;
       if (!ACCEPTED_EXTENSIONS.includes(ext)) {
         const message = `Only ${ACCEPTED_EXTENSIONS.join(" or ")} files are accepted.`;
-        setError(message);
+        setErrorMessage(message);
         toast.error(message);
         return;
       }
@@ -150,15 +196,16 @@ function UploadCard({ onUploaded }: { onUploaded: () => Promise<void> }) {
       <CardHeader>
         <CardTitle>Upload your CV</CardTitle>
         <CardDescription>
-          Drop a .tex file (single-file CV) or a .zip archive containing
-          main.tex plus any included files, fonts, and images. The server
-          flattens it, extracts a list of typed value fields it can later
-          override during per-job tailoring, and drafts a first-person
-          personal brief. The renderer never rewrites your LaTeX — it only
-          substitutes overrides into the marked spans.
+          Drop a .tex file or a .zip archive containing main.tex plus any
+          included files, fonts, and images. The server flattens it,
+          compiles it, then asks the LLM to produce a templated version.
+          The upload is only accepted if (a) your CV's source compiles, (b)
+          the templated version compiles, and (c) the substituted PDF's
+          text matches the original. Up to 3 LLM retries — beyond that the
+          upload is rejected with the per-attempt log.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
@@ -187,7 +234,9 @@ function UploadCard({ onUploaded }: { onUploaded: () => Promise<void> }) {
           )}
           <div className="text-center">
             <div className="font-medium">
-              {pending ? "Uploading and extracting…" : "Click to upload or drag a file here"}
+              {pending
+                ? "Uploading, compiling, and extracting…"
+                : "Click to upload or drag a file here"}
             </div>
             <div className="text-xs text-muted-foreground">
               .tex or .zip (max 10 MB)
@@ -205,11 +254,43 @@ function UploadCard({ onUploaded }: { onUploaded: () => Promise<void> }) {
             }}
           />
         </button>
-        {error ? (
-          <Alert variant="destructive" className="mt-4">
+
+        {errorMessage ? (
+          <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Upload failed</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription>
+              <div className="space-y-3">
+                <p className="text-sm">{errorMessage}</p>
+                {errorDetails?.stage === "compile-original" &&
+                errorDetails.originalCompileStderr ? (
+                  <CompileLogViewer
+                    stderr={errorDetails.originalCompileStderr}
+                    label="Tectonic stderr (your CV's source)"
+                    defaultOpen
+                    variant="warning"
+                  />
+                ) : null}
+                {errorDetails?.stage === "extract-loop" &&
+                errorDetails.attempts ? (
+                  <AttemptLogViewer attempts={errorDetails.attempts} />
+                ) : null}
+              </div>
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        {latestAttempts && latestAttempts.length > 1 ? (
+          <Alert>
+            <CheckCircle2 className="h-4 w-4" />
+            <AlertTitle>
+              Accepted after {latestAttempts.length} attempts
+            </AlertTitle>
+            <AlertDescription>
+              <div className="mt-2">
+                <AttemptLogViewer attempts={latestAttempts} />
+              </div>
+            </AlertDescription>
           </Alert>
         ) : null}
       </CardContent>
@@ -221,14 +302,18 @@ function CvEditor({ cv }: { cv: CvDocument }) {
   const queryClient = useQueryClient();
   const [name, setName] = useState(cv.name);
   const [personalBrief, setPersonalBrief] = useState(cv.personalBrief);
+  const [reExtractAttempts, setReExtractAttempts] =
+    useState<CvUploadPipelineAttempt[] | null>(null);
+  const [reExtractError, setReExtractError] = useState<string | null>(null);
+  const [reExtractDetails, setReExtractDetails] =
+    useState<UploadFailureDetails | null>(null);
 
   useEffect(() => {
     setName(cv.name);
     setPersonalBrief(cv.personalBrief);
   }, [cv.id, cv.updatedAt, cv.name, cv.personalBrief]);
 
-  const isDirty =
-    name !== cv.name || personalBrief !== cv.personalBrief;
+  const isDirty = name !== cv.name || personalBrief !== cv.personalBrief;
 
   const invalidateAll = useCallback(async () => {
     await queryClient.invalidateQueries({
@@ -249,13 +334,23 @@ function CvEditor({ cv }: { cv: CvDocument }) {
   });
 
   const reExtractMutation = useMutation({
-    mutationFn: () => api.reExtractCvDocument(cv.id),
-    onSuccess: async () => {
-      toast.success("Re-extracted from original archive");
+    mutationFn: () => api.reExtractCvDocumentTemplate(cv.id),
+    onSuccess: async (result) => {
+      toast.success(
+        `Re-extracted (${result.attempts.length} attempt${result.attempts.length === 1 ? "" : "s"})`,
+      );
+      setReExtractAttempts(result.attempts);
+      setReExtractError(null);
+      setReExtractDetails(null);
       await invalidateAll();
     },
     onError: (err: unknown) => {
-      toast.error(err instanceof Error ? err.message : "Re-extract failed");
+      const message =
+        err instanceof Error ? err.message : "Re-extract failed";
+      setReExtractError(message);
+      setReExtractDetails(extractFailureDetails(err));
+      setReExtractAttempts(null);
+      toast.error(message);
     },
   });
 
@@ -282,16 +377,41 @@ function CvEditor({ cv }: { cv: CvDocument }) {
     setPersonalBrief(cv.personalBrief);
   };
 
+  const isLegacy5d = cv.templatedTex.length === 0;
+
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader className="flex flex-row items-start justify-between gap-4">
-          <div className="flex-1">
+          <div className="flex-1 space-y-2">
             <CardTitle>{cv.name}</CardTitle>
             <CardDescription>
               Uploaded {new Date(cv.createdAt).toLocaleString()} · last edited{" "}
               {new Date(cv.updatedAt).toLocaleString()}
             </CardDescription>
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              {isLegacy5d ? (
+                <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-amber-900">
+                  Pre-template substrate — re-extract to migrate
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-emerald-900">
+                  <CheckCircle2 className="h-3 w-3" />
+                  Matches original CV
+                </span>
+              )}
+              {cv.compileAttempts > 0 ? (
+                <span className="rounded-full border border-border/60 bg-muted/40 px-2 py-0.5 text-muted-foreground">
+                  Compiled in {cv.compileAttempts} attempt
+                  {cv.compileAttempts === 1 ? "" : "s"}
+                </span>
+              ) : null}
+              {cv.fields.length > 0 ? (
+                <span className="rounded-full border border-border/60 bg-muted/40 px-2 py-0.5 text-muted-foreground">
+                  {cv.fields.length} fields
+                </span>
+              ) : null}
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button
@@ -315,7 +435,17 @@ function CvEditor({ cv }: { cv: CvDocument }) {
                 rel="noopener noreferrer"
               >
                 <Download className="mr-2 h-4 w-4" />
-                Render preview
+                Templated PDF
+              </a>
+            </Button>
+            <Button asChild type="button" variant="ghost" size="sm">
+              <a
+                href={`/api/cv/${cv.id}/render-original-preview`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <ExternalLink className="mr-2 h-4 w-4" />
+                Original PDF
               </a>
             </Button>
             <DeleteCvButton
@@ -336,6 +466,45 @@ function CvEditor({ cv }: { cv: CvDocument }) {
         </CardContent>
       </Card>
 
+      {reExtractError ? (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Re-extract failed</AlertTitle>
+          <AlertDescription>
+            <div className="space-y-3">
+              <p className="text-sm">{reExtractError}</p>
+              {reExtractDetails?.stage === "compile-original" &&
+              reExtractDetails.originalCompileStderr ? (
+                <CompileLogViewer
+                  stderr={reExtractDetails.originalCompileStderr}
+                  label="Tectonic stderr (source)"
+                  defaultOpen
+                  variant="warning"
+                />
+              ) : null}
+              {reExtractDetails?.stage === "extract-loop" &&
+              reExtractDetails.attempts ? (
+                <AttemptLogViewer attempts={reExtractDetails.attempts} />
+              ) : null}
+            </div>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {reExtractAttempts && reExtractAttempts.length > 1 ? (
+        <Alert>
+          <CheckCircle2 className="h-4 w-4" />
+          <AlertTitle>
+            Accepted after {reExtractAttempts.length} attempts
+          </AlertTitle>
+          <AlertDescription>
+            <div className="mt-2">
+              <AttemptLogViewer attempts={reExtractAttempts} />
+            </div>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
       <Card>
         <CardHeader>
           <CardTitle>Personal brief</CardTitle>
@@ -343,8 +512,8 @@ function CvEditor({ cv }: { cv: CvDocument }) {
             Long-form, first-person background that powers per-job tailoring.
             Paste in extra context the CV doesn't carry — side projects, tools
             you've used in passing, transcripts of long-running chats. The
-            brief is the source of truth for tailoring; the CV JSON below is
-            just the render target.
+            brief is the source of truth for tailoring; the CV's templated
+            tex is the render target.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -362,10 +531,10 @@ function CvEditor({ cv }: { cv: CvDocument }) {
         <CardHeader>
           <CardTitle>Extracted fields ({cv.fields.length})</CardTitle>
           <CardDescription>
-            Verbatim spans of the source LaTeX that per-job tailoring can
-            override. The renderer only touches these spans — everything
-            else in your CV is preserved byte-for-byte. To re-extract, click
-            "Re-extract" above.
+            Spans of the source LaTeX that per-job tailoring can override.
+            Everything else in the templated tex is preserved byte-for-byte.
+            Spot-check the role tags here — if the LLM mislabeled one (e.g.
+            tagged your email as `bullet`), click "Re-extract" above.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -398,6 +567,23 @@ function CvEditor({ cv }: { cv: CvDocument }) {
               ))}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Compile log</CardTitle>
+          <CardDescription>
+            Tectonic stderr from the most recent successful template
+            compile. Empty when this CV was uploaded under the pre-template
+            substrate (re-extract to populate).
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <CompileLogViewer
+            stderr={cv.lastCompileStderr}
+            label="Most recent compile"
+          />
         </CardContent>
       </Card>
 

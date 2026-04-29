@@ -18,6 +18,10 @@ import {
 } from "@server/services/cv/llm-extract-cv";
 import { RenderCvError, renderCv } from "@server/services/cv/render";
 import {
+  RenderTemplateError,
+  renderTemplate,
+} from "@server/services/cv/render-template";
+import {
   RunTectonicError,
   runTectonic,
 } from "@server/services/cv/run-tectonic";
@@ -243,8 +247,12 @@ cvRouter.get("/:id/render-preview", async (req: Request, res: Response) => {
       return fail(res, notFound("CV document not found."));
     }
 
-    // No overrides — render the source verbatim.
-    const tex = renderCv(document.flattenedTex, document.fields, {});
+    // 5e CVs render via marker-replace against `defaultFieldValues`.
+    // 5d CVs (no `templatedTex`) keep the cursor-walk path. Cutover to
+    // single substrate happens in 5e.4.
+    const tex = document.templatedTex
+      ? renderTemplate(document.templatedTex, document.defaultFieldValues)
+      : renderCv(document.flattenedTex, document.fields, {});
     const result = await runTectonic({
       renderedTex: tex,
       archive: new Uint8Array(archive),
@@ -260,6 +268,125 @@ cvRouter.get("/:id/render-preview", async (req: Request, res: Response) => {
     handleCvError(res, error);
   }
 });
+
+/**
+ * Compile the unmodified `flattened_tex` so the user can compare the
+ * 5e templated render against the original CV PDF in the verification
+ * view ("Show original PDF" link).
+ */
+cvRouter.get(
+  "/:id/render-original-preview",
+  async (req: Request, res: Response) => {
+    try {
+      const archive = await cvRepo.getCvDocumentArchive(req.params.id);
+      const document = await cvRepo.getCvDocumentById(req.params.id);
+      if (!document || !archive) {
+        return fail(res, notFound("CV document not found."));
+      }
+
+      const result = await runTectonic({
+        renderedTex: document.flattenedTex,
+        archive: new Uint8Array(archive),
+      });
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `inline; filename="${document.name}-original.pdf"`,
+      );
+      res.send(Buffer.from(result.pdf));
+    } catch (error) {
+      handleCvError(res, error);
+    }
+  },
+);
+
+/**
+ * 5e re-extract: re-runs the templated upload pipeline against the
+ * existing archive. Same accept/reject semantics as the upload route —
+ * returns 502 with the per-attempt log on failure rather than mutating
+ * the document. The 5d POST `/:id/re-extract` route stays for 5d-era
+ * documents until 5e.4 cuts over.
+ */
+cvRouter.post(
+  "/:id/re-extract-template",
+  async (req: Request, res: Response) => {
+    try {
+      const archive = await cvRepo.getCvDocumentArchive(req.params.id);
+      if (!archive) return fail(res, notFound("CV document not found."));
+      const existing = await cvRepo.getCvDocumentById(req.params.id);
+      if (!existing) return fail(res, notFound("CV document not found."));
+
+      const maxRetriesRaw =
+        typeof req.body === "object" && req.body !== null
+          ? (req.body as Record<string, unknown>).maxRetries
+          : undefined;
+      const maxRetries =
+        typeof maxRetriesRaw === "number" ? maxRetriesRaw : undefined;
+
+      const result = await runUploadPipeline({
+        archive: new Uint8Array(archive),
+        filename: existing.name,
+        maxRetries,
+      });
+
+      if (!result.ok) {
+        logger.warn("CV re-extract-template rejected", {
+          cvDocumentId: req.params.id,
+          stage: result.stage,
+          attempts: result.attempts?.length ?? 0,
+        });
+        const status = result.stage === "flatten" ? 400 : 502;
+        return fail(
+          res,
+          new AppError({
+            status,
+            code:
+              result.stage === "flatten"
+                ? "INVALID_REQUEST"
+                : result.stage === "compile-original"
+                  ? "UNPROCESSABLE_ENTITY"
+                  : "UPSTREAM_ERROR",
+            message: result.message,
+            details: {
+              stage: result.stage,
+              ...(result.flattenCode
+                ? { flattenCode: result.flattenCode }
+                : {}),
+              ...(result.originalCompileStderr
+                ? {
+                    originalCompileStderr:
+                      result.originalCompileStderr.slice(-2000),
+                  }
+                : {}),
+              ...(result.attempts ? { attempts: result.attempts } : {}),
+            },
+          }),
+        );
+      }
+
+      const updated = await cvRepo.updateCvDocument(req.params.id, {
+        flattenedTex: result.flattenedTex,
+        fields: result.fields,
+        personalBrief: result.personalBrief,
+        templatedTex: result.templatedTex,
+        defaultFieldValues: result.defaultFieldValues,
+        lastCompileStderr: result.compileStderr,
+        compileAttempts: result.compileAttempts,
+      });
+      if (!updated) return fail(res, notFound("CV document not found."));
+
+      logger.info("CV document re-extracted via template pipeline", {
+        cvDocumentId: req.params.id,
+        fieldCount: result.fields.length,
+        compileAttempts: result.compileAttempts,
+      });
+      ok(res, { cv: updated, attempts: result.attempts });
+    } catch (error) {
+      handleCvError(res, error);
+    }
+  },
+);
 
 cvRouter.delete("/:id", async (req: Request, res: Response) => {
   try {
@@ -332,6 +459,10 @@ function handleCvError(res: Response, error: unknown): void {
     return;
   }
   if (error instanceof RenderCvError) {
+    fail(res, badRequest(error.message, { code: error.code }));
+    return;
+  }
+  if (error instanceof RenderTemplateError) {
     fail(res, badRequest(error.message, { code: error.code }));
     return;
   }
