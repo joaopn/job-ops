@@ -43,8 +43,18 @@ const DEFAULT_CONFIG: PipelineConfig = {
   enableCrawling: true,
   enableScoring: true,
   enableImporting: true,
-  enableAutoTailoring: true,
+  enableAutoTailoring: false,
 };
+
+async function resolveAutoTailoring(
+  configValue: boolean | undefined,
+): Promise<boolean> {
+  if (typeof configValue === "boolean") return configValue;
+  const raw = await settingsRepo.getSetting("autoTailoringEnabled");
+  if (raw === "1" || raw === "true") return true;
+  if (raw === "0" || raw === "false") return false;
+  return false;
+}
 
 // Track if pipeline is currently running
 let isPipelineRunning = false;
@@ -122,7 +132,15 @@ export async function runPipeline(
   cancelRequestedAt = null;
   resetProgress();
   const locationIntent = await resolveLocationIntent(config);
-  const mergedConfig = { ...DEFAULT_CONFIG, ...config, locationIntent };
+  const enableAutoTailoring = await resolveAutoTailoring(
+    config.enableAutoTailoring,
+  );
+  const mergedConfig = {
+    ...DEFAULT_CONFIG,
+    ...config,
+    enableAutoTailoring,
+    locationIntent,
+  };
   const configSnapshot = {
     topN: mergedConfig.topN,
     minSuitabilityScore: mergedConfig.minSuitabilityScore,
@@ -217,16 +235,24 @@ export async function runPipeline(
         candidates: jobsToProcess.length,
       });
 
-      await persistResultSummary({
-        stage: "processing",
-        jobsScored: scoredJobs.length,
-        jobsSelected: jobsToProcess.length,
-      });
-      const { processedCount } = await processJobsStep({
-        jobsToProcess,
-        processJob,
-        shouldCancel: () => cancelRequestedAt !== null,
-      });
+      let processedCount = 0;
+      if (mergedConfig.enableAutoTailoring) {
+        await persistResultSummary({
+          stage: "processing",
+          jobsScored: scoredJobs.length,
+          jobsSelected: jobsToProcess.length,
+        });
+        ({ processedCount } = await processJobsStep({
+          jobsToProcess,
+          processJob,
+          shouldCancel: () => cancelRequestedAt !== null,
+        }));
+      } else {
+        pipelineLogger.info(
+          "Auto-tailoring disabled; skipping processing step",
+          { jobsSelected: jobsToProcess.length },
+        );
+      }
       jobsProcessed = processedCount;
 
       resultSummary = updatePipelineRunResultSummary(resultSummary, {

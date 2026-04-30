@@ -34,6 +34,22 @@ describe("selectJobsStep", () => {
     expect(selected.map((job) => job.id)).toEqual(["a", "c"]);
   });
 
+  it("does not apply topN cap when auto-tailoring is disabled", async () => {
+    const jobs = [
+      { id: "a", suitabilityScore: 90, suitabilityReason: "high" },
+      { id: "b", suitabilityScore: 45, suitabilityReason: "low" },
+      { id: "c", suitabilityScore: 80, suitabilityReason: "med" },
+      { id: "d", suitabilityScore: 70, suitabilityReason: "ok" },
+    ] as any;
+
+    const selected = await selectJobsStep({
+      scoredJobs: jobs,
+      mergedConfig: { ...baseConfig, enableAutoTailoring: false },
+    });
+
+    expect(selected.map((job) => job.id)).toEqual(["a", "c", "d"]);
+  });
+
   it("breaks score ties toward selected locations when requested", async () => {
     const settingsRepo = await import("@server/repositories/settings");
     vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({

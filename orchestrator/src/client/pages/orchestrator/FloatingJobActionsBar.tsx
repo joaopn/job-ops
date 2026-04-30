@@ -44,12 +44,12 @@ export const FloatingJobActionsBar: React.FC<FloatingJobActionsBarProps> = ({
                 <Button
                   type="button"
                   size="sm"
-                  variant="outline"
+                  variant="default"
                   className="w-full sm:w-auto"
                   disabled={jobActionInFlight}
                   onClick={onMoveToReady}
                 >
-                  Move to Ready
+                  Tailor {selectedCount} {selectedCount === 1 ? "job" : "jobs"}
                 </Button>
               )}
               {canSkipSelected && (

@@ -96,7 +96,7 @@ export const SHORTCUTS = {
   moveToReady: {
     key: "r",
     displayKey: "r",
-    label: "Move to Ready",
+    label: "Tailor job",
     group: "actions",
     scope: ["discovered"],
   },

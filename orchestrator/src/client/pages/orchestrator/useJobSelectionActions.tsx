@@ -19,13 +19,13 @@ import { clampNumber } from "./utils";
 const MAX_JOB_ACTION_JOB_IDS = 100;
 
 const jobActionLabel: Record<JobAction, string> = {
-  move_to_ready: "Moving jobs to Ready...",
+  move_to_ready: "Tailoring selected jobs...",
   skip: "Skipping selected jobs...",
   rescore: "Calculating match scores...",
 };
 
 const jobActionSuccessLabel: Record<JobAction, string> = {
-  move_to_ready: "jobs moved to Ready",
+  move_to_ready: "jobs tailored",
   skip: "jobs skipped",
   rescore: "matches recalculated",
 };
@@ -106,6 +106,29 @@ export function useJobSelectionActions({
         );
         return new Set(allIds.slice(0, MAX_JOB_ACTION_JOB_IDS));
       });
+    },
+    [activeJobs],
+  );
+
+  const selectAllAboveScore = useCallback(
+    (threshold: number) => {
+      const matchingIds = activeJobs
+        .filter((job) => (job.suitabilityScore ?? -1) >= threshold)
+        .map((job) => job.id);
+      if (matchingIds.length === 0) {
+        toast.message(`No jobs scored ≥ ${threshold} in this view.`);
+        return;
+      }
+      if (matchingIds.length > MAX_JOB_ACTION_JOB_IDS) {
+        toast.error(
+          `Select all is limited to ${MAX_JOB_ACTION_JOB_IDS} jobs per action.`,
+        );
+        setSelectedJobIds(
+          new Set(matchingIds.slice(0, MAX_JOB_ACTION_JOB_IDS)),
+        );
+        return;
+      }
+      setSelectedJobIds(new Set(matchingIds));
     },
     [activeJobs],
   );
@@ -273,6 +296,7 @@ export function useJobSelectionActions({
     jobActionInFlight,
     toggleSelectJob,
     toggleSelectAll,
+    selectAllAboveScore,
     clearSelection,
     runJobAction,
   };

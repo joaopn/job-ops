@@ -63,7 +63,7 @@ export const DiscoveredPanel: React.FC<DiscoveredPanelProps> = ({
       setIsFinalizing(true);
       await api.processJob(job.id);
 
-      toast.success("Job moved to Ready");
+      toast.success("Job tailored");
 
       onJobMoved(job.id);
       await onJobUpdated();

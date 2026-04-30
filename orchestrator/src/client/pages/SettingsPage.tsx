@@ -6,6 +6,7 @@ import { DangerZoneSection } from "@client/pages/settings/components/DangerZoneS
 import { DisplaySettingsSection } from "@client/pages/settings/components/DisplaySettingsSection";
 import { EnvironmentSettingsSection } from "@client/pages/settings/components/EnvironmentSettingsSection";
 import { ModelSettingsSection } from "@client/pages/settings/components/ModelSettingsSection";
+import { PipelineSettingsSection } from "@client/pages/settings/components/PipelineSettingsSection";
 import {
   type LlmProviderId,
   normalizeLlmProvider,
@@ -58,6 +59,7 @@ const DEFAULT_FORM_VALUES: UpdateSettingsInput = {
   penalizeMissingSalary: null,
   missingSalaryPenalty: null,
   autoSkipScoreThreshold: null,
+  autoTailoringEnabled: null,
 };
 
 type LlmProviderValue = LlmProviderId | null;
@@ -67,9 +69,10 @@ type SettingsSectionId =
   | "chat"
   | "environment"
   | "display"
+  | "pipeline"
   | "danger-zone";
 
-type SettingsGroupId = "ai" | "accounts" | "display" | "danger";
+type SettingsGroupId = "ai" | "accounts" | "display" | "pipeline" | "danger";
 
 type SettingsSectionDescriptor = {
   id: SettingsSectionId;
@@ -128,6 +131,18 @@ const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
     ],
   },
   {
+    id: "pipeline",
+    label: "Pipeline",
+    items: [
+      {
+        id: "pipeline",
+        label: "Pipeline Behavior",
+        description: "Auto-tailor toggle for pipeline runs.",
+        searchTerms: ["pipeline", "tailor", "auto", "scoring", "rank"],
+      },
+    ],
+  },
+  {
     id: "danger",
     label: "Danger Zone",
     items: [
@@ -167,6 +182,7 @@ const SECTION_FIELD_MAP: Record<
     "basicAuthPassword",
   ],
   display: ["showSponsorInfo", "renderMarkdownInJobDescriptions"],
+  pipeline: ["autoTailoringEnabled"],
   "danger-zone": [],
 };
 
@@ -209,6 +225,7 @@ const NULL_SETTINGS_PAYLOAD: UpdateSettingsInput = {
   penalizeMissingSalary: null,
   missingSalaryPenalty: null,
   autoSkipScoreThreshold: null,
+  autoTailoringEnabled: null,
 };
 
 const mapSettingsToForm = (data: AppSettings): UpdateSettingsInput => ({
@@ -238,6 +255,7 @@ const mapSettingsToForm = (data: AppSettings): UpdateSettingsInput => ({
   penalizeMissingSalary: data.penalizeMissingSalary.override,
   missingSalaryPenalty: data.missingSalaryPenalty.override,
   autoSkipScoreThreshold: data.autoSkipScoreThreshold.override,
+  autoTailoringEnabled: data.autoTailoringEnabled.override,
 });
 
 const normalizeString = (value: string | null | undefined) => {
@@ -333,6 +351,12 @@ const getDerivedSettings = (settings: AppSettings | null) => {
         default: settings?.autoSkipScoreThreshold?.default ?? null,
       },
     },
+    pipeline: {
+      autoTailoringEnabled: {
+        effective: settings?.autoTailoringEnabled?.value ?? false,
+        default: settings?.autoTailoringEnabled?.default ?? false,
+      },
+    },
   };
 };
 
@@ -398,7 +422,7 @@ export const SettingsPage: React.FC = () => {
   useQueryErrorToast(settingsQuery.error, "Failed to load settings");
 
   const derived = getDerivedSettings(settings);
-  const { model, display, chat, envSettings, scoring } = derived;
+  const { model, display, chat, envSettings, scoring, pipeline } = derived;
 
   const canSave = isDirty && isValid;
 
@@ -497,6 +521,10 @@ export const SettingsPage: React.FC = () => {
         autoSkipScoreThreshold: nullIfSame(
           data.autoSkipScoreThreshold,
           scoring.autoSkipScoreThreshold.default,
+        ),
+        autoTailoringEnabled: nullIfSame(
+          data.autoTailoringEnabled,
+          pipeline.autoTailoringEnabled.default,
         ),
         ...envPayload,
       };
@@ -734,6 +762,16 @@ export const SettingsPage: React.FC = () => {
       activeSectionContent = (
         <DisplaySettingsSection
           values={display}
+          isLoading={isLoading}
+          isSaving={isSaving}
+          layoutMode="panel"
+        />
+      );
+      break;
+    case "pipeline":
+      activeSectionContent = (
+        <PipelineSettingsSection
+          values={pipeline}
           isLoading={isLoading}
           isSaving={isSaving}
           layoutMode="panel"

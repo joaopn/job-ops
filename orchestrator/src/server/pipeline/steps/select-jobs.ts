@@ -46,7 +46,7 @@ export async function selectJobsStep(args: {
   const prioritizeSelectedLocations =
     locationIntent.geoScope === "remote_worldwide_prioritize_selected";
 
-  return args.scoredJobs
+  const ranked = args.scoredJobs
     .filter(
       (job) =>
         (job.suitabilityScore ?? 0) >= args.mergedConfig.minSuitabilityScore,
@@ -66,6 +66,10 @@ export async function selectJobsStep(args: {
         locationIntent,
       ).priority;
       return rightPriority - leftPriority;
-    })
-    .slice(0, args.mergedConfig.topN);
+    });
+
+  // topN caps the auto-tailor budget. When auto-tailoring is off the user
+  // picks from the full ranked list manually, so the cap doesn't apply.
+  if (!args.mergedConfig.enableAutoTailoring) return ranked;
+  return ranked.slice(0, args.mergedConfig.topN);
 }

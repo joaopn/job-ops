@@ -49,3 +49,7 @@ export type ScoringValues = {
   blockedCompanyKeywords: EffectiveDefault<string[]>;
   scoringInstructions: EffectiveDefault<string>;
 };
+
+export type PipelineSettingsValues = {
+  autoTailoringEnabled: EffectiveDefault<boolean>;
+};

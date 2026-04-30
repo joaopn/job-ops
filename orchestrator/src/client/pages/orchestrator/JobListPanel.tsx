@@ -32,6 +32,7 @@ interface JobListPanelProps {
   onSelectJob: (jobId: string) => void;
   onToggleSelectJob: (jobId: string) => void;
   onToggleSelectAll: (checked: boolean) => void;
+  onSelectAllAboveScore?: (threshold: number) => void;
   primaryEmptyStateAction?: EmptyStateAction;
   secondaryEmptyStateAction?: EmptyStateAction;
   emptyStateMessage?: string;
@@ -51,6 +52,7 @@ export const JobListPanel = forwardRef<VirtualListHandle, JobListPanelProps>(
       onSelectJob,
       onToggleSelectJob,
       onToggleSelectAll,
+      onSelectAllAboveScore,
       primaryEmptyStateAction,
       secondaryEmptyStateAction,
       emptyStateMessage,
@@ -142,9 +144,28 @@ export const JobListPanel = forwardRef<VirtualListHandle, JobListPanelProps>(
               />
               Select all filtered
             </label>
-            <span className="text-xs text-muted-foreground tabular-nums">
-              {selectedJobIds.size} selected
-            </span>
+            <div className="flex items-center gap-2">
+              {onSelectAllAboveScore && activeTab === "discovered" && (
+                <div className="hidden gap-1 sm:flex">
+                  {[60, 70, 80].map((threshold) => (
+                    <Button
+                      key={threshold}
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => onSelectAllAboveScore(threshold)}
+                      title={`Select jobs with score ≥ ${threshold}`}
+                    >
+                      ≥ {threshold}
+                    </Button>
+                  ))}
+                </div>
+              )}
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {selectedJobIds.size} selected
+              </span>
+            </div>
           </div>
           <div
             className="relative"

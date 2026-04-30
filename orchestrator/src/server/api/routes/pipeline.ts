@@ -162,6 +162,7 @@ const runPipelineSchema = z.object({
     .optional(),
   searchScope: z.enum(LOCATION_SEARCH_SCOPE_VALUES).optional(),
   matchStrictness: z.enum(LOCATION_MATCH_STRICTNESS_VALUES).optional(),
+  enableAutoTailoring: z.boolean().optional(),
 });
 
 pipelineRouter.post("/run", async (req: Request, res: Response) => {
@@ -235,6 +236,7 @@ pipelineRouter.post("/run", async (req: Request, res: Response) => {
         minSuitabilityScore: config.minSuitabilityScore,
         sources: config.sources,
         locationIntent,
+        enableAutoTailoring: config.enableAutoTailoring,
       }).catch((error) => {
         logger.error("Background pipeline run failed", error);
       });

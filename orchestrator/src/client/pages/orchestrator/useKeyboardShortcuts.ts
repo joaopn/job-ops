@@ -200,12 +200,12 @@ export function useKeyboardShortcuts(args: UseKeyboardShortcutsArgs): void {
 
         shortcutActionInFlight.current = true;
         const jobId = selectedJob.id;
-        toast.message("Moving job to Ready...");
+        toast.message("Tailoring job...");
 
         api
           .processJob(jobId)
           .then(async () => {
-            toast.success("Job moved to Ready", {
+            toast.success("Job tailored", {
               description: "Your tailored PDF has been generated.",
             });
             selectNextAfterAction(jobId);
@@ -213,9 +213,7 @@ export function useKeyboardShortcuts(args: UseKeyboardShortcutsArgs): void {
           })
           .catch((err: unknown) => {
             const msg =
-              err instanceof Error
-                ? err.message
-                : "Failed to move job to ready";
+              err instanceof Error ? err.message : "Failed to tailor job";
             toast.error(msg);
           })
           .finally(() => {

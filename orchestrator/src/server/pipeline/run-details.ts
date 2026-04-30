@@ -43,7 +43,7 @@ export function buildRequestedConfigSnapshot(
     enableCrawling: config.enableCrawling !== false,
     enableScoring: config.enableScoring !== false,
     enableImporting: config.enableImporting !== false,
-    enableAutoTailoring: config.enableAutoTailoring !== false,
+    enableAutoTailoring: config.enableAutoTailoring === true,
   };
 }
 

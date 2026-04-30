@@ -444,6 +444,13 @@ export const settingsRegistry = {
       return value === null || value === undefined ? null : String(value);
     },
   },
+  autoTailoringEnabled: {
+    kind: "typed" as const,
+    schema: z.boolean(),
+    default: (): boolean => false,
+    parse: parseBitBoolOrNull,
+    serialize: serializeBitBool,
+  },
 
   // --- Model Variants ---
   modelScorer: {
