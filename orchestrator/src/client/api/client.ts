@@ -1193,6 +1193,7 @@ export async function updateCvDocument(
   input: Partial<{
     name: string;
     personalBrief: string;
+    extractionPrompt: string;
   }>,
 ): Promise<CvDocument> {
   return fetchApi<CvDocument>(`/cv/${id}`, {
@@ -1223,12 +1224,16 @@ export async function uploadCvDocumentTemplate(args: {
   filename: string;
   name?: string;
   maxRetries?: number;
+  extractionPrompt?: string;
 }): Promise<CvUploadTemplateResponse> {
   const form = new FormData();
   form.append("file", args.file, args.filename);
   if (args.name) form.append("name", args.name);
   if (args.maxRetries !== undefined) {
     form.append("maxRetries", String(args.maxRetries));
+  }
+  if (args.extractionPrompt !== undefined) {
+    form.append("extractionPrompt", args.extractionPrompt);
   }
   return fetchApi<CvUploadTemplateResponse>("/cv/upload-template", {
     method: "POST",
@@ -1238,7 +1243,7 @@ export async function uploadCvDocumentTemplate(args: {
 
 export async function reExtractCvDocumentTemplate(
   id: string,
-  options?: { maxRetries?: number },
+  options?: { maxRetries?: number; extractionPrompt?: string },
 ): Promise<CvUploadTemplateResponse> {
   return fetchApi<CvUploadTemplateResponse>(
     `/cv/${id}/re-extract-template`,
@@ -1247,6 +1252,17 @@ export async function reExtractCvDocumentTemplate(
       body: JSON.stringify(options ?? {}),
     },
   );
+}
+
+/**
+ * 5e.3a: returns the server's default extraction system prompt. Used by
+ * the CV page to pre-fill the per-CV prompt textarea.
+ */
+export async function fetchExtractionPromptDefault(): Promise<string> {
+  const result = await fetchApi<{ prompt: string }>(
+    "/cv/extraction-prompt-default",
+  );
+  return result.prompt;
 }
 
 export async function validateLlm(input: {

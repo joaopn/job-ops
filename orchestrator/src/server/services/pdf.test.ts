@@ -20,6 +20,7 @@ const FAKE_CV: CvDocument = {
   defaultFieldValues: {},
   lastCompileStderr: null,
   compileAttempts: 0,
+  extractionPrompt: "",
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };

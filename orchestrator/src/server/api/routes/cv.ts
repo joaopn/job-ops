@@ -25,6 +25,7 @@ import {
   RunTectonicError,
   runTectonic,
 } from "@server/services/cv/run-tectonic";
+import { getExtractionPromptDefault } from "@server/services/cv/llm-template-extract";
 import { runUploadPipeline } from "@server/services/cv/upload-pipeline";
 import busboy from "busboy";
 import type { Request, Response } from "express";
@@ -33,12 +34,17 @@ import { z } from "zod";
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const MAX_PERSONAL_BRIEF_BYTES = 50_000;
+const MAX_EXTRACTION_PROMPT_BYTES = 50_000;
 
 export const cvRouter = Router();
 
 const updateCvSchema = z.object({
   name: z.string().trim().min(1).max(100).optional(),
   personalBrief: z.string().max(MAX_PERSONAL_BRIEF_BYTES).optional(),
+  extractionPrompt: z
+    .string()
+    .max(MAX_EXTRACTION_PROMPT_BYTES)
+    .optional(),
 });
 
 interface ParsedUpload {
@@ -105,10 +111,21 @@ cvRouter.post("/upload-template", async (req: Request, res: Response) => {
     const maxRetriesRaw = upload.fields.maxRetries;
     const maxRetries = maxRetriesRaw ? Number(maxRetriesRaw) : undefined;
 
+    const extractionPromptRaw = upload.fields.extractionPrompt ?? "";
+    if (extractionPromptRaw.length > MAX_EXTRACTION_PROMPT_BYTES) {
+      return fail(
+        res,
+        badRequest(
+          `extractionPrompt exceeds the ${MAX_EXTRACTION_PROMPT_BYTES}-byte limit.`,
+        ),
+      );
+    }
+
     const result = await runUploadPipeline({
       archive: upload.bytes,
       filename: upload.filename,
       maxRetries,
+      extractionPrompt: extractionPromptRaw || undefined,
     });
 
     if (!result.ok) {
@@ -154,6 +171,7 @@ cvRouter.post("/upload-template", async (req: Request, res: Response) => {
       defaultFieldValues: result.defaultFieldValues,
       lastCompileStderr: result.compileStderr,
       compileAttempts: result.compileAttempts,
+      extractionPrompt: extractionPromptRaw,
     });
 
     logger.info("CV document created via upload-template", {
@@ -185,6 +203,25 @@ cvRouter.get("/", async (_req: Request, res: Response) => {
     fail(res, toAppError(error));
   }
 });
+
+/**
+ * 5e.3a: returns the server's default extraction system prompt verbatim.
+ * The client uses this to pre-fill the per-CV textarea on first upload
+ * (so the user sees the entire prompt, can edit it, and submits the full
+ * text). Listed before the `/:id` routes so the literal path isn't
+ * shadowed.
+ */
+cvRouter.get(
+  "/extraction-prompt-default",
+  async (_req: Request, res: Response) => {
+    try {
+      const prompt = await getExtractionPromptDefault();
+      ok(res, { prompt });
+    } catch (error) {
+      fail(res, toAppError(error));
+    }
+  },
+);
 
 cvRouter.get("/:id", async (req: Request, res: Response) => {
   try {
@@ -317,17 +354,39 @@ cvRouter.post(
       const existing = await cvRepo.getCvDocumentById(req.params.id);
       if (!existing) return fail(res, notFound("CV document not found."));
 
-      const maxRetriesRaw =
+      const body =
         typeof req.body === "object" && req.body !== null
-          ? (req.body as Record<string, unknown>).maxRetries
-          : undefined;
+          ? (req.body as Record<string, unknown>)
+          : {};
+      const maxRetriesRaw = body.maxRetries;
       const maxRetries =
         typeof maxRetriesRaw === "number" ? maxRetriesRaw : undefined;
+
+      // 5e.3a: a re-extract may carry a fresh per-CV prompt. Persist it
+      // BEFORE running the pipeline so a failed re-extract still saves
+      // the user's edited prompt (next attempt sees the new text).
+      let effectivePrompt = existing.extractionPrompt;
+      if (typeof body.extractionPrompt === "string") {
+        const incoming = body.extractionPrompt;
+        if (incoming.length > MAX_EXTRACTION_PROMPT_BYTES) {
+          return fail(
+            res,
+            badRequest(
+              `extractionPrompt exceeds the ${MAX_EXTRACTION_PROMPT_BYTES}-byte limit.`,
+            ),
+          );
+        }
+        effectivePrompt = incoming;
+        await cvRepo.updateCvDocument(req.params.id, {
+          extractionPrompt: incoming,
+        });
+      }
 
       const result = await runUploadPipeline({
         archive: new Uint8Array(archive),
         filename: existing.name,
         maxRetries,
+        extractionPrompt: effectivePrompt || undefined,
       });
 
       if (!result.ok) {

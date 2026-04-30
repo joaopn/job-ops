@@ -89,6 +89,7 @@ const baseCvDocument: CvDocument = {
   defaultFieldValues: {},
   lastCompileStderr: null,
   compileAttempts: 0,
+  extractionPrompt: "",
   createdAt: "2026-04-26T00:00:00Z",
   updatedAt: "2026-04-26T00:00:00Z",
 };

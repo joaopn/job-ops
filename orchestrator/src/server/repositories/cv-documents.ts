@@ -28,6 +28,7 @@ function mapRow(row: typeof cvDocuments.$inferSelect): CvDocument {
     defaultFieldValues: parseDefaultFieldValues(row.defaultFieldValues),
     lastCompileStderr: row.lastCompileStderr ?? null,
     compileAttempts: row.compileAttempts ?? 0,
+    extractionPrompt: row.extractionPrompt ?? "",
     createdAt: new Date(row.createdAt).toISOString(),
     updatedAt: new Date(row.updatedAt).toISOString(),
   };
@@ -111,6 +112,7 @@ export async function createCvDocument(
     defaultFieldValues: input.defaultFieldValues ?? {},
     lastCompileStderr: input.lastCompileStderr ?? null,
     compileAttempts: input.compileAttempts ?? 0,
+    extractionPrompt: input.extractionPrompt ?? "",
     createdAt: now,
     updatedAt: now,
   });
@@ -153,6 +155,9 @@ export async function updateCvDocument(
         : {}),
       ...(input.compileAttempts !== undefined
         ? { compileAttempts: input.compileAttempts }
+        : {}),
+      ...(input.extractionPrompt !== undefined
+        ? { extractionPrompt: input.extractionPrompt }
         : {}),
       updatedAt: now,
     })

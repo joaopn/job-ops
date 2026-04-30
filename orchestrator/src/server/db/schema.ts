@@ -38,6 +38,10 @@ export const cvDocuments = sqliteTable("cv_documents", {
     .default(sql`('{}')`),
   lastCompileStderr: text("last_compile_stderr"),
   compileAttempts: integer("compile_attempts").notNull().default(0),
+  // 5e.3a: per-CV system prompt override. Empty string means "use the
+  // server default at extraction time" (the cv-template-extract YAML).
+  // Capped at 50KB at the API layer.
+  extractionPrompt: text("extraction_prompt").notNull().default(""),
   createdAt: integer("created_at", { mode: "number" }).notNull(),
   updatedAt: integer("updated_at", { mode: "number" }).notNull(),
 });

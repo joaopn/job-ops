@@ -36,6 +36,7 @@ export {
 } from "./pdftotext-diff";
 export {
   buildPreviousAttemptBlock,
+  getExtractionPromptDefault,
   llmTemplateExtract,
   TemplateExtractError,
   type TemplateExtractArgs,

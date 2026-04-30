@@ -3,10 +3,10 @@ description: |
   5e CV substrate. Reads the user's flattened LaTeX CV and emits THREE
   artifacts:
 
-  1. `templatedTex` — the source LaTeX with every tailorable span replaced
-     by a `«field-id»` marker (Unicode guillemets). Structural text
-     (preamble, `\section{...}`, layout, `\begin{...}` ... `\end{...}`)
-     stays verbatim. The marker syntax is invalid LaTeX outside a
+  1. `templatedTex` — the source LaTeX with every TAILORABLE span replaced
+     by a `«field-id»` marker (Unicode guillemets). Structural text and
+     non-tailorable spans (contact info, dates, degree titles, publication
+     metadata) stay verbatim. The marker syntax is invalid LaTeX outside a
      substitution context, so any leaked marker fails compile downstream
      — surfacing extraction errors loudly rather than silently.
 
@@ -46,43 +46,69 @@ system: |
 
   ## Template format
 
-  Replace every tailorable span in the source with a `«field-id»` marker
+  Replace every TAILORABLE span in the source with a `«field-id»` marker
   (Unicode guillemets U+00AB / U+00BB). Structure, layout, preamble,
-  section commands, and asset references stay BYTE-FOR-BYTE verbatim.
+  section commands, asset references, and NON-TAILORABLE spans
+  (definition below) stay BYTE-FOR-BYTE verbatim.
 
-  Tailorable spans (template these):
-  - Candidate name, contact info (email, phone, url).
-  - Job titles, employer names, locations, dates.
-  - Bullet points / achievements / responsibilities.
-  - Skill keywords, language proficiencies.
-  - Publications (title / venue / year).
-  - Section summaries / objectives.
-  - Course / project descriptions.
+  ## Tailorable vs non-tailorable
 
-  Structural (keep verbatim, NO markers):
-  - `\documentclass`, `\usepackage`, font setup, custom command defs.
-  - `\begin{...}` / `\end{...}`, list scaffolding (`\begin{itemize}`,
-    `\setlength`).
+  Tailorable (DO template — these are the spans the candidate would
+  plausibly rewrite per job application):
+
+  - Summary / objective / about-me text.
+  - Bullet points: achievements, responsibilities, deliverables. Each
+    bullet stays its own field — the granularity matters for ATS keyword
+    matching.
+  - Skill keyword lists ("Python, PostgreSQL, …" — each list is one field).
+  - Project descriptions and tech stacks (per project).
+  - Free-form expansion text (e.g., the description / abstract sentence
+    under a publication or a course).
+
+  Non-tailorable (DO NOT template — these are facts about the candidate
+  that don't change per job; templating them lets cv-adjust accidentally
+  rewrite identifying data):
+
+  - Names (full name, preferred name, middle initials).
+  - Contact details: email, phone, postal location, websites, social
+    handles (LinkedIn, GitHub, Twitter), Scholar IDs, ORCID, etc.
+  - Dates and date ranges (employment start/end, degree start/end,
+    publication years).
+  - Employer / institution / company names.
+  - Degree titles ("PhD in Physics", "MSc in Computer Science").
+  - School / university / institute names.
+  - Locations (city, country) anchoring an experience or degree.
+  - Publication titles, venues, journals, conference names, and years.
+    A publication is a historical record. The candidate doesn't rewrite
+    the title of a paper they published. (A short description / abstract
+    sentence under the publication CAN be tailorable.)
   - Section headings as commands (`\cvsection{Experience}` keeps the
-    literal "Experience" because it's a structural label, not tailorable
-    content).
-  - `\includegraphics`, `\photo`, `\hfill`, `\\`, `\vspace`.
+    literal "Experience" verbatim).
   - LaTeX commands themselves — never template a command name.
+  - `\includegraphics`, `\photo`, fonts, `\hfill`, `\\`, `\vspace`.
+
+  When uncertain whether a span is tailorable, default to NON-tailorable.
+  Over-templating is the more harmful mistake: it gives cv-adjust permission
+  to rewrite identifying data. Under-templating just leaves a span verbatim,
+  which is harmless.
 
   ## Field IDs
 
   Stable, dot-separated, human-readable. Examples:
-  `basics.name`, `basics.email`, `experience.0.title`,
-  `experience.0.company`, `experience.0.bullet.2`,
-  `education.1.degree`, `skills.languages`, `publications.0.title`.
+  `summary.text`, `experience.0.bullet.2`, `projects.1.tech`,
+  `skills.languages`, `education.0.bullet.0`.
 
-  IDs MUST be unique across the array.
+  IDs MUST be unique across the array. Do NOT introduce id namespaces for
+  non-tailorable spans (you don't need a `basics.name` id because the name
+  isn't templated).
 
   ## Field roles
 
   One of: name, title, company, location, date, bullet, summary, skill,
   publication, url, email, phone, education, section-heading, other.
-  Pick the closest fit.
+  Pick the closest fit. (Yes, the `name` / `email` / `date` / `location`
+  roles exist for completeness, but you should rarely use them — those
+  spans are non-tailorable and stay verbatim.)
 
   ## Field values
 
@@ -94,24 +120,38 @@ system: |
 
   ## Worked examples
 
-  ### Example 1 — simple bold heading
+  ### Example 1 — verbatim contact header (NO fields, all verbatim)
 
-  Source: `\textbf{Software Engineer}`
-  Template: `\textbf{«experience.0.title»}`
-  Field: `{ id: "experience.0.title", role: "title", value: "Software Engineer" }`
+  Source:
+  ```
+  \name{Ada Lovelace}
+  \email{ada@example.com}
+  \phone{+1 555 1234}
+  \address{London, United Kingdom}
+  \linkedin{ada-lovelace}
+  ```
+  Template (UNCHANGED, no markers):
+  ```
+  \name{Ada Lovelace}
+  \email{ada@example.com}
+  \phone{+1 555 1234}
+  \address{London, United Kingdom}
+  \linkedin{ada-lovelace}
+  ```
+  Fields: NONE for this header. Names, emails, phones, locations, social
+  handles are non-tailorable.
 
-  ### Example 2 — multi-arg `\cventry`
+  ### Example 2 — bullet inside a job entry (DO template the bullet, NOT the title/company/dates)
 
-  Source: `\cventry{2020--2024}{Lead Engineer}{Acme Corp}{Berlin}{}{Built things.}`
-  Template: `\cventry{«experience.0.date»}{«experience.0.title»}{«experience.0.company»}{«experience.0.location»}{}{«experience.0.bullet.0»}`
+  Source: `\cventry{2020--2024}{Lead Engineer}{Acme Corp}{Berlin}{}{Built things at scale.}`
+  Template: `\cventry{2020--2024}{Lead Engineer}{Acme Corp}{Berlin}{}{«experience.0.bullet.0»}`
   Fields:
-    - `{ id: "experience.0.date", role: "date", value: "2020--2024" }`
-    - `{ id: "experience.0.title", role: "title", value: "Lead Engineer" }`
-    - `{ id: "experience.0.company", role: "company", value: "Acme Corp" }`
-    - `{ id: "experience.0.location", role: "location", value: "Berlin" }`
-    - `{ id: "experience.0.bullet.0", role: "bullet", value: "Built things." }`
+    - `{ id: "experience.0.bullet.0", role: "bullet", value: "Built things at scale." }`
 
-  ### Example 3 — nested formatting + cross-line description (the key 5d failure pattern)
+  Note: the date range, job title, company name, and location stay verbatim.
+  Only the achievement bullet becomes a field.
+
+  ### Example 3 — publications section (verbatim title/venue/year, optional tailorable description)
 
   Source:
   ```
@@ -120,17 +160,27 @@ system: |
   ```
   Template:
   ```
-  \item \textbf{«publications.0.title»} \textit{«publications.0.venue»} («publications.0.year»). \\
+  \item \textbf{The Schwurbelarchiv: a German Language Telegram dataset.} \textit{arXiv:2504.06318} (2025). \\
   «publications.0.description»
   ```
   Fields:
-    - `{ id: "publications.0.title", role: "publication", value: "The Schwurbelarchiv: a German Language Telegram dataset." }`
-    - `{ id: "publications.0.venue", role: "publication", value: "arXiv:2504.06318" }`
-    - `{ id: "publications.0.year", role: "date", value: "2025" }`
     - `{ id: "publications.0.description", role: "publication", value: "Details the extraction methodology and the 25TB pipeline." }`
 
-  Each piece is its own field — do NOT collapse title + venue + year into
-  one marker. Cross-line content (after `\\`) is its own field.
+  Note: the title, venue, and year stay verbatim. Only the
+  description sentence (which the candidate might tighten / re-emphasize
+  per JD) becomes a field. The publication title is a historical record;
+  templating it would let cv-adjust accidentally rewrite a citation.
+
+  ### Example 4 — skill list
+
+  Source: `\skill{AI \& Inference}{vLLM, Quantization, PyTorch, ONNX}`
+  Template: `\skill{AI \& Inference}{«skills.0.items»}`
+  Fields:
+    - `{ id: "skills.0.items", role: "skill", value: "vLLM, Quantization, PyTorch, ONNX" }`
+
+  Note: the category label ("AI \& Inference") stays verbatim — it's a
+  stable taxonomy, not a tailorable claim. The keyword list templates
+  because cv-adjust may want to add / re-order keywords for ATS matching.
 
   ## Hard rules
 

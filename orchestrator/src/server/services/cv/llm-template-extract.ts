@@ -68,6 +68,13 @@ export interface TemplateExtractArgs {
   flattenedTex: string;
   assetReferences: string[];
   /**
+   * 5e.3a: per-CV LLM system prompt override. When provided (non-empty),
+   * replaces the cv-template-extract YAML's system prompt entirely. The
+   * user message (asset list + source CV + retry block) is always
+   * server-controlled. Empty / undefined → use the YAML default.
+   */
+  extractionPrompt?: string;
+  /**
    * Retry context. When present, the LLM is asked to correct its previous
    * output rather than restart from scratch — the prior template + the
    * tectonic / pdftotext failure are appended to the user message.
@@ -121,6 +128,25 @@ export function buildPreviousAttemptBlock(
   return sections.join("\n");
 }
 
+/**
+ * Returns the YAML system prompt as a plain string. Used by the
+ * `GET /api/cv/extraction-prompt-default` endpoint so the client can
+ * pre-fill the per-CV prompt textarea on upload / editor load.
+ *
+ * Variables in the system body are passed through unsubstituted because
+ * none currently apply (interpolation only happens in the user message).
+ * If we ever add system-side variables, this resolver needs to render
+ * them with neutral defaults so the surfaced text is usable as-is.
+ */
+export async function getExtractionPromptDefault(): Promise<string> {
+  const prompt = await loadPrompt("cv-template-extract", {
+    flattenedTex: "",
+    assetReferencesList: "",
+    previousAttemptBlock: "",
+  });
+  return prompt.system;
+}
+
 export async function llmTemplateExtract(
   args: TemplateExtractArgs,
 ): Promise<TemplateExtractResult> {
@@ -134,9 +160,17 @@ export async function llmTemplateExtract(
     previousAttemptBlock: buildPreviousAttemptBlock(args.previousAttempt),
   });
 
+  // 5e.3a: when the caller supplied a per-CV override, replace the YAML
+  // system prompt entirely. The user message stays server-controlled
+  // (asset list + source + retry block).
+  const systemContent =
+    args.extractionPrompt && args.extractionPrompt.trim().length > 0
+      ? args.extractionPrompt
+      : prompt.system;
+
   const llm = new LlmService();
   const messages: Array<{ role: "system" | "user"; content: string }> = [];
-  if (prompt.system) messages.push({ role: "system", content: prompt.system });
+  if (systemContent) messages.push({ role: "system", content: systemContent });
   messages.push({ role: "user", content: prompt.user });
 
   const result = await llm.callJson<{

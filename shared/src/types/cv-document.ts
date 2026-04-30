@@ -23,6 +23,13 @@ export interface CvDocument {
   lastCompileStderr: string | null;
   /** How many template-extract retries the upload took. Observability. */
   compileAttempts: number;
+  /**
+   * 5e.3a: per-CV LLM system prompt. The user can override the entire
+   * default cv-template-extract system prompt with their own text;
+   * empty string means "use the server default at extraction time".
+   * Capped at 50KB at the API layer.
+   */
+  extractionPrompt: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -71,6 +78,7 @@ export interface CreateCvDocumentInput {
   defaultFieldValues?: CvFieldOverrides;
   lastCompileStderr?: string | null;
   compileAttempts?: number;
+  extractionPrompt?: string;
 }
 
 export interface UpdateCvDocumentInput {
@@ -83,4 +91,5 @@ export interface UpdateCvDocumentInput {
   defaultFieldValues?: CvFieldOverrides;
   lastCompileStderr?: string | null;
   compileAttempts?: number;
+  extractionPrompt?: string;
 }

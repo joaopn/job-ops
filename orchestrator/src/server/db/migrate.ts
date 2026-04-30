@@ -400,6 +400,11 @@ const migrations: string[] = [
   `ALTER TABLE cv_documents ADD COLUMN last_compile_stderr TEXT`,
   `ALTER TABLE cv_documents ADD COLUMN compile_attempts INTEGER NOT NULL DEFAULT 0`,
 
+  // 5e.3a: per-CV system prompt. The user can override the entire LLM
+  // system prompt (default = the server's cv-template-extract YAML).
+  // Empty value means "use the server default at extraction time".
+  `ALTER TABLE cv_documents ADD COLUMN extraction_prompt TEXT NOT NULL DEFAULT ''`,
+
   // Drop legacy settings keys that are no longer read by the app.
   `DELETE FROM settings WHERE key IN (
      'jobspyHoursOld',

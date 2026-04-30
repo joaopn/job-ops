@@ -43,6 +43,12 @@ export interface UploadPipelineArgs {
   filename: string;
   /** Default 3. Capped at runtime to keep extraction bounded. */
   maxRetries?: number;
+  /**
+   * 5e.3a per-CV system-prompt override. Empty / undefined → use the
+   * server's YAML default. When provided, replaces the system prompt for
+   * every retry attempt.
+   */
+  extractionPrompt?: string;
 }
 
 /**
@@ -151,6 +157,7 @@ export async function runUploadPipeline(
       flattened,
       originalPdf,
       archive: args.archive,
+      extractionPrompt: args.extractionPrompt,
       previousAttempt: previousForRetry,
     });
     attempts.push(result.record);
@@ -215,10 +222,17 @@ async function runOneAttempt(input: {
   flattened: ReturnType<typeof flattenInput>;
   originalPdf: Uint8Array;
   archive: Uint8Array;
+  extractionPrompt: string | undefined;
   previousAttempt: TemplateExtractPreviousAttempt | undefined;
 }): Promise<AttemptOutcome> {
-  const { attemptNumber, flattened, originalPdf, archive, previousAttempt } =
-    input;
+  const {
+    attemptNumber,
+    flattened,
+    originalPdf,
+    archive,
+    extractionPrompt,
+    previousAttempt,
+  } = input;
 
   // 3a. LLM template-extract.
   let extracted: Awaited<ReturnType<typeof llmTemplateExtract>>;
@@ -226,6 +240,7 @@ async function runOneAttempt(input: {
     extracted = await llmTemplateExtract({
       flattenedTex: flattened.flattenedTex,
       assetReferences: flattened.assetReferences,
+      extractionPrompt,
       previousAttempt,
     });
   } catch (error) {

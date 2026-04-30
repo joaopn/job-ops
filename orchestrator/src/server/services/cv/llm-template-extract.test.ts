@@ -195,6 +195,82 @@ describe("llmTemplateExtract", () => {
   });
 });
 
+describe("llmTemplateExtract — extractionPrompt override", () => {
+  it("replaces the YAML system prompt with the override when given", async () => {
+    callJsonMock.mockResolvedValue({
+      success: true,
+      data: {
+        templatedTex: SAMPLE_TEX,
+        fieldsJson: JSON.stringify(SAMPLE_FIELDS),
+        personalBrief: "Brief",
+      },
+    });
+
+    await llmTemplateExtract({
+      flattenedTex: "x",
+      assetReferences: [],
+      extractionPrompt: "CUSTOM SYSTEM PROMPT — only template bullets.",
+    });
+
+    const messages = callJsonMock.mock.calls[0][0].messages as Array<{
+      role: string;
+      content: string;
+    }>;
+    const systemMessage = messages.find((m) => m.role === "system");
+    expect(systemMessage?.content).toBe(
+      "CUSTOM SYSTEM PROMPT — only template bullets.",
+    );
+  });
+
+  it("falls back to the YAML default when no override given", async () => {
+    callJsonMock.mockResolvedValue({
+      success: true,
+      data: {
+        templatedTex: SAMPLE_TEX,
+        fieldsJson: JSON.stringify(SAMPLE_FIELDS),
+        personalBrief: "Brief",
+      },
+    });
+
+    await llmTemplateExtract({
+      flattenedTex: "x",
+      assetReferences: [],
+    });
+
+    const messages = callJsonMock.mock.calls[0][0].messages as Array<{
+      role: string;
+      content: string;
+    }>;
+    const systemMessage = messages.find((m) => m.role === "system");
+    // The mock loadPrompt returns "stub-system" as the system text.
+    expect(systemMessage?.content).toBe("stub-system");
+  });
+
+  it("treats whitespace-only override as 'no override' and uses the default", async () => {
+    callJsonMock.mockResolvedValue({
+      success: true,
+      data: {
+        templatedTex: SAMPLE_TEX,
+        fieldsJson: JSON.stringify(SAMPLE_FIELDS),
+        personalBrief: "Brief",
+      },
+    });
+
+    await llmTemplateExtract({
+      flattenedTex: "x",
+      assetReferences: [],
+      extractionPrompt: "   \n  ",
+    });
+
+    const messages = callJsonMock.mock.calls[0][0].messages as Array<{
+      role: string;
+      content: string;
+    }>;
+    const systemMessage = messages.find((m) => m.role === "system");
+    expect(systemMessage?.content).toBe("stub-system");
+  });
+});
+
 describe("buildPreviousAttemptBlock", () => {
   it("returns empty string when no previous attempt", () => {
     expect(buildPreviousAttemptBlock(undefined)).toBe("");

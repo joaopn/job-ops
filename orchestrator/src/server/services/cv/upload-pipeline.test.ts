@@ -285,6 +285,28 @@ describe("runUploadPipeline — extract loop", () => {
     expect(result.attempts?.every((a) => a.failureKind !== null)).toBe(true);
   });
 
+  it("forwards extractionPrompt to every llm-template-extract call", async () => {
+    mocks.runTectonic
+      .mockResolvedValueOnce({ pdf: FAKE_PDF_ORIGINAL, log: "" })
+      .mockRejectedValueOnce(
+        new RunTectonicError("brace mismatch", "NON_ZERO_EXIT", "! Extra }"),
+      )
+      .mockResolvedValueOnce({ pdf: FAKE_PDF_TEMPLATED, log: "" });
+
+    await runUploadPipeline({
+      archive: ARCHIVE,
+      filename: "cv.zip",
+      extractionPrompt: "CUSTOM SYSTEM PROMPT — only template bullets.",
+    });
+
+    expect(mocks.llmTemplateExtract).toHaveBeenCalledTimes(2);
+    for (const call of mocks.llmTemplateExtract.mock.calls) {
+      expect(call[0].extractionPrompt).toBe(
+        "CUSTOM SYSTEM PROMPT — only template bullets.",
+      );
+    }
+  });
+
   it("clamps maxRetries to a minimum of 1", async () => {
     mocks.pdftotextDiff.mockResolvedValue({
       ok: false,

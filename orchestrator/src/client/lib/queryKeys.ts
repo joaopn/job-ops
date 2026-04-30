@@ -10,6 +10,8 @@ export const queryKeys = {
     list: () => [...queryKeys.cvDocuments.all, "list"] as const,
     detail: (id: string) =>
       [...queryKeys.cvDocuments.all, "detail", id] as const,
+    extractionPromptDefault: () =>
+      [...queryKeys.cvDocuments.all, "extraction-prompt-default"] as const,
   },
   jobs: {
     all: ["jobs"] as const,

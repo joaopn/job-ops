@@ -138,8 +138,30 @@ function UploadCard({ onUploaded }: { onUploaded: () => Promise<void> }) {
     useState<UploadFailureDetails | null>(null);
   const [latestAttempts, setLatestAttempts] =
     useState<CvUploadPipelineAttempt[] | null>(null);
+  const [extractionPrompt, setExtractionPrompt] = useState<string | null>(
+    null,
+  );
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [dragOver, setDragOver] = useState(false);
+
+  const defaultPromptQuery = useQuery<string>({
+    queryKey: queryKeys.cvDocuments.extractionPromptDefault(),
+    queryFn: api.fetchExtractionPromptDefault,
+  });
+
+  // Pre-fill the textarea once the server default arrives. The user can
+  // then edit any of it before clicking Upload.
+  useEffect(() => {
+    if (defaultPromptQuery.data && extractionPrompt === null) {
+      setExtractionPrompt(defaultPromptQuery.data);
+    }
+  }, [defaultPromptQuery.data, extractionPrompt]);
+
+  const handleResetPrompt = useCallback(() => {
+    if (defaultPromptQuery.data) {
+      setExtractionPrompt(defaultPromptQuery.data);
+    }
+  }, [defaultPromptQuery.data]);
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -148,6 +170,7 @@ function UploadCard({ onUploaded }: { onUploaded: () => Promise<void> }) {
         file,
         filename: file.name,
         name: baseName,
+        extractionPrompt: extractionPrompt ?? undefined,
       });
     },
     onSuccess: async (result) => {
@@ -255,6 +278,44 @@ function UploadCard({ onUploaded }: { onUploaded: () => Promise<void> }) {
           />
         </button>
 
+        <div className="grid gap-2">
+          <div className="flex items-center justify-between gap-2">
+            <Label htmlFor="upload-extraction-prompt">
+              Extraction prompt{" "}
+              <span className="text-xs font-normal text-muted-foreground">
+                (the system prompt for this upload — pre-filled with the
+                default; edit to change extraction policy)
+              </span>
+            </Label>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={handleResetPrompt}
+              disabled={
+                pending ||
+                !defaultPromptQuery.data ||
+                extractionPrompt === defaultPromptQuery.data
+              }
+            >
+              Reset to default
+            </Button>
+          </div>
+          <Textarea
+            id="upload-extraction-prompt"
+            value={extractionPrompt ?? ""}
+            onChange={(event) => setExtractionPrompt(event.target.value)}
+            placeholder={
+              defaultPromptQuery.isLoading
+                ? "Loading default prompt…"
+                : "(default prompt unavailable — see server logs)"
+            }
+            className="min-h-[260px] font-mono text-xs"
+            spellCheck={false}
+            disabled={pending || defaultPromptQuery.isLoading}
+          />
+        </div>
+
         {errorMessage ? (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
@@ -308,12 +369,38 @@ function CvEditor({ cv }: { cv: CvDocument }) {
   const [reExtractDetails, setReExtractDetails] =
     useState<UploadFailureDetails | null>(null);
 
+  const defaultPromptQuery = useQuery<string>({
+    queryKey: queryKeys.cvDocuments.extractionPromptDefault(),
+    queryFn: api.fetchExtractionPromptDefault,
+  });
+
+  // Initial textarea value: stored prompt if user has customized,
+  // otherwise the server default (so the user always sees the actual
+  // prompt that will run).
+  const initialPrompt =
+    cv.extractionPrompt || defaultPromptQuery.data || "";
+  const [extractionPrompt, setExtractionPrompt] = useState(initialPrompt);
+
   useEffect(() => {
     setName(cv.name);
     setPersonalBrief(cv.personalBrief);
   }, [cv.id, cv.updatedAt, cv.name, cv.personalBrief]);
 
+  // Update the textarea when (a) the persisted CV changes (e.g. after a
+  // successful re-extract) or (b) the server default lands and the CV has
+  // no custom prompt.
+  useEffect(() => {
+    const next = cv.extractionPrompt || defaultPromptQuery.data || "";
+    setExtractionPrompt(next);
+  }, [cv.id, cv.updatedAt, cv.extractionPrompt, defaultPromptQuery.data]);
+
   const isDirty = name !== cv.name || personalBrief !== cv.personalBrief;
+  // Dirty when the textarea differs from what's persisted (or from the
+  // default if nothing was persisted). Saving stores whatever's in the
+  // textarea; if it equals the default we still record it so the prompt
+  // is locked at this snapshot — explicit Reset clears back to "use
+  // current server default".
+  const promptDirty = extractionPrompt !== (cv.extractionPrompt || defaultPromptQuery.data || "");
 
   const invalidateAll = useCallback(async () => {
     await queryClient.invalidateQueries({
@@ -334,7 +421,13 @@ function CvEditor({ cv }: { cv: CvDocument }) {
   });
 
   const reExtractMutation = useMutation({
-    mutationFn: () => api.reExtractCvDocumentTemplate(cv.id),
+    mutationFn: () =>
+      api.reExtractCvDocumentTemplate(cv.id, {
+        // Always send the current textarea value — the server persists
+        // it before running the pipeline so a failed re-extract still
+        // saves the latest edit.
+        extractionPrompt,
+      }),
     onSuccess: async (result) => {
       toast.success(
         `Re-extracted (${result.attempts.length} attempt${result.attempts.length === 1 ? "" : "s"})`,
@@ -351,6 +444,29 @@ function CvEditor({ cv }: { cv: CvDocument }) {
       setReExtractDetails(extractFailureDetails(err));
       setReExtractAttempts(null);
       toast.error(message);
+    },
+  });
+
+  const savePromptMutation = useMutation({
+    mutationFn: async () =>
+      api.updateCvDocument(cv.id, { extractionPrompt }),
+    onSuccess: async () => {
+      toast.success("Prompt saved");
+      await invalidateAll();
+    },
+    onError: (err: unknown) => {
+      toast.error(err instanceof Error ? err.message : "Save prompt failed");
+    },
+  });
+
+  const resetPromptMutation = useMutation({
+    mutationFn: async () => api.updateCvDocument(cv.id, { extractionPrompt: "" }),
+    onSuccess: async () => {
+      toast.success("Reset to server default");
+      await invalidateAll();
+    },
+    onError: (err: unknown) => {
+      toast.error(err instanceof Error ? err.message : "Reset failed");
     },
   });
 
@@ -504,6 +620,98 @@ function CvEditor({ cv }: { cv: CvDocument }) {
           </AlertDescription>
         </Alert>
       ) : null}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Extraction prompt</CardTitle>
+          <CardDescription>
+            The full LLM system prompt used to extract this CV — pre-filled
+            with the server default, edit any of it. The user message
+            (asset list, source, retry context) is server-controlled. Save
+            persists; Re-extract saves and re-runs the pipeline. Reset to
+            default clears your override so future re-extracts use whatever
+            the server's current default is.
+            {cv.extractionPrompt ? (
+              <span className="ml-1 text-amber-700">
+                (using a custom override; reset to track server updates.)
+              </span>
+            ) : (
+              <span className="ml-1 text-muted-foreground">
+                (using the server default — no override saved.)
+              </span>
+            )}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Textarea
+            value={extractionPrompt}
+            onChange={(event) => setExtractionPrompt(event.target.value)}
+            spellCheck={false}
+            className="min-h-[260px] font-mono text-xs"
+            placeholder={
+              defaultPromptQuery.isLoading
+                ? "Loading default prompt…"
+                : "(default prompt unavailable — see server logs)"
+            }
+            disabled={
+              savePromptMutation.isPending ||
+              resetPromptMutation.isPending ||
+              reExtractMutation.isPending ||
+              defaultPromptQuery.isLoading
+            }
+          />
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => resetPromptMutation.mutate()}
+              disabled={
+                !cv.extractionPrompt ||
+                resetPromptMutation.isPending ||
+                savePromptMutation.isPending ||
+                reExtractMutation.isPending
+              }
+            >
+              {resetPromptMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              Reset to default
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => savePromptMutation.mutate()}
+              disabled={
+                !promptDirty ||
+                savePromptMutation.isPending ||
+                reExtractMutation.isPending
+              }
+            >
+              {savePromptMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="mr-2 h-4 w-4" />
+              )}
+              Save
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => reExtractMutation.mutate()}
+              disabled={reExtractMutation.isPending}
+            >
+              {reExtractMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-2 h-4 w-4" />
+              )}
+              Re-extract with this prompt
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
