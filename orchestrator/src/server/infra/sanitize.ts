@@ -3,6 +3,28 @@ const REDACTED = "[REDACTED]";
 const SENSITIVE_KEY_PATTERN =
   /(authorization|cookie|password|pass|secret|token|api.?key|credential|set-cookie|proxy-authorization|x-api-key)/i;
 
+/**
+ * Keys whose names happen to match SENSITIVE_KEY_PATTERN (because they
+ * contain "token", "pass", etc. as a substring) but carry non-sensitive
+ * data. The sanitizer skips redaction for these. Match is case-insensitive
+ * and on the exact key name, not a pattern. Add narrowly — broad
+ * exemptions defeat the sanitizer's purpose.
+ */
+const SAFE_KEY_ALLOWLIST = new Set<string>([
+  // LLM telemetry — token counts and derived rate, not auth tokens.
+  "prompttokens",
+  "completiontokens",
+  "totaltokens",
+  "tokenspersec",
+  "tokensin",
+  "tokensout",
+]);
+
+function isSensitiveKey(key: string): boolean {
+  if (SAFE_KEY_ALLOWLIST.has(key.toLowerCase())) return false;
+  return SENSITIVE_KEY_PATTERN.test(key);
+}
+
 const DEFAULT_MAX_STRING = 800;
 const DEFAULT_MAX_DEPTH = 5;
 const DEFAULT_MAX_ITEMS = 30;
@@ -62,7 +84,7 @@ export function sanitizeUnknown(
         break;
       }
 
-      if (SENSITIVE_KEY_PATTERN.test(key)) {
+      if (isSensitiveKey(key)) {
         out[key] = REDACTED;
         continue;
       }

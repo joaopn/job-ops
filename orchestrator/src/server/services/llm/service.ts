@@ -26,6 +26,7 @@ import {
 } from "./utils/http";
 import { parseJsonContent } from "./utils/json";
 import { parseErrorMessage, truncate } from "./utils/string";
+import { computeTokensPerSec, extractUsage } from "./utils/usage";
 
 export class LlmService {
   private readonly provider: LlmProvider;
@@ -230,6 +231,7 @@ export class LlmService {
     const { maxRetries = 0, retryDelayMs = 500, signal, jobId } = options;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      const attemptStartedAt = Date.now();
       try {
         if (attempt > 0) {
           logger.info("LLM retry attempt", {
@@ -245,6 +247,16 @@ export class LlmService {
           signal,
         });
         const parsed = parseJsonContent<T>(result.text, jobId);
+        // Codex app-server protocol doesn't expose token usage today, so
+        // promptTokens / completionTokens / tokensPerSec are omitted.
+        this.logCallCompleted({
+          mode: "codex",
+          model: options.model,
+          jobId,
+          startedAt: attemptStartedAt,
+          attemptNumber: attempt + 1,
+          success: true,
+        });
         return { success: true, data: parsed };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -259,6 +271,15 @@ export class LlmService {
           continue;
         }
 
+        this.logCallCompleted({
+          mode: "codex",
+          model: options.model,
+          jobId,
+          startedAt: attemptStartedAt,
+          attemptNumber: attempt + 1,
+          success: false,
+          errorMessage: message,
+        });
         return { success: false, error: message };
       }
     }
@@ -289,6 +310,7 @@ export class LlmService {
     const model = normalizeModelForProvider(this.provider, rawModel);
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      const attemptStartedAt = Date.now();
       try {
         if (attempt > 0) {
           logger.info("LLM retry attempt", {
@@ -335,6 +357,17 @@ export class LlmService {
         }
 
         const parsed = parseJsonContent<T>(content, jobId);
+        const usage = extractUsage(data);
+        this.logCallCompleted({
+          mode,
+          model,
+          jobId,
+          startedAt: attemptStartedAt,
+          attemptNumber: attempt + 1,
+          success: true,
+          promptTokens: usage.promptTokens,
+          completionTokens: usage.completionTokens,
+        });
         return { success: true, data: parsed };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -348,6 +381,9 @@ export class LlmService {
             body,
           })
         ) {
+          // Capability errors signal "try the next mode" — they're not a
+          // call failure. Skip the call-completed log; the next mode (or
+          // the final exhaustion path in callJson) will emit one.
           return { success: false, error: `CAPABILITY:${message}` };
         }
 
@@ -362,11 +398,71 @@ export class LlmService {
           continue;
         }
 
+        this.logCallCompleted({
+          mode,
+          model,
+          jobId,
+          startedAt: attemptStartedAt,
+          attemptNumber: attempt + 1,
+          success: false,
+          errorStatus: status ?? null,
+          errorMessage: message,
+        });
         return { success: false, error: message };
       }
     }
 
     return { success: false, error: "All retry attempts failed" };
+  }
+
+  /**
+   * Emit a single structured `LLM call completed` log line per HTTP-level
+   * call (final attempt of a mode — successful or finally-failed). Token
+   * counts are best-effort: providers that don't surface usage produce a
+   * log without `promptTokens` / `completionTokens` / `tokensPerSec`.
+   * Capability-error paths are excluded — they'll be retried on the next
+   * mode and are accounted for there.
+   */
+  private logCallCompleted(args: {
+    mode: ResponseMode | "codex";
+    model: string;
+    jobId: string | undefined;
+    startedAt: number;
+    attemptNumber: number;
+    success: boolean;
+    promptTokens?: number | null;
+    completionTokens?: number | null;
+    errorStatus?: number | string | null;
+    errorMessage?: string;
+  }): void {
+    const durationMs = Date.now() - args.startedAt;
+    const completionTokens = args.completionTokens ?? null;
+    const tokensPerSec = computeTokensPerSec(completionTokens, durationMs);
+    const meta: Record<string, unknown> = {
+      provider: this.provider,
+      model: args.model,
+      mode: args.mode,
+      jobId: args.jobId ?? null,
+      durationMs,
+      attemptNumber: args.attemptNumber,
+      success: args.success,
+    };
+    if (args.promptTokens !== null && args.promptTokens !== undefined) {
+      meta.promptTokens = args.promptTokens;
+    }
+    if (completionTokens !== null) {
+      meta.completionTokens = completionTokens;
+    }
+    if (tokensPerSec !== null) {
+      meta.tokensPerSec = tokensPerSec;
+    }
+    if (!args.success) {
+      if (args.errorStatus !== null && args.errorStatus !== undefined) {
+        meta.errorStatus = args.errorStatus;
+      }
+      if (args.errorMessage) meta.errorMessage = args.errorMessage;
+    }
+    logger.info("LLM call completed", meta);
   }
 
   private async listOpenAiModels(): Promise<string[]> {
