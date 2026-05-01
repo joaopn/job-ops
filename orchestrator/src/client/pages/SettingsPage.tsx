@@ -7,6 +7,7 @@ import { DisplaySettingsSection } from "@client/pages/settings/components/Displa
 import { EnvironmentSettingsSection } from "@client/pages/settings/components/EnvironmentSettingsSection";
 import { ModelSettingsSection } from "@client/pages/settings/components/ModelSettingsSection";
 import { PipelineSettingsSection } from "@client/pages/settings/components/PipelineSettingsSection";
+import { PromptsPanel } from "@client/pages/settings/components/PromptsPanel";
 import {
   type LlmProviderId,
   normalizeLlmProvider,
@@ -72,9 +73,16 @@ type SettingsSectionId =
   | "environment"
   | "display"
   | "pipeline"
+  | "prompts"
   | "danger-zone";
 
-type SettingsGroupId = "ai" | "accounts" | "display" | "pipeline" | "danger";
+type SettingsGroupId =
+  | "ai"
+  | "accounts"
+  | "display"
+  | "pipeline"
+  | "prompts"
+  | "danger";
 
 type SettingsSectionDescriptor = {
   id: SettingsSectionId;
@@ -145,6 +153,19 @@ const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
     ],
   },
   {
+    id: "prompts",
+    label: "Prompts",
+    items: [
+      {
+        id: "prompts",
+        label: "LLM Prompts",
+        description:
+          "List the YAML prompts loaded from disk and reload edits without restarting.",
+        searchTerms: ["yaml", "llm", "prompt", "system", "reload"],
+      },
+    ],
+  },
+  {
     id: "danger",
     label: "Danger Zone",
     items: [
@@ -189,6 +210,7 @@ const SECTION_FIELD_MAP: Record<
     "inboxStaleThresholdDays",
     "inboxAgeoutThresholdDays",
   ],
+  prompts: [],
   "danger-zone": [],
 };
 
@@ -803,6 +825,9 @@ export const SettingsPage: React.FC = () => {
           layoutMode="panel"
         />
       );
+      break;
+    case "prompts":
+      activeSectionContent = <PromptsPanel layoutMode="panel" />;
       break;
     case "danger-zone":
       activeSectionContent = (

@@ -30,4 +30,8 @@ export const queryKeys = {
     runInsights: (id: string) =>
       [...queryKeys.pipeline.all, "run-insights", id] as const,
   },
+  prompts: {
+    all: ["prompts"] as const,
+    list: () => [...queryKeys.prompts.all, "list"] as const,
+  },
 } as const;

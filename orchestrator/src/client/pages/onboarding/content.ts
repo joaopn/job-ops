@@ -21,14 +21,20 @@ export const STEP_COPY: Record<
     description:
       "Pick the provider, confirm the endpoint, and validate the credentials this workspace will use for scoring and tailoring.",
   },
-  searchterms: {
+  cv: {
     eyebrow: "Step 2",
+    title: "Upload your CV.",
+    description:
+      "Drop your LaTeX CV — the server flattens, compiles, and extracts it. The personal brief drafted from your CV is what powers per-job tailoring; you can paste in extra context (side projects, tools you've used in passing) before continuing.",
+  },
+  searchterms: {
+    eyebrow: "Step 3",
     title: "Choose the job titles to search for.",
     description:
       "Edit the list so Job Ops searches for the roles you actually want next.",
   },
   basicauth: {
-    eyebrow: "Step 3",
+    eyebrow: "Step 4",
     title: "Secure your workspace",
     description:
       "Add a username and password so only signed-in users can access protected parts of Job Ops. You can always set this up later in Settings.",

@@ -88,6 +88,8 @@ export const OnboardingPage: React.FC = () => {
                     basicAuthUser={flow.watch("basicAuthUser")}
                     control={flow.control}
                     currentStep={flow.currentStep}
+                    cvChoice={flow.cvChoice}
+                    cvDocument={flow.cvDocument}
                     hasSavedSearchTermsInSession={
                       flow.hasSavedSearchTermsInSession
                     }
@@ -95,6 +97,7 @@ export const OnboardingPage: React.FC = () => {
                     isGeneratingSearchTerms={flow.isGeneratingSearchTerms}
                     llmKeyHint={flow.llmKeyHint}
                     llmValidation={flow.llmValidation}
+                    personalBrief={flow.watch("personalBrief")}
                     searchTermDraft={flow.watch("searchTermDraft")}
                     searchTerms={flow.watch("searchTerms")}
                     searchTermsSource={flow.searchTermsSource}
@@ -106,6 +109,13 @@ export const OnboardingPage: React.FC = () => {
                     }
                     onBasicAuthUserChange={(value) =>
                       flow.setValue("basicAuthUser", value)
+                    }
+                    onCvChoiceChange={flow.setCvChoice}
+                    onCvDocumentChange={flow.setCvDocument}
+                    onPersonalBriefChange={(value) =>
+                      flow.setValue("personalBrief", value, {
+                        shouldDirty: true,
+                      })
                     }
                     onRegenerateSearchTerms={flow.handleRegenerateSearchTerms}
                     onSearchTermDraftChange={(value) =>

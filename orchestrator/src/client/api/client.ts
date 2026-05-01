@@ -1327,6 +1327,26 @@ export async function updateSettings(
   });
 }
 
+// Prompts API
+export interface PromptDescriptor {
+  name: string;
+  path: string;
+  description: string;
+  modifiedAt: string;
+}
+
+export async function listPrompts(): Promise<PromptDescriptor[]> {
+  const result = await fetchApi<{ prompts: PromptDescriptor[] }>("/prompts");
+  return result.prompts;
+}
+
+export async function reloadPrompt(name?: string): Promise<{ reloaded: string }> {
+  return fetchApi<{ reloaded: string }>("/prompts/reload", {
+    method: "POST",
+    body: JSON.stringify(name ? { name } : {}),
+  });
+}
+
 // Database API
 export async function clearDatabase(): Promise<{
   message: string;

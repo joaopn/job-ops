@@ -12,6 +12,7 @@ import { jobsRouter } from "./routes/jobs";
 import { manualJobsRouter } from "./routes/manual-jobs";
 import { onboardingRouter } from "./routes/onboarding";
 import { pipelineRouter } from "./routes/pipeline";
+import { promptsRouter } from "./routes/prompts";
 import { settingsRouter } from "./routes/settings";
 
 export const apiRouter = Router();
@@ -24,5 +25,6 @@ apiRouter.use("/manual-jobs", manualJobsRouter);
 apiRouter.use("/cv", cvRouter);
 apiRouter.use("/database", databaseRouter);
 apiRouter.use("/onboarding", onboardingRouter);
+apiRouter.use("/prompts", promptsRouter);
 apiRouter.use("/auth", authRouter);
 apiRouter.use("/", extractorHealthRouter);

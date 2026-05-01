@@ -9,14 +9,16 @@ export type OnboardingFormData = {
   llmProvider: string;
   llmBaseUrl: string;
   llmApiKey: string;
+  personalBrief: string;
   searchTerms: string[];
   searchTermDraft: string;
   basicAuthUser: string;
   basicAuthPassword: string;
 };
 
-export type StepId = "llm" | "searchterms" | "basicauth";
+export type StepId = "llm" | "cv" | "searchterms" | "basicauth";
 export type BasicAuthChoice = "enable" | "skip" | null;
+export type CvChoice = "upload" | "skip" | null;
 
 export type OnboardingStep = {
   id: StepId;

@@ -13,17 +13,20 @@ import { getDefaultModelForProvider } from "@shared/settings-registry";
 import type { UpdateSettingsInput } from "@shared/settings-schema.js";
 import type {
   AppSettings,
+  CvDocument,
+  CvDocumentSummary,
   SearchTermsSuggestionResponse,
   ValidationResult,
 } from "@shared/types.js";
 import { normalizeSearchTerms } from "@shared/utils/search-terms";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { EMPTY_VALIDATION_STATE, STEP_COPY } from "./content";
 import type {
   BasicAuthChoice,
+  CvChoice,
   OnboardingFormData,
   OnboardingStep,
   StepId,
@@ -42,6 +45,9 @@ export function useOnboardingFlow() {
   );
   const [basicAuthChoice, setBasicAuthChoice] =
     useState<BasicAuthChoice>("enable");
+  const [cvChoice, setCvChoice] = useState<CvChoice>(null);
+  const [cvDocument, setCvDocument] = useState<CvDocument | null>(null);
+  const cvHydratedRef = useRef(false);
   const [searchTermsSaved, setSearchTermsSaved] = useState(false);
   const [hasSavedSearchTermsInSession, setHasSavedSearchTermsInSession] =
     useState(false);
@@ -58,6 +64,7 @@ export function useOnboardingFlow() {
         llmProvider: "",
         llmBaseUrl: "",
         llmApiKey: "",
+        personalBrief: "",
         searchTerms: [],
         searchTermDraft: "",
         basicAuthUser: "",
@@ -84,6 +91,7 @@ export function useOnboardingFlow() {
       llmProvider: settings.llmProvider?.value || "",
       llmBaseUrl: settings.llmBaseUrl?.value || "",
       llmApiKey: "",
+      personalBrief: "",
       searchTerms: settings.searchTerms?.value ?? [],
       searchTermDraft: "",
       basicAuthUser: settings.basicAuthUser ?? "",
@@ -122,6 +130,47 @@ export function useOnboardingFlow() {
   const llmValidated = llmValidation.valid;
   const searchTermsComplete = searchTermsSaved && !searchTermsStale;
   const basicAuthComplete = hasCompletedBasicAuthOnboarding(settings);
+
+  const cvListQuery = useQuery<CvDocumentSummary[]>({
+    queryKey: queryKeys.cvDocuments.list(),
+    queryFn: api.listCvDocuments,
+  });
+  const activeCvId = cvListQuery.data?.[0]?.id ?? null;
+  const cvDetailQuery = useQuery<CvDocument>({
+    queryKey: activeCvId
+      ? queryKeys.cvDocuments.detail(activeCvId)
+      : ["cv-documents", "detail", "none"],
+    queryFn: () => {
+      if (!activeCvId) throw new Error("No active CV");
+      return api.getCvDocument(activeCvId);
+    },
+    enabled: Boolean(activeCvId),
+  });
+
+  // Hydrate CV state once when the detail query lands. After hydration the
+  // user owns the brief textarea — re-syncing here would clobber unsaved edits.
+  useEffect(() => {
+    if (cvHydratedRef.current) return;
+    if (cvListQuery.isLoading || cvDetailQuery.isFetching) return;
+    if (cvDetailQuery.data) {
+      setCvDocument(cvDetailQuery.data);
+      setCvChoice("upload");
+      setValue("personalBrief", cvDetailQuery.data.personalBrief, {
+        shouldDirty: false,
+      });
+      cvHydratedRef.current = true;
+    } else if (!activeCvId && !cvListQuery.isLoading) {
+      cvHydratedRef.current = true;
+    }
+  }, [
+    activeCvId,
+    cvDetailQuery.data,
+    cvDetailQuery.isFetching,
+    cvListQuery.isLoading,
+    setValue,
+  ]);
+
+  const cvComplete = Boolean(cvDocument) || cvChoice === "skip";
 
   const toValidationState = useCallback(
     (
@@ -202,6 +251,13 @@ export function useOnboardingFlow() {
         disabled: false,
       },
       {
+        id: "cv",
+        label: "CV",
+        subtitle: "Upload your CV or skip",
+        complete: cvComplete,
+        disabled: false,
+      },
+      {
         id: "searchterms",
         label: "Search terms",
         subtitle: "Titles to search for",
@@ -216,7 +272,7 @@ export function useOnboardingFlow() {
         disabled: false,
       },
     ],
-    [basicAuthComplete, llmValidated, searchTermsComplete],
+    [basicAuthComplete, cvComplete, llmValidated, searchTermsComplete],
   );
 
   useEffect(() => {
@@ -375,6 +431,57 @@ export function useOnboardingFlow() {
     }
   }, [getValues, setValue, syncSettingsCache]);
 
+  const handleCompleteCv = useCallback(async () => {
+    if (cvChoice === null) {
+      toast.info("Upload your CV or pick 'Skip for now' to continue");
+      return false;
+    }
+    if (cvChoice === "skip") {
+      // Server has nothing to persist for skip; advance.
+      return true;
+    }
+    if (!cvDocument) {
+      toast.info("Wait for the upload to finish before continuing");
+      return false;
+    }
+    const nextBrief = getValues().personalBrief;
+    if (nextBrief === cvDocument.personalBrief) {
+      // No edits → nothing to save, advance.
+      return true;
+    }
+    try {
+      setIsSaving(true);
+      const updated = await api.updateCvDocument(cvDocument.id, {
+        personalBrief: nextBrief,
+      });
+      setCvDocument(updated);
+      setValue("personalBrief", updated.personalBrief, { shouldDirty: false });
+      // Search-terms suggestions read from the brief; force the user to
+      // re-pull suggestions if they edited the brief after first save.
+      markSearchTermsStale();
+      queryClient.setQueryData(
+        queryKeys.cvDocuments.detail(updated.id),
+        updated,
+      );
+      toast.success("Personal brief saved");
+      return true;
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to save personal brief",
+      );
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
+  }, [
+    cvChoice,
+    cvDocument,
+    getValues,
+    markSearchTermsStale,
+    queryClient,
+    setValue,
+  ]);
+
   const handleCompleteBasicAuth = useCallback(async () => {
     if (basicAuthChoice === "skip") {
       try {
@@ -441,6 +548,10 @@ export function useOnboardingFlow() {
       await handleSaveLlm();
       return;
     }
+    if (currentStep === "cv") {
+      await handleCompleteCv();
+      return;
+    }
     if (currentStep === "searchterms") {
       await handleSaveSearchTerms();
       return;
@@ -449,6 +560,7 @@ export function useOnboardingFlow() {
   }, [
     currentStep,
     handleCompleteBasicAuth,
+    handleCompleteCv,
     handleSaveLlm,
     handleSaveSearchTerms,
   ]);
@@ -467,15 +579,21 @@ export function useOnboardingFlow() {
       ? llmValidated
         ? "Revalidate connection"
         : "Save connection"
-      : currentStep === "searchterms"
-        ? hasSavedSearchTermsInSession
-          ? "Update search terms"
-          : "Save search terms"
-        : basicAuthChoice === "enable"
-          ? "Enable authentication"
-          : basicAuthChoice === "skip"
-            ? "Finish onboarding"
-            : "Choose an option";
+      : currentStep === "cv"
+        ? cvChoice === "skip"
+          ? "Finish step"
+          : cvDocument
+            ? "Save brief"
+            : "Upload to continue"
+        : currentStep === "searchterms"
+          ? hasSavedSearchTermsInSession
+            ? "Update search terms"
+            : "Save search terms"
+          : basicAuthChoice === "enable"
+            ? "Enable authentication"
+            : basicAuthChoice === "skip"
+              ? "Finish onboarding"
+              : "Choose an option";
 
   return {
     basicAuthChoice,
@@ -484,6 +602,8 @@ export function useOnboardingFlow() {
     control,
     currentCopy,
     currentStep,
+    cvChoice,
+    cvDocument,
     isBusy,
     isGeneratingSearchTerms,
     hasSavedSearchTermsInSession,
@@ -500,6 +620,8 @@ export function useOnboardingFlow() {
     watch,
     setCurrentStep,
     setBasicAuthChoice,
+    setCvChoice,
+    setCvDocument,
     setValue,
     handleRegenerateSearchTerms: async () => {
       await handleGenerateSearchTerms({ showToast: true });

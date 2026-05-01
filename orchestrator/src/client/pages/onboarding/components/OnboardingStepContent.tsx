@@ -1,14 +1,19 @@
 import type { LlmProviderId } from "@client/pages/settings/utils";
-import type { SearchTermsSuggestionResponse } from "@shared/types.js";
+import type {
+  CvDocument,
+  SearchTermsSuggestionResponse,
+} from "@shared/types.js";
 import type React from "react";
 import type { Control } from "react-hook-form";
 import type {
   BasicAuthChoice,
+  CvChoice,
   OnboardingFormData,
   StepId,
   ValidationState,
 } from "../types";
 import { BasicAuthStep } from "./BasicAuthStep";
+import { CvUploadStep } from "./CvUploadStep";
 import { LlmConnectionStep } from "./LlmConnectionStep";
 import { SearchTermsStep } from "./SearchTermsStep";
 
@@ -18,11 +23,14 @@ export const OnboardingStepContent: React.FC<{
   basicAuthUser: string;
   control: Control<OnboardingFormData>;
   currentStep: StepId;
+  cvChoice: CvChoice;
+  cvDocument: CvDocument | null;
   isBusy: boolean;
   isGeneratingSearchTerms: boolean;
   hasSavedSearchTermsInSession: boolean;
   llmKeyHint: string | null;
   llmValidation: ValidationState;
+  personalBrief: string;
   searchTermDraft: string;
   searchTerms: string[];
   searchTermsSource: SearchTermsSuggestionResponse["source"] | null;
@@ -31,6 +39,9 @@ export const OnboardingStepContent: React.FC<{
   onBasicAuthChoiceChange: (choice: BasicAuthChoice) => void;
   onBasicAuthPasswordChange: (value: string) => void;
   onBasicAuthUserChange: (value: string) => void;
+  onCvChoiceChange: (choice: CvChoice) => void;
+  onCvDocumentChange: (cv: CvDocument) => void;
+  onPersonalBriefChange: (value: string) => void;
   onRegenerateSearchTerms: () => Promise<void>;
   onSearchTermDraftChange: (value: string) => void;
   onSearchTermsChange: (values: string[]) => void;
@@ -43,6 +54,20 @@ export const OnboardingStepContent: React.FC<{
         llmKeyHint={props.llmKeyHint}
         selectedProvider={props.selectedProvider}
         validation={props.llmValidation}
+      />
+    );
+  }
+
+  if (props.currentStep === "cv") {
+    return (
+      <CvUploadStep
+        isBusy={props.isBusy}
+        cvChoice={props.cvChoice}
+        onCvChoiceChange={props.onCvChoiceChange}
+        cvDocument={props.cvDocument}
+        onCvDocumentChange={props.onCvDocumentChange}
+        personalBrief={props.personalBrief}
+        onPersonalBriefChange={props.onPersonalBriefChange}
       />
     );
   }
