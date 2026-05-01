@@ -51,6 +51,9 @@ export const DangerZoneSection: React.FC<DangerZoneSectionProps> = ({
     !Number.isNaN(parsedThreshold) &&
     parsedThreshold >= 0 &&
     parsedThreshold <= 100;
+  const historyStatusesSelected = statusesToClear.filter(
+    (status) => status === "closed" || status === "skipped",
+  );
   return (
     <SettingsSectionFrame
       mode={layoutMode}
@@ -72,7 +75,11 @@ export const DangerZoneSection: React.FC<DangerZoneSectionProps> = ({
               Clear Jobs by Status
             </div>
             <div className="text-xs text-muted-foreground">
-              Select which job statuses you want to clear.
+              Select which job statuses you want to clear. Clearing{" "}
+              <span className="font-medium text-foreground">closed</span> or{" "}
+              <span className="font-medium text-foreground">skipped</span>{" "}
+              deletes application history (outcomes, applied/closed timestamps);
+              this is irreversible.
             </div>
           </div>
 
@@ -132,6 +139,13 @@ export const DangerZoneSection: React.FC<DangerZoneSectionProps> = ({
                 <AlertDialogDescription>
                   This will delete all jobs with the following statuses:{" "}
                   {statusesToClear.join(", ")}. This action cannot be undone.
+                  {historyStatusesSelected.length > 0 ? (
+                    <span className="mt-2 block font-medium text-destructive">
+                      Includes {historyStatusesSelected.join(" + ")} —
+                      application history (outcomes, applied/closed timestamps)
+                      will be lost.
+                    </span>
+                  ) : null}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -159,7 +173,7 @@ export const DangerZoneSection: React.FC<DangerZoneSectionProps> = ({
               </div>
               <div className="text-xs text-muted-foreground">
                 Remove all jobs with a suitability score below the specified
-                threshold. Applied jobs will not be deleted.
+                threshold. Live jobs (Applied + In Progress) are preserved.
               </div>
             </div>
 
@@ -203,8 +217,8 @@ export const DangerZoneSection: React.FC<DangerZoneSectionProps> = ({
                     </AlertDialogTitle>
                     <AlertDialogDescription>
                       This will permanently delete all jobs with a suitability
-                      score below {parsedThreshold}. Applied jobs will be
-                      preserved. This action cannot be undone.
+                      score below {parsedThreshold}. Live jobs (Applied + In
+                      Progress) are preserved. This action cannot be undone.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
