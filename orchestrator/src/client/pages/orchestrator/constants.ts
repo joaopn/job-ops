@@ -97,6 +97,7 @@ export type DateFilterDimension = "ready" | "applied" | "closed" | "discovered";
 export type SortKey =
   | "date"
   | "discoveredAt"
+  | "posted"
   | "score"
   | "salary"
   | "title"
@@ -140,6 +141,7 @@ export const DEFAULT_DATE_FILTER: JobDateFilter = {
 export const sortLabels: Record<JobSort["key"], string> = {
   date: "Date",
   discoveredAt: "Discovered",
+  posted: "Posted",
   score: "Score",
   salary: "Salary",
   title: "Title",
@@ -149,11 +151,29 @@ export const sortLabels: Record<JobSort["key"], string> = {
 export const defaultSortDirection: Record<JobSort["key"], SortDirection> = {
   date: "desc",
   discoveredAt: "desc",
+  posted: "desc",
   score: "desc",
   salary: "desc",
   title: "asc",
   employer: "asc",
 };
+
+export type ClosedSubFilter =
+  | "all"
+  | "skipped"
+  | "rejected"
+  | "withdrawn"
+  | "ghosted"
+  | "other";
+
+export const ALLOWED_CLOSED_SUB_FILTERS: ClosedSubFilter[] = [
+  "all",
+  "skipped",
+  "rejected",
+  "withdrawn",
+  "ghosted",
+  "other",
+];
 
 export const tabs: Array<{
   id: FilterTab;

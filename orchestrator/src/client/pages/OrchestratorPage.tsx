@@ -10,6 +10,7 @@ import { KeyboardShortcutBar } from "../components/KeyboardShortcutBar";
 import { KeyboardShortcutDialog } from "../components/KeyboardShortcutDialog";
 import { type FilterTab, tabs } from "./orchestrator/constants";
 import { FloatingJobActionsBar } from "./orchestrator/FloatingJobActionsBar";
+import { ClosedFilterChips } from "./orchestrator/ClosedFilterChips";
 import { JobCommandBar } from "./orchestrator/JobCommandBar";
 import { JobDetailPanel } from "./orchestrator/JobDetailPanel";
 import { JobListPanel } from "./orchestrator/JobListPanel";
@@ -46,6 +47,10 @@ export const OrchestratorPage: React.FC = () => {
     setDateFilter,
     sort,
     setSort,
+    maxAgeDays,
+    setMaxAgeDays,
+    closedSubFilter,
+    setClosedSubFilter,
     resetFilters,
   } = useOrchestratorFilters();
 
@@ -127,7 +132,7 @@ export const OrchestratorPage: React.FC = () => {
     [navigateWithContext, activeTab],
   );
 
-  const { settings } = useSettings();
+  const { settings, inboxStaleThresholdDays } = useSettings();
   const {
     jobs,
     selectedJob,
@@ -172,6 +177,8 @@ export const OrchestratorPage: React.FC = () => {
     sourceFilter,
     salaryFilter,
     sort,
+    maxAgeDays,
+    closedSubFilter,
   );
   const setActiveTab = useCallback(
     (newTab: FilterTab) => {
@@ -308,6 +315,8 @@ export const OrchestratorPage: React.FC = () => {
         "appliedRange",
         "appliedStart",
         "appliedEnd",
+        "maxAge",
+        "closedFilter",
       ]) {
         nextParams.delete(key);
       }
@@ -466,6 +475,8 @@ export const OrchestratorPage: React.FC = () => {
             onSalaryFilterChange={setSalaryFilter}
             dateFilter={dateFilter}
             onDateFilterChange={setDateFilter}
+            maxAgeDays={maxAgeDays}
+            onMaxAgeDaysChange={setMaxAgeDays}
             sourcesWithJobs={sourcesWithJobs}
             sort={sort}
             onSortChange={setSort}
@@ -491,6 +502,15 @@ export const OrchestratorPage: React.FC = () => {
               primaryEmptyStateAction={primaryEmptyStateAction}
               secondaryEmptyStateAction={secondaryEmptyStateAction}
               emptyStateMessage={emptyStateMessage}
+              staleThresholdDays={inboxStaleThresholdDays}
+              closedFilterChips={
+                activeTab === "closed" ? (
+                  <ClosedFilterChips
+                    value={closedSubFilter}
+                    onChange={setClosedSubFilter}
+                  />
+                ) : undefined
+              }
             />
 
             {/* Inspector panel: visually subordinate to list */}

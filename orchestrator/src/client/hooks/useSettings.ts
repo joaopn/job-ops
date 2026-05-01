@@ -29,6 +29,8 @@ export function useSettings() {
     showSponsorInfo: settings?.showSponsorInfo?.value ?? true,
     renderMarkdownInJobDescriptions:
       settings?.renderMarkdownInJobDescriptions?.value ?? true,
+    inboxStaleThresholdDays:
+      settings?.inboxStaleThresholdDays?.value ?? 7,
     refreshSettings,
   };
 }

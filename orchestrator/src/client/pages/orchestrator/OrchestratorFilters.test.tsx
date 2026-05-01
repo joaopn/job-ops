@@ -54,6 +54,8 @@ const renderFilters = (
       preset: null,
     },
     onDateFilterChange: vi.fn(),
+    maxAgeDays: null,
+    onMaxAgeDaysChange: vi.fn(),
     sourcesWithJobs: ["hiringcafe", "linkedin", "manual"] as JobSource[],
     sort: { key: "score", direction: "desc" } as JobSort,
     onSortChange: vi.fn(),

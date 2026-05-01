@@ -1,6 +1,6 @@
 import type { JobListItem } from "@shared/types.js";
 import { Loader2 } from "lucide-react";
-import { forwardRef, useImperativeHandle } from "react";
+import { type ReactNode, forwardRef, useImperativeHandle } from "react";
 import {
   useVirtualizedList,
   type VirtualListHandle,
@@ -36,6 +36,8 @@ interface JobListPanelProps {
   primaryEmptyStateAction?: EmptyStateAction;
   secondaryEmptyStateAction?: EmptyStateAction;
   emptyStateMessage?: string;
+  staleThresholdDays?: number;
+  closedFilterChips?: ReactNode;
 }
 
 const ROW_ESTIMATE = 84;
@@ -56,6 +58,8 @@ export const JobListPanel = forwardRef<VirtualListHandle, JobListPanelProps>(
       primaryEmptyStateAction,
       secondaryEmptyStateAction,
       emptyStateMessage,
+      staleThresholdDays,
+      closedFilterChips,
     },
     ref,
   ) => {
@@ -90,6 +94,7 @@ export const JobListPanel = forwardRef<VirtualListHandle, JobListPanelProps>(
     if (activeJobs.length === 0) {
       return (
         <div className="min-w-0 rounded-xl border border-border bg-card shadow-sm">
+          {closedFilterChips}
           <div className="flex flex-col items-center justify-center gap-4 px-6 py-12 text-center">
             <div className="text-base font-semibold">No jobs found</div>
             <p className="max-w-md text-sm text-muted-foreground">
@@ -122,6 +127,7 @@ export const JobListPanel = forwardRef<VirtualListHandle, JobListPanelProps>(
 
     return (
       <div className="min-w-0 rounded-xl border border-border bg-card shadow-sm">
+        {closedFilterChips}
         <div className="divide-y divide-border/40">
           <div className="flex items-center justify-between gap-3 px-4 py-2 opacity-100 transition-opacity sm:opacity-50 sm:hover:opacity-100">
             <label
@@ -246,6 +252,7 @@ export const JobListPanel = forwardRef<VirtualListHandle, JobListPanelProps>(
                       job={job}
                       isSelected={isSelected}
                       showStatusDot={false}
+                      staleThresholdDays={staleThresholdDays}
                     />
                   </button>
                 </div>

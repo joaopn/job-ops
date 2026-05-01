@@ -1,13 +1,21 @@
 import type { JobListItem, JobSource } from "@shared/types";
 import { useMemo } from "react";
 import type {
+  ClosedSubFilter,
   DateFilterDimension,
   FilterTab,
   JobDateFilter,
   JobSort,
   SalaryFilter,
 } from "./constants";
-import { compareJobs, getJobDateValue, parseSalaryBounds } from "./utils";
+import {
+  compareJobs,
+  getJobDateValue,
+  getJobPostedValue,
+  parseSalaryBounds,
+} from "./utils";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 const dateSortPriorityOrder: DateFilterDimension[] = [
   "ready",
@@ -23,6 +31,8 @@ export const useFilteredJobs = (
   sourceFilter: JobSource | "all",
   salaryFilter: SalaryFilter,
   sort: JobSort,
+  maxAgeDays: number | null,
+  closedSubFilter: ClosedSubFilter,
 ) =>
   useMemo(() => {
     let filtered = [...jobs];
@@ -45,6 +55,16 @@ export const useFilteredJobs = (
       filtered = filtered.filter(
         (job) => job.status === "skipped" || job.status === "closed",
       );
+      if (closedSubFilter !== "all") {
+        if (closedSubFilter === "skipped") {
+          filtered = filtered.filter((job) => job.status === "skipped");
+        } else {
+          filtered = filtered.filter(
+            (job) =>
+              job.status === "closed" && job.outcome === closedSubFilter,
+          );
+        }
+      }
     } else if (activeTab === "all") {
       const includeClosedJobs = dateFilter.dimensions.includes("closed");
       if (!includeClosedJobs) {
@@ -64,6 +84,15 @@ export const useFilteredJobs = (
 
     if (sourceFilter !== "all") {
       filtered = filtered.filter((job) => job.source === sourceFilter);
+    }
+
+    if (maxAgeDays != null && maxAgeDays > 0) {
+      const cutoff = Date.now() - maxAgeDays * DAY_MS;
+      filtered = filtered.filter((job) => {
+        const posted = getJobPostedValue(job);
+        if (posted == null) return false;
+        return posted >= cutoff;
+      });
     }
 
     const hasMin =
@@ -110,7 +139,16 @@ export const useFilteredJobs = (
         : sort;
 
     return [...filtered].sort((a, b) => compareJobs(a, b, effectiveSort));
-  }, [jobs, activeTab, dateFilter, sourceFilter, salaryFilter, sort]);
+  }, [
+    jobs,
+    activeTab,
+    dateFilter,
+    sourceFilter,
+    salaryFilter,
+    sort,
+    maxAgeDays,
+    closedSubFilter,
+  ]);
 
 const matchesDateDimension = (
   job: JobListItem,

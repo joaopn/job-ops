@@ -57,6 +57,8 @@ interface OrchestratorFiltersProps {
   onSalaryFilterChange: (value: SalaryFilter) => void;
   dateFilter: JobDateFilter;
   onDateFilterChange: (value: JobDateFilter) => void;
+  maxAgeDays: number | null;
+  onMaxAgeDaysChange: (value: number | null) => void;
   sourcesWithJobs: JobSource[];
   sort: JobSort;
   onSortChange: (sort: JobSort) => void;
@@ -90,6 +92,7 @@ const sortFieldOrder: JobSort["key"][] = [
   "score",
   "date",
   "discoveredAt",
+  "posted",
   "salary",
   "title",
   "employer",
@@ -99,6 +102,7 @@ const sortFieldLabels: Record<JobSort["key"], string> = {
   score: "Score",
   date: "Date",
   discoveredAt: "Discovered",
+  posted: "Posted",
   salary: "Salary",
   title: "Title",
   employer: "Company",
@@ -137,7 +141,7 @@ const getDateRangeForPreset = (preset: Exclude<DateFilterPreset, "custom">) => {
 const getDirectionOptions = (
   key: JobSort["key"],
 ): Array<{ value: JobSort["direction"]; label: string }> => {
-  if (key === "date" || key === "discoveredAt") {
+  if (key === "date" || key === "discoveredAt" || key === "posted") {
     return [
       { value: "desc", label: "Most recent" },
       { value: "asc", label: "Least recent" },
@@ -186,6 +190,8 @@ export const OrchestratorFilters: React.FC<OrchestratorFiltersProps> = ({
   onSalaryFilterChange,
   dateFilter,
   onDateFilterChange,
+  maxAgeDays,
+  onMaxAgeDaysChange,
   sourcesWithJobs,
   sort,
   onSortChange,
@@ -210,13 +216,15 @@ export const OrchestratorFilters: React.FC<OrchestratorFiltersProps> = ({
       Number(
         (typeof salaryFilter.min === "number" && salaryFilter.min > 0) ||
           (typeof salaryFilter.max === "number" && salaryFilter.max > 0),
-      ),
+      ) +
+      Number(maxAgeDays != null && maxAgeDays > 0),
     [
       sourceFilter,
       sponsorFilter,
       dateFilter.dimensions.length,
       salaryFilter.min,
       salaryFilter.max,
+      maxAgeDays,
     ],
   );
 
@@ -440,6 +448,66 @@ export const OrchestratorFilters: React.FC<OrchestratorFiltersProps> = ({
                           </div>
                         </>
                       )}
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle>Ad age</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="flex flex-wrap gap-2">
+                        {[7, 14, 30, 60].map((days) => (
+                          <Button
+                            key={days}
+                            type="button"
+                            size="sm"
+                            variant={
+                              maxAgeDays === days ? "default" : "outline"
+                            }
+                            onClick={() =>
+                              onMaxAgeDaysChange(
+                                maxAgeDays === days ? null : days,
+                              )
+                            }
+                          >
+                            ≤ {days}d
+                          </Button>
+                        ))}
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={maxAgeDays == null ? "default" : "outline"}
+                          onClick={() => onMaxAgeDaysChange(null)}
+                        >
+                          Any age
+                        </Button>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Label
+                          htmlFor="max-age-days"
+                          className="text-xs text-muted-foreground"
+                        >
+                          Custom (days):
+                        </Label>
+                        <Input
+                          id="max-age-days"
+                          type="number"
+                          min={1}
+                          className="h-8 w-24"
+                          value={maxAgeDays == null ? "" : String(maxAgeDays)}
+                          onChange={(event) => {
+                            const raw = event.target.value.trim();
+                            const parsed = Number.parseInt(raw, 10);
+                            onMaxAgeDaysChange(
+                              Number.isFinite(parsed) && parsed > 0
+                                ? parsed
+                                : null,
+                            );
+                          }}
+                          placeholder="e.g. 21"
+                        />
+                      </div>
                     </CardContent>
                   </Card>
 

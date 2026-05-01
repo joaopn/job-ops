@@ -2,6 +2,7 @@ import type { JobSource } from "@shared/types.js";
 import { useCallback, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import type {
+  ClosedSubFilter,
   DateFilterDimension,
   DateFilterPreset,
   JobDateFilter,
@@ -10,7 +11,11 @@ import type {
   SalaryFilterMode,
   SponsorFilter,
 } from "./constants";
-import { DEFAULT_SORT, dateFilterDimensionOrder } from "./constants";
+import {
+  ALLOWED_CLOSED_SUB_FILTERS,
+  DEFAULT_SORT,
+  dateFilterDimensionOrder,
+} from "./constants";
 
 const allowedSponsorFilters: SponsorFilter[] = [
   "all",
@@ -27,6 +32,7 @@ const allowedSalaryModes: SalaryFilterMode[] = [
 const allowedSortKeys: JobSort["key"][] = [
   "date",
   "discoveredAt",
+  "posted",
   "score",
   "salary",
   "title",
@@ -211,6 +217,48 @@ export const useOrchestratorFilters = () => {
     [setSearchParams],
   );
 
+  const maxAgeDays = useMemo((): number | null => {
+    const raw = searchParams.get("maxAge");
+    if (raw == null) return null;
+    const parsed = Number.parseInt(raw, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }, [searchParams]);
+
+  const setMaxAgeDays = useCallback(
+    (value: number | null) => {
+      setSearchParams(
+        (prev) => {
+          if (value == null || value <= 0) prev.delete("maxAge");
+          else prev.set("maxAge", String(value));
+          return prev;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
+  const closedSubFilter = useMemo((): ClosedSubFilter => {
+    const raw = searchParams.get("closedFilter") ?? "all";
+    return ALLOWED_CLOSED_SUB_FILTERS.includes(raw as ClosedSubFilter)
+      ? (raw as ClosedSubFilter)
+      : "all";
+  }, [searchParams]);
+
+  const setClosedSubFilter = useCallback(
+    (value: ClosedSubFilter) => {
+      setSearchParams(
+        (prev) => {
+          if (value === "all") prev.delete("closedFilter");
+          else prev.set("closedFilter", value);
+          return prev;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
   const setDateFilter = useCallback(
     (value: JobDateFilter) => {
       setSearchParams(
@@ -249,6 +297,8 @@ export const useOrchestratorFilters = () => {
         prev.delete("appliedStart");
         prev.delete("appliedEnd");
         prev.delete("appliedRange");
+        prev.delete("maxAge");
+        prev.delete("closedFilter");
         return prev;
       },
       { replace: true },
@@ -267,6 +317,10 @@ export const useOrchestratorFilters = () => {
     setDateFilter,
     sort,
     setSort,
+    maxAgeDays,
+    setMaxAgeDays,
+    closedSubFilter,
+    setClosedSubFilter,
     resetFilters,
   };
 };

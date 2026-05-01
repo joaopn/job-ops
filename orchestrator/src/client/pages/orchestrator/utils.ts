@@ -8,6 +8,12 @@ import {
 
 const dateValue = (value: string | null) => {
   if (!value) return null;
+  // Some extractors persist `date_posted` as a Unix-ms numeric string
+  // (jobspy → linkedin/indeed) rather than ISO. Treat all-digit strings as ms.
+  if (/^\d+$/.test(value)) {
+    const ms = Number(value);
+    return Number.isFinite(ms) ? ms : null;
+  }
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? parsed : null;
 };
@@ -109,6 +115,18 @@ export const compareJobs = (a: JobListItem, b: JobListItem, sort: JobSort) => {
       value = compareNumber(aDate, bDate);
       break;
     }
+    case "posted": {
+      const aDate = getJobPostedValue(a);
+      const bDate = getJobPostedValue(b);
+      if (aDate == null && bDate == null) {
+        value = 0;
+        break;
+      }
+      if (aDate == null) return 1;
+      if (bDate == null) return -1;
+      value = compareNumber(aDate, bDate);
+      break;
+    }
     case "date": {
       const aDate = getSortDateValue(a, sort);
       const bDate = getSortDateValue(b, sort);
@@ -128,6 +146,9 @@ export const compareJobs = (a: JobListItem, b: JobListItem, sort: JobSort) => {
   if (value !== 0) return sort.direction === "asc" ? value : -value;
   return a.id.localeCompare(b.id);
 };
+
+export const getJobPostedValue = (job: JobListItem): number | null =>
+  dateValue(job.datePosted) ?? dateValue(job.discoveredAt);
 
 export const getJobDateValue = (
   job: JobListItem,
