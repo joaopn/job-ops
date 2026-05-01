@@ -28,9 +28,12 @@ const renderFilters = (
     activeTab: "ready" as FilterTab,
     onTabChange: vi.fn(),
     counts: {
+      inbox: 1,
+      selected: 0,
       ready: 2,
-      discovered: 1,
-      applied: 3,
+      live: 3,
+      backlog: 0,
+      closed: 0,
       all: 6,
     },
     onOpenCommandBar: vi.fn(),
@@ -69,8 +72,8 @@ describe("OrchestratorFilters", () => {
   it("notifies when tabs and command search shortcut are used", () => {
     const { props } = renderFilters();
 
-    fireEvent.mouseDown(screen.getByRole("tab", { name: /applied/i }));
-    expect(props.onTabChange).toHaveBeenCalledWith("applied");
+    fireEvent.mouseDown(screen.getByRole("tab", { name: /live/i }));
+    expect(props.onTabChange).toHaveBeenCalledWith("live");
 
     fireEvent.click(screen.getByRole("button", { name: /search jobs/i }));
     expect(props.onOpenCommandBar).toHaveBeenCalled();

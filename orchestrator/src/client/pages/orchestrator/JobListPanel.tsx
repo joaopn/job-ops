@@ -145,7 +145,7 @@ export const JobListPanel = forwardRef<VirtualListHandle, JobListPanelProps>(
               Select all filtered
             </label>
             <div className="flex items-center gap-2">
-              {onSelectAllAboveScore && activeTab === "discovered" && (
+              {onSelectAllAboveScore && activeTab === "inbox" && (
                 <div className="hidden gap-1 sm:flex">
                   {[60, 70, 80].map((threshold) => (
                     <Button

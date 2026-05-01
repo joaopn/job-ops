@@ -25,6 +25,7 @@ export const DiscoveredPanel: React.FC<DiscoveredPanelProps> = ({
 }) => {
   const [isSkipping, setIsSkipping] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
+  const [isMovingStatus, setIsMovingStatus] = useState(false);
   const [isEditDetailsOpen, setIsEditDetailsOpen] = useState(false);
   const previousJobIdRef = useRef<string | null>(null);
   const skipJobMutation = useSkipJobMutation();
@@ -78,6 +79,33 @@ export const DiscoveredPanel: React.FC<DiscoveredPanelProps> = ({
 
   const handleRescore = () => rescoreJob(job?.id);
 
+  const flipStatus = async (
+    status: "selected" | "discovered" | "backlog",
+    successLabel: string,
+    failureLabel: string,
+  ) => {
+    if (!job || isMovingStatus) return;
+    try {
+      setIsMovingStatus(true);
+      await api.updateJob(job.id, { status });
+      toast.message(successLabel);
+      onJobMoved(job.id);
+      await onJobUpdated();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : failureLabel;
+      toast.error(message);
+    } finally {
+      setIsMovingStatus(false);
+    }
+  };
+
+  const handleMoveToSelected = () =>
+    flipStatus("selected", "Moved to Selected", "Failed to move to Selected");
+  const handleUnselect = () =>
+    flipStatus("discovered", "Returned to Inbox", "Failed to unselect");
+  const handleMoveToBacklog = () =>
+    flipStatus("backlog", "Moved to Backlog", "Failed to move to Backlog");
+
   if (!job) {
     return <EmptyState />;
   }
@@ -96,6 +124,10 @@ export const DiscoveredPanel: React.FC<DiscoveredPanelProps> = ({
         onRescore={handleRescore}
         isRescoring={isRescoring}
         onEditDetails={() => setIsEditDetailsOpen(true)}
+        onMoveToSelected={handleMoveToSelected}
+        onUnselect={handleUnselect}
+        onMoveToBacklog={handleMoveToBacklog}
+        isMovingStatus={isMovingStatus}
       />
 
       <JobDetailsEditDrawer

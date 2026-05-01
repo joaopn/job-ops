@@ -1,30 +1,266 @@
+import type { JobOutcome } from "@shared/types.js";
 import { AnimatePresence, motion } from "framer-motion";
 import type React from "react";
 import { Button } from "@/components/ui/button";
+import type { FilterTab } from "./constants";
+import { MarkClosedPopover } from "./MarkClosedPopover";
 
 interface FloatingJobActionsBarProps {
+  activeTab: FilterTab;
   selectedCount: number;
   canMoveSelected: boolean;
   canSkipSelected: boolean;
   canRescoreSelected: boolean;
+  canMoveToSelectedSelected: boolean;
+  canMoveToBacklogSelected: boolean;
+  canUnselectSelected: boolean;
+  canMarkClosedSelected: boolean;
+  canReopenSelected: boolean;
   jobActionInFlight: boolean;
   onMoveToReady: () => void;
   onSkipSelected: () => void;
   onRescoreSelected: () => void;
+  onMoveToSelected: () => void;
+  onMoveToBacklog: () => void;
+  onUnselect: () => void;
+  onMarkClosed: (outcome: JobOutcome) => void;
+  onReopen: () => void;
   onClear: () => void;
 }
 
+const jobOrJobs = (count: number) => (count === 1 ? "job" : "jobs");
+
 export const FloatingJobActionsBar: React.FC<FloatingJobActionsBarProps> = ({
+  activeTab,
   selectedCount,
   canMoveSelected,
   canSkipSelected,
   canRescoreSelected,
+  canMoveToSelectedSelected,
+  canMoveToBacklogSelected,
+  canUnselectSelected,
+  canMarkClosedSelected,
+  canReopenSelected,
   jobActionInFlight,
   onMoveToReady,
   onSkipSelected,
   onRescoreSelected,
+  onMoveToSelected,
+  onMoveToBacklog,
+  onUnselect,
+  onMarkClosed,
+  onReopen,
   onClear,
 }) => {
+  const buttonClass = "w-full sm:w-auto";
+
+  // Per-tab button rendering. Each branch returns the buttons that make
+  // sense for the rows in that tab. Selection-state guards (`can*Selected`)
+  // hide buttons that don't apply to the current selection (mixed-status
+  // selections in All Jobs, etc.).
+  const renderTabButtons = (): React.ReactNode => {
+    switch (activeTab) {
+      case "inbox":
+        return (
+          <>
+            {canMoveToSelectedSelected && (
+              <Button
+                type="button"
+                size="sm"
+                variant="default"
+                className={buttonClass}
+                disabled={jobActionInFlight}
+                onClick={onMoveToSelected}
+              >
+                Move to Selected
+              </Button>
+            )}
+            {canMoveSelected && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className={buttonClass}
+                disabled={jobActionInFlight}
+                onClick={onMoveToReady}
+              >
+                Tailor {selectedCount} {jobOrJobs(selectedCount)}
+              </Button>
+            )}
+            {canMoveToBacklogSelected && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className={buttonClass}
+                disabled={jobActionInFlight}
+                onClick={onMoveToBacklog}
+              >
+                Move to Backlog
+              </Button>
+            )}
+            {canSkipSelected && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className={buttonClass}
+                disabled={jobActionInFlight}
+                onClick={onSkipSelected}
+              >
+                Skip
+              </Button>
+            )}
+          </>
+        );
+
+      case "selected":
+        return (
+          <>
+            {canMoveSelected && (
+              <Button
+                type="button"
+                size="sm"
+                variant="default"
+                className={buttonClass}
+                disabled={jobActionInFlight}
+                onClick={onMoveToReady}
+              >
+                Tailor {selectedCount} {jobOrJobs(selectedCount)}
+              </Button>
+            )}
+            {canUnselectSelected && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className={buttonClass}
+                disabled={jobActionInFlight}
+                onClick={onUnselect}
+              >
+                Unselect
+              </Button>
+            )}
+            {canSkipSelected && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className={buttonClass}
+                disabled={jobActionInFlight}
+                onClick={onSkipSelected}
+              >
+                Skip
+              </Button>
+            )}
+          </>
+        );
+
+      case "ready":
+        return (
+          <>
+            {canSkipSelected && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className={buttonClass}
+                disabled={jobActionInFlight}
+                onClick={onSkipSelected}
+              >
+                Skip
+              </Button>
+            )}
+          </>
+        );
+
+      case "live":
+        return (
+          <>
+            {canMarkClosedSelected && (
+              <MarkClosedPopover
+                onSelect={onMarkClosed}
+                disabled={jobActionInFlight}
+                trigger={
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="default"
+                    className={buttonClass}
+                    disabled={jobActionInFlight}
+                  >
+                    Mark Closed
+                  </Button>
+                }
+              />
+            )}
+          </>
+        );
+
+      case "backlog":
+        return (
+          <>
+            {canMoveToSelectedSelected && (
+              <Button
+                type="button"
+                size="sm"
+                variant="default"
+                className={buttonClass}
+                disabled={jobActionInFlight}
+                onClick={onMoveToSelected}
+              >
+                Move to Selected
+              </Button>
+            )}
+            {canSkipSelected && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className={buttonClass}
+                disabled={jobActionInFlight}
+                onClick={onSkipSelected}
+              >
+                Skip
+              </Button>
+            )}
+          </>
+        );
+
+      case "closed":
+        return (
+          <>
+            {canReopenSelected && (
+              <Button
+                type="button"
+                size="sm"
+                variant="default"
+                className={buttonClass}
+                disabled={jobActionInFlight}
+                onClick={onReopen}
+              >
+                Reopen
+              </Button>
+            )}
+          </>
+        );
+
+      default: // "all"
+        return canRescoreSelected ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className={buttonClass}
+            disabled={jobActionInFlight}
+            onClick={onRescoreSelected}
+          >
+            Recalculate match
+          </Button>
+        ) : null;
+    }
+  };
+
   return (
     <AnimatePresence initial={false}>
       {selectedCount > 0 ? (
@@ -40,47 +276,12 @@ export const FloatingJobActionsBar: React.FC<FloatingJobActionsBarProps> = ({
               {selectedCount} selected
             </div>
             <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
-              {canMoveSelected && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="default"
-                  className="w-full sm:w-auto"
-                  disabled={jobActionInFlight}
-                  onClick={onMoveToReady}
-                >
-                  Tailor {selectedCount} {selectedCount === 1 ? "job" : "jobs"}
-                </Button>
-              )}
-              {canSkipSelected && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="w-full sm:w-auto"
-                  disabled={jobActionInFlight}
-                  onClick={onSkipSelected}
-                >
-                  Skip selected
-                </Button>
-              )}
-              {canRescoreSelected && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="w-full sm:w-auto"
-                  disabled={jobActionInFlight}
-                  onClick={onRescoreSelected}
-                >
-                  Recalculate match
-                </Button>
-              )}
+              {renderTabButtons()}
               <Button
                 type="button"
                 size="sm"
                 variant="ghost"
-                className="w-full sm:w-auto"
+                className={buttonClass}
                 onClick={onClear}
                 disabled={jobActionInFlight}
               >

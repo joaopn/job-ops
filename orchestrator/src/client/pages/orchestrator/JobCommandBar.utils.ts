@@ -95,15 +95,18 @@ const computeFieldMatchScore = (fieldRaw: string, needleRaw: string) => {
 
 export const getCommandGroup = (status: JobStatus): CommandGroupId => {
   if (status === "ready") return "ready";
-  if (status === "discovered" || status === "processing") return "discovered";
-  if (status === "applied") return "applied";
+  if (status === "discovered" || status === "processing" || status === "selected") return "discovered";
+  if (status === "applied" || status === "in_progress") return "applied";
   return "other";
 };
 
 export const getFilterTab = (status: JobStatus): FilterTab => {
   if (status === "ready") return "ready";
-  if (status === "discovered" || status === "processing") return "discovered";
-  if (status === "applied") return "applied";
+  if (status === "discovered") return "inbox";
+  if (status === "selected" || status === "processing") return "selected";
+  if (status === "applied" || status === "in_progress") return "live";
+  if (status === "backlog") return "backlog";
+  if (status === "skipped" || status === "closed") return "closed";
   return "all";
 };
 

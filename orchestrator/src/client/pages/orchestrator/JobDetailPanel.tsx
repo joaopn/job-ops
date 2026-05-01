@@ -12,7 +12,7 @@ import {
 } from "@client/hooks/queries/useJobMutations";
 import { useActiveCv } from "@client/hooks/useActiveCv";
 import { useSettings } from "@client/hooks/useSettings";
-import type { Job, JobListItem } from "@shared/types.js";
+import type { Job, JobListItem, JobOutcome } from "@shared/types.js";
 import {
   CheckCircle2,
   Copy,
@@ -46,6 +46,7 @@ import {
   safeFilenamePart,
 } from "@/lib/utils";
 import type { FilterTab } from "./constants";
+import { MarkClosedPopover } from "./MarkClosedPopover";
 
 interface JobDetailPanelProps {
   activeTab: FilterTab;
@@ -236,6 +237,50 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
     }
   };
 
+  const handleMarkClosed = async (outcome: JobOutcome) => {
+    if (!selectedJob) return;
+    try {
+      await api.updateJobOutcome(selectedJob.id, { outcome });
+      await api.updateJob(selectedJob.id, { status: "closed" });
+      toast.success("Application closed");
+      await onJobUpdated();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to close application";
+      toast.error(message);
+    }
+  };
+
+  const handleMoveToSelectedRow = async () => {
+    if (!selectedJob) return;
+    try {
+      await api.updateJob(selectedJob.id, { status: "selected" });
+      toast.message("Moved to Selected");
+      await onJobUpdated();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to move to Selected";
+      toast.error(message);
+    }
+  };
+
+  const handleReopen = async () => {
+    if (!selectedJob) return;
+    try {
+      await api.updateJob(selectedJob.id, {
+        status: "selected",
+        outcome: null,
+        closedAt: null,
+      });
+      toast.success("Job reopened");
+      await onJobUpdated();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to reopen job";
+      toast.error(message);
+    }
+  };
+
   const handleCopyInfo = async () => {
     if (!selectedJob) return;
     try {
@@ -267,6 +312,11 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
     : "#";
   const canApply = selectedJob?.status === "ready";
   const canMoveToInProgress = selectedJob?.status === "applied";
+  const canMarkClosed =
+    selectedJob?.status === "applied" || selectedJob?.status === "in_progress";
+  const canRowMoveToSelected = selectedJob?.status === "backlog";
+  const canRowReopen =
+    selectedJob?.status === "skipped" || selectedJob?.status === "closed";
   const canProcess = selectedJob
     ? ["discovered", "ready"].includes(selectedJob.status)
     : false;
@@ -274,12 +324,12 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
     ? ["discovered", "ready"].includes(selectedJob.status)
     : false;
   const showReadyPdf = activeTab === "ready";
-  const showGeneratePdf = activeTab === "discovered";
+  const showGeneratePdf = activeTab === "inbox" || activeTab === "selected";
   const isProcessingSelected = selectedJob
     ? processingJobId === selectedJob.id || selectedJob.status === "processing"
     : false;
 
-  if (activeTab === "discovered") {
+  if (activeTab === "inbox" || activeTab === "selected") {
     return (
       <DiscoveredPanel
         job={selectedJob}
@@ -411,6 +461,43 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
           >
             <CheckCircle2 className="h-3.5 w-3.5" />
             Move to In Progress
+          </Button>
+        )}
+
+        {canMarkClosed && (
+          <MarkClosedPopover
+            onSelect={(outcome) => void handleMarkClosed(outcome)}
+            trigger={
+              <Button
+                size="sm"
+                className="h-8 gap-1.5 text-xs bg-rose-600/20 text-rose-300 hover:bg-rose-600/30 border border-rose-500/30"
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Mark Closed
+              </Button>
+            }
+          />
+        )}
+
+        {canRowMoveToSelected && (
+          <Button
+            size="sm"
+            className="h-8 gap-1.5 text-xs bg-violet-600/20 text-violet-300 hover:bg-violet-600/30 border border-violet-500/30"
+            onClick={handleMoveToSelectedRow}
+          >
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            Move to Selected
+          </Button>
+        )}
+
+        {canRowReopen && (
+          <Button
+            size="sm"
+            className="h-8 gap-1.5 text-xs bg-cyan-600/20 text-cyan-300 hover:bg-cyan-600/30 border border-cyan-500/30"
+            onClick={handleReopen}
+          >
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            Reopen
           </Button>
         )}
 

@@ -1,17 +1,24 @@
 import * as api from "@client/api";
 import type {
   JobAction,
+  JobActionRequest,
   JobActionResponse,
   JobListItem,
+  JobOutcome,
 } from "@shared/types.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { FilterTab } from "./constants";
 import { JobActionProgressToast } from "./JobActionProgressToast";
 import {
+  canMarkClosed,
+  canMoveToBacklog,
   canMoveToReady,
+  canMoveToSelected,
+  canReopen,
   canRescore,
   canSkip,
+  canUnselect,
   getFailedJobIds,
 } from "./jobActions";
 import { clampNumber } from "./utils";
@@ -71,6 +78,26 @@ export function useJobSelectionActions({
   );
   const canRescoreSelected = useMemo(
     () => canRescore(selectedJobs),
+    [selectedJobs],
+  );
+  const canMoveToSelectedSelected = useMemo(
+    () => canMoveToSelected(selectedJobs),
+    [selectedJobs],
+  );
+  const canMoveToBacklogSelected = useMemo(
+    () => canMoveToBacklog(selectedJobs),
+    [selectedJobs],
+  );
+  const canUnselectSelected = useMemo(
+    () => canUnselect(selectedJobs),
+    [selectedJobs],
+  );
+  const canMarkClosedSelected = useMemo(
+    () => canMarkClosed(selectedJobs),
+    [selectedJobs],
+  );
+  const canReopenSelected = useMemo(
+    () => canReopen(selectedJobs),
     [selectedJobs],
   );
 
@@ -147,12 +174,10 @@ export function useJobSelectionActions({
     setSelectedJobIds(new Set());
   }, []);
 
-  const runJobAction = useCallback(
-    // mark_closed needs an outcome; 5g.3b adds a dedicated path through
-    // MarkClosedPopover. The bulk progress-toast hook only handles
-    // option-less variants.
-    async (action: Exclude<JobAction, "mark_closed">) => {
-      const selectedAtStart = Array.from(selectedJobIds);
+  const runStreamingAction = useCallback(
+    async (request: JobActionRequest) => {
+      const action = request.action;
+      const selectedAtStart = request.jobIds;
       if (selectedAtStart.length === 0) return;
       if (selectedAtStart.length > MAX_JOB_ACTION_JOB_IDS) {
         toast.error(
@@ -200,57 +225,51 @@ export function useJobSelectionActions({
       try {
         setJobActionInFlight(action);
         upsertProgressToast();
-        await api.streamJobAction(
-          {
-            action,
-            jobIds: selectedAtStart,
-          },
-          {
-            onEvent: (event) => {
-              if (event.type === "error") {
-                streamError = event.message || "Failed to run job action";
-                return;
-              }
+        await api.streamJobAction(request, {
+          onEvent: (event) => {
+            if (event.type === "error") {
+              streamError = event.message || "Failed to run job action";
+              return;
+            }
 
-              if (event.type === "started") {
-                latestProgress = {
-                  requested: event.requested,
-                  completed: event.completed,
-                  succeeded: event.succeeded,
-                  failed: event.failed,
-                };
-                upsertProgressToast();
-                return;
-              }
-
-              if (event.type === "progress") {
-                latestProgress = {
-                  requested: event.requested,
-                  completed: event.completed,
-                  succeeded: event.succeeded,
-                  failed: event.failed,
-                };
-                upsertProgressToast();
-                return;
-              }
-
+            if (event.type === "started") {
               latestProgress = {
                 requested: event.requested,
                 completed: event.completed,
                 succeeded: event.succeeded,
                 failed: event.failed,
               };
-              finalResult = {
-                action: event.action,
+              upsertProgressToast();
+              return;
+            }
+
+            if (event.type === "progress") {
+              latestProgress = {
                 requested: event.requested,
+                completed: event.completed,
                 succeeded: event.succeeded,
                 failed: event.failed,
-                results: event.results,
               };
               upsertProgressToast();
-            },
+              return;
+            }
+
+            latestProgress = {
+              requested: event.requested,
+              completed: event.completed,
+              succeeded: event.succeeded,
+              failed: event.failed,
+            };
+            finalResult = {
+              action: event.action,
+              requested: event.requested,
+              succeeded: event.succeeded,
+              failed: event.failed,
+              results: event.results,
+            };
+            upsertProgressToast();
           },
-        );
+        });
 
         if (streamError) {
           throw new Error(streamError);
@@ -298,7 +317,31 @@ export function useJobSelectionActions({
         setJobActionInFlight(null);
       }
     },
-    [selectedJobIds, loadJobs],
+    [loadJobs],
+  );
+
+  // Option-less variants. mark_closed needs an outcome and goes through
+  // runMarkClosedAction below.
+  const runJobAction = useCallback(
+    async (action: Exclude<JobAction, "mark_closed">) => {
+      const jobIds = Array.from(selectedJobIds);
+      if (jobIds.length === 0) return;
+      await runStreamingAction({ action, jobIds } as JobActionRequest);
+    },
+    [selectedJobIds, runStreamingAction],
+  );
+
+  const runMarkClosedAction = useCallback(
+    async (outcome: JobOutcome) => {
+      const jobIds = Array.from(selectedJobIds);
+      if (jobIds.length === 0) return;
+      await runStreamingAction({
+        action: "mark_closed",
+        jobIds,
+        options: { outcome },
+      });
+    },
+    [selectedJobIds, runStreamingAction],
   );
 
   return {
@@ -306,11 +349,17 @@ export function useJobSelectionActions({
     canSkipSelected,
     canMoveSelected,
     canRescoreSelected,
+    canMoveToSelectedSelected,
+    canMoveToBacklogSelected,
+    canUnselectSelected,
+    canMarkClosedSelected,
+    canReopenSelected,
     jobActionInFlight,
     toggleSelectJob,
     toggleSelectAll,
     selectAllAboveScore,
     clearSelection,
     runJobAction,
+    runMarkClosedAction,
   };
 }

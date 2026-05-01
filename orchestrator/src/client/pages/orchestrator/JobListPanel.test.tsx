@@ -81,7 +81,7 @@ describe("JobListPanel", () => {
 
     expect(screen.getByText("No jobs found")).toBeInTheDocument();
     expect(
-      screen.getByText("Run the pipeline to discover and process new jobs."),
+      screen.getByText("Tailor selected jobs to generate PDFs."),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /tailor discovered jobs/i }),

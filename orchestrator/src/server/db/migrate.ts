@@ -254,182 +254,19 @@ const migrations: string[] = [
   `ALTER TABLE cv_documents_new RENAME TO cv_documents`,
   `PRAGMA foreign_keys = ON`,
 
-  // Drop unused columns from legacy `jobs` (tailored_summary/headline/skills,
-  // tracer_links_enabled, sponsor_match_*) by rebuilding the table. This is a
-  // no-op on fresh DBs (round-trip with zero rows) and the canonical migration
-  // path on legacy DBs.
-  `PRAGMA foreign_keys = OFF`,
-  `DROP TABLE IF EXISTS jobs_new`,
-  `CREATE TABLE jobs_new (
-    id TEXT PRIMARY KEY,
-    source TEXT NOT NULL DEFAULT 'linkedin',
-    source_job_id TEXT,
-    job_url_direct TEXT,
-    date_posted TEXT,
-    job_type TEXT,
-    salary_source TEXT,
-    salary_interval TEXT,
-    salary_min_amount REAL,
-    salary_max_amount REAL,
-    salary_currency TEXT,
-    is_remote INTEGER,
-    job_level TEXT,
-    job_function TEXT,
-    listing_type TEXT,
-    emails TEXT,
-    company_industry TEXT,
-    company_logo TEXT,
-    company_url_direct TEXT,
-    company_addresses TEXT,
-    company_num_employees TEXT,
-    company_revenue TEXT,
-    company_description TEXT,
-    skills TEXT,
-    experience_range TEXT,
-    company_rating REAL,
-    company_reviews_count INTEGER,
-    vacancy_count INTEGER,
-    work_from_home_type TEXT,
-    title TEXT NOT NULL,
-    employer TEXT NOT NULL,
-    employer_url TEXT,
-    job_url TEXT NOT NULL UNIQUE,
-    application_link TEXT,
-    disciplines TEXT,
-    deadline TEXT,
-    salary TEXT,
-    location TEXT,
-    location_evidence TEXT,
-    degree_required TEXT,
-    starting TEXT,
-    job_description TEXT,
-    status TEXT NOT NULL DEFAULT 'discovered' CHECK(status IN ('discovered', 'processing', 'ready', 'applied', 'in_progress', 'skipped', 'expired')),
-    outcome TEXT,
-    closed_at INTEGER,
-    suitability_score REAL,
-    suitability_reason TEXT,
-    tailored_fields TEXT NOT NULL DEFAULT '{}',
-    tailoring_matched TEXT,
-    tailoring_skipped TEXT,
-    cv_document_id TEXT REFERENCES cv_documents(id) ON DELETE SET NULL,
-    pdf_path TEXT,
-    cover_letter_draft TEXT NOT NULL DEFAULT '',
-    discovered_at TEXT NOT NULL DEFAULT (datetime('now')),
-    processed_at TEXT,
-    ready_at TEXT,
-    applied_at TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-  )`,
-  `INSERT INTO jobs_new (
-    id, source, source_job_id, job_url_direct, date_posted, job_type,
-    salary_source, salary_interval, salary_min_amount, salary_max_amount,
-    salary_currency, is_remote, job_level, job_function, listing_type, emails,
-    company_industry, company_logo, company_url_direct, company_addresses,
-    company_num_employees, company_revenue, company_description, skills,
-    experience_range, company_rating, company_reviews_count, vacancy_count,
-    work_from_home_type, title, employer, employer_url, job_url,
-    application_link, disciplines, deadline, salary, location,
-    location_evidence, degree_required, starting, job_description, status,
-    outcome, closed_at, suitability_score, suitability_reason, tailored_fields,
-    tailoring_matched, tailoring_skipped, cv_document_id,
-    pdf_path, cover_letter_draft, discovered_at, processed_at, ready_at,
-    applied_at, created_at, updated_at
-  )
-  SELECT
-    id, source, source_job_id, job_url_direct, date_posted, job_type,
-    salary_source, salary_interval, salary_min_amount, salary_max_amount,
-    salary_currency, is_remote, job_level, job_function, listing_type, emails,
-    company_industry, company_logo, company_url_direct, company_addresses,
-    company_num_employees, company_revenue, company_description, skills,
-    experience_range, company_rating, company_reviews_count, vacancy_count,
-    work_from_home_type, title, employer, employer_url, job_url,
-    application_link, disciplines, deadline, salary, location,
-    location_evidence, degree_required, starting, job_description, status,
-    outcome, closed_at, suitability_score, suitability_reason,
-    '{}' AS tailored_fields,
-    tailoring_matched, tailoring_skipped, cv_document_id,
-    pdf_path, cover_letter_draft, discovered_at, processed_at,
-    ready_at, applied_at, created_at, updated_at
-  FROM jobs`,
-  `DROP TABLE jobs`,
-  `ALTER TABLE jobs_new RENAME TO jobs`,
-  `PRAGMA foreign_keys = ON`,
-
-  // Indices.
-  `CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)`,
-  `CREATE INDEX IF NOT EXISTS idx_jobs_discovered_at ON jobs(discovered_at)`,
-  `CREATE INDEX IF NOT EXISTS idx_jobs_status_discovered_at ON jobs(status, discovered_at)`,
-  `CREATE INDEX IF NOT EXISTS idx_pipeline_runs_started_at ON pipeline_runs(started_at)`,
-  `CREATE INDEX IF NOT EXISTS idx_tasks_application_id ON tasks(application_id)`,
-  `CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date)`,
-  `CREATE INDEX IF NOT EXISTS idx_interviews_application_id ON interviews(application_id)`,
-  `CREATE INDEX IF NOT EXISTS idx_job_notes_job_updated ON job_notes(job_id, updated_at)`,
-  `CREATE INDEX IF NOT EXISTS idx_job_chat_threads_job_updated ON job_chat_threads(job_id, updated_at)`,
-  `CREATE INDEX IF NOT EXISTS idx_job_chat_messages_thread_created ON job_chat_messages(thread_id, created_at)`,
-  `CREATE INDEX IF NOT EXISTS idx_job_chat_messages_parent ON job_chat_messages(parent_message_id)`,
-  `CREATE INDEX IF NOT EXISTS idx_job_chat_runs_thread_status ON job_chat_runs(thread_id, status)`,
-  `CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires_at ON auth_sessions(expires_at)`,
-  `CREATE INDEX IF NOT EXISTS idx_auth_sessions_revoked_at ON auth_sessions(revoked_at)`,
-
-  // Backfill duplicate-running-runs guard rail.
-  `WITH ranked AS (
-      SELECT
-        id,
-        ROW_NUMBER() OVER (PARTITION BY thread_id ORDER BY started_at DESC, id DESC) AS rank_in_thread
-      FROM job_chat_runs
-      WHERE status = 'running'
-    )
-    UPDATE job_chat_runs
-    SET
-      status = 'failed',
-      error_code = COALESCE(error_code, 'CONFLICT'),
-      error_message = COALESCE(error_message, 'Recovered duplicate running run during migration'),
-      completed_at = COALESCE(completed_at, CAST(strftime('%s', 'now') AS INTEGER)),
-      updated_at = datetime('now')
-    WHERE id IN (SELECT id FROM ranked WHERE rank_in_thread > 1)`,
-  `CREATE UNIQUE INDEX IF NOT EXISTS idx_job_chat_runs_thread_running_unique
-   ON job_chat_runs(thread_id)
-   WHERE status = 'running'`,
-
-  // 5e CV substrate columns. Additive, idempotent via duplicate-column-name
-  // skip below. The runtime path still uses flattened_tex + fields for
-  // rendering until 5e.4 cuts over.
-  `ALTER TABLE cv_documents ADD COLUMN templated_tex TEXT NOT NULL DEFAULT ''`,
-  `ALTER TABLE cv_documents ADD COLUMN default_field_values TEXT NOT NULL DEFAULT '{}'`,
-  `ALTER TABLE cv_documents ADD COLUMN last_compile_stderr TEXT`,
-  `ALTER TABLE cv_documents ADD COLUMN compile_attempts INTEGER NOT NULL DEFAULT 0`,
-
-  // 5e.3a: per-CV system prompt. The user can override the entire LLM
-  // system prompt (default = the server's cv-template-extract YAML).
-  // Empty value means "use the server default at extraction time".
-  `ALTER TABLE cv_documents ADD COLUMN extraction_prompt TEXT NOT NULL DEFAULT ''`,
-
-  // Drop legacy settings keys that are no longer read by the app.
-  `DELETE FROM settings WHERE key IN (
-     'jobspyHoursOld',
-     'jobspySites',
-     'jobspyLinkedinFetchDescription',
-     'jobspyIsRemote',
-     'openrouterApiKey',
-     'webhookUrl',
-     'pipelineWebhookUrl'
-   )`,
-
   // 5g repost-tracking columns. Additive, idempotent via duplicate-column
-  // skip below.
+  // skip below. Has to run BEFORE the rebuild block — the rebuild's
+  // INSERT SELECT references `reposted_at` / `repost_count` from `jobs`, so
+  // legacy DBs without those columns would otherwise fail the SELECT.
   `ALTER TABLE jobs ADD COLUMN reposted_at TEXT`,
   `ALTER TABLE jobs ADD COLUMN repost_count INTEGER NOT NULL DEFAULT 0`,
 
-  // 5g status + outcome enum migration. Status drops `expired`, adds
-  // `selected`, `backlog`, `closed`. Outcome drops `offer_accepted`,
-  // `offer_declined`, `no_response`, adds `other`. Both enums are SQLite
-  // CHECK constraints so the table-rebuild dance is unavoidable. Existing
-  // rows are remapped:
-  //   status: 'expired'        -> 'closed' (with outcome='other')
-  //   outcome: 'no_response'   -> 'ghosted'
-  //   outcome: 'offer_accepted', 'offer_declined' -> 'other'
-  // No-op on fresh DBs (round-trip with zero rows).
+  // Canonical jobs-table rebuild. Originally added in 5d to drop unused
+  // columns (tailored_summary/headline/skills, tracer_links_enabled,
+  // sponsor_match_*); 5g extended it with the new status + outcome enums and
+  // the repost-tracking columns. Runs every boot; on a fresh DB it's a
+  // round-trip with zero rows. The CASE expressions remap legacy enum values
+  // forward for any pre-5g rows that might still be in flight.
   `PRAGMA foreign_keys = OFF`,
   `DROP TABLE IF EXISTS jobs_new`,
   `CREATE TABLE jobs_new (
@@ -528,9 +365,12 @@ const migrations: string[] = [
       WHEN outcome IN ('offer_accepted', 'offer_declined') THEN 'other'
       ELSE outcome
     END AS outcome,
-    closed_at, suitability_score, suitability_reason, tailored_fields,
+    closed_at, suitability_score, suitability_reason,
+    '{}' AS tailored_fields,
     tailoring_matched, tailoring_skipped, cv_document_id,
-    pdf_path, cover_letter_draft, reposted_at, repost_count,
+    pdf_path, cover_letter_draft,
+    COALESCE(reposted_at, NULL) AS reposted_at,
+    COALESCE(repost_count, 0) AS repost_count,
     discovered_at, processed_at,
     ready_at, applied_at, created_at, updated_at
   FROM jobs`,
@@ -538,10 +378,66 @@ const migrations: string[] = [
   `ALTER TABLE jobs_new RENAME TO jobs`,
   `PRAGMA foreign_keys = ON`,
 
-  // Re-create indices dropped by the table rebuild.
+  // Indices.
   `CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)`,
   `CREATE INDEX IF NOT EXISTS idx_jobs_discovered_at ON jobs(discovered_at)`,
   `CREATE INDEX IF NOT EXISTS idx_jobs_status_discovered_at ON jobs(status, discovered_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_pipeline_runs_started_at ON pipeline_runs(started_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_tasks_application_id ON tasks(application_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date)`,
+  `CREATE INDEX IF NOT EXISTS idx_interviews_application_id ON interviews(application_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_job_notes_job_updated ON job_notes(job_id, updated_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_job_chat_threads_job_updated ON job_chat_threads(job_id, updated_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_job_chat_messages_thread_created ON job_chat_messages(thread_id, created_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_job_chat_messages_parent ON job_chat_messages(parent_message_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_job_chat_runs_thread_status ON job_chat_runs(thread_id, status)`,
+  `CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires_at ON auth_sessions(expires_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_auth_sessions_revoked_at ON auth_sessions(revoked_at)`,
+
+  // Backfill duplicate-running-runs guard rail.
+  `WITH ranked AS (
+      SELECT
+        id,
+        ROW_NUMBER() OVER (PARTITION BY thread_id ORDER BY started_at DESC, id DESC) AS rank_in_thread
+      FROM job_chat_runs
+      WHERE status = 'running'
+    )
+    UPDATE job_chat_runs
+    SET
+      status = 'failed',
+      error_code = COALESCE(error_code, 'CONFLICT'),
+      error_message = COALESCE(error_message, 'Recovered duplicate running run during migration'),
+      completed_at = COALESCE(completed_at, CAST(strftime('%s', 'now') AS INTEGER)),
+      updated_at = datetime('now')
+    WHERE id IN (SELECT id FROM ranked WHERE rank_in_thread > 1)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_job_chat_runs_thread_running_unique
+   ON job_chat_runs(thread_id)
+   WHERE status = 'running'`,
+
+  // 5e CV substrate columns. Additive, idempotent via duplicate-column-name
+  // skip below. The runtime path still uses flattened_tex + fields for
+  // rendering until 5e.4 cuts over.
+  `ALTER TABLE cv_documents ADD COLUMN templated_tex TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE cv_documents ADD COLUMN default_field_values TEXT NOT NULL DEFAULT '{}'`,
+  `ALTER TABLE cv_documents ADD COLUMN last_compile_stderr TEXT`,
+  `ALTER TABLE cv_documents ADD COLUMN compile_attempts INTEGER NOT NULL DEFAULT 0`,
+
+  // 5e.3a: per-CV system prompt. The user can override the entire LLM
+  // system prompt (default = the server's cv-template-extract YAML).
+  // Empty value means "use the server default at extraction time".
+  `ALTER TABLE cv_documents ADD COLUMN extraction_prompt TEXT NOT NULL DEFAULT ''`,
+
+  // Drop legacy settings keys that are no longer read by the app.
+  `DELETE FROM settings WHERE key IN (
+     'jobspyHoursOld',
+     'jobspySites',
+     'jobspyLinkedinFetchDescription',
+     'jobspyIsRemote',
+     'openrouterApiKey',
+     'webhookUrl',
+     'pipelineWebhookUrl'
+   )`,
+
 ];
 
 console.log("🔧 Running database migrations...");

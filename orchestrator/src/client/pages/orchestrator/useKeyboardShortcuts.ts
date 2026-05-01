@@ -5,7 +5,7 @@ import {
 } from "@client/hooks/queries/useJobMutations";
 import { useHotkeys } from "@client/hooks/useHotkeys";
 import { useActiveCv } from "@client/hooks/useActiveCv";
-import { SHORTCUTS } from "@client/lib/shortcut-map";
+import { SHORTCUTS, isShortcutInScope } from "@client/lib/shortcut-map";
 import type { JobAction, JobListItem } from "@shared/types.js";
 import { useCallback, useRef } from "react";
 import { toast } from "sonner";
@@ -119,9 +119,12 @@ export function useKeyboardShortcuts(args: UseKeyboardShortcutsArgs): void {
       },
 
       // ── Tab switching ───────────────────────────────────────────────────
+      [SHORTCUTS.tabInbox.key]: () => setActiveTab("inbox"),
+      [SHORTCUTS.tabSelected.key]: () => setActiveTab("selected"),
       [SHORTCUTS.tabReady.key]: () => setActiveTab("ready"),
-      [SHORTCUTS.tabDiscovered.key]: () => setActiveTab("discovered"),
-      [SHORTCUTS.tabApplied.key]: () => setActiveTab("applied"),
+      [SHORTCUTS.tabLive.key]: () => setActiveTab("live"),
+      [SHORTCUTS.tabBacklog.key]: () => setActiveTab("backlog"),
+      [SHORTCUTS.tabClosed.key]: () => setActiveTab("closed"),
       [SHORTCUTS.tabAll.key]: () => setActiveTab("all"),
       [SHORTCUTS.prevTabArrow.key]: (e) => {
         e.preventDefault();
@@ -134,7 +137,7 @@ export function useKeyboardShortcuts(args: UseKeyboardShortcutsArgs): void {
 
       // ── Context actions ─────────────────────────────────────────────────
       [SHORTCUTS.skip.key]: () => {
-        if (!["discovered", "ready"].includes(activeTab)) return;
+        if (!isShortcutInScope(SHORTCUTS.skip, activeTab)) return;
         if (shortcutActionInFlight.current) return;
 
         if (selectedJobIds.size > 0) {
@@ -188,7 +191,7 @@ export function useKeyboardShortcuts(args: UseKeyboardShortcutsArgs): void {
       },
 
       [SHORTCUTS.moveToReady.key]: () => {
-        if (activeTab !== "discovered") return;
+        if (!isShortcutInScope(SHORTCUTS.moveToReady, activeTab)) return;
         if (shortcutActionInFlight.current) return;
 
         if (selectedJobIds.size > 0) {
@@ -219,6 +222,30 @@ export function useKeyboardShortcuts(args: UseKeyboardShortcutsArgs): void {
           .finally(() => {
             shortcutActionInFlight.current = false;
           });
+      },
+
+      [SHORTCUTS.moveToSelected.key]: () => {
+        if (!isShortcutInScope(SHORTCUTS.moveToSelected, activeTab)) return;
+        if (shortcutActionInFlight.current) return;
+        if (selectedJobIds.size > 0) {
+          void runJobAction("move_to_selected");
+        }
+      },
+
+      [SHORTCUTS.moveToBacklog.key]: () => {
+        if (!isShortcutInScope(SHORTCUTS.moveToBacklog, activeTab)) return;
+        if (shortcutActionInFlight.current) return;
+        if (selectedJobIds.size > 0) {
+          void runJobAction("move_to_backlog");
+        }
+      },
+
+      [SHORTCUTS.reopenJob.key]: () => {
+        if (!isShortcutInScope(SHORTCUTS.reopenJob, activeTab)) return;
+        if (shortcutActionInFlight.current) return;
+        if (selectedJobIds.size > 0) {
+          void runJobAction("reopen");
+        }
       },
 
       [SHORTCUTS.viewPdf.key]: () => {

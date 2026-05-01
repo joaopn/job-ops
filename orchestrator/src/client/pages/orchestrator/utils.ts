@@ -174,21 +174,35 @@ export const jobMatchesQuery = (job: JobListItem, query: string) => {
 
 export const getJobCounts = (
   jobs: JobListItem[],
-): Record<FilterTab, number> => {
-  const byTab: Record<FilterTab, number> = {
+): Record<FilterTab, number> & { discovered: number } => {
+  // Includes a `discovered` alias so legacy callers (empty-state CTAs that
+  // ask "how many Inbox rows" via the historical `counts.discovered` name)
+  // keep working without churn.
+  const byTab: Record<FilterTab, number> & { discovered: number } = {
+    inbox: 0,
+    selected: 0,
     ready: 0,
-    discovered: 0,
-    applied: 0,
+    live: 0,
+    backlog: 0,
+    closed: 0,
     all: jobs.length,
+    discovered: 0,
   };
 
   for (const job of jobs) {
-    if (job.closedAt != null) continue;
-    if (job.status === "in_progress") continue;
-    if (job.status === "ready" || job.status === "processing") byTab.ready += 1;
-    if (job.status === "applied") byTab.applied += 1;
-    if (job.status === "discovered" || job.status === "processing")
+    if (job.status === "discovered") {
+      byTab.inbox += 1;
       byTab.discovered += 1;
+    }
+    if (job.status === "selected" || job.status === "processing") {
+      byTab.selected += 1;
+    }
+    if (job.status === "ready") byTab.ready += 1;
+    if (job.status === "applied" || job.status === "in_progress") {
+      byTab.live += 1;
+    }
+    if (job.status === "backlog") byTab.backlog += 1;
+    if (job.status === "skipped" || job.status === "closed") byTab.closed += 1;
   }
 
   return byTab;

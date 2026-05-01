@@ -83,7 +83,14 @@ export const appliedDuplicateIndicator = {
   dot: "bg-yellow-400",
 };
 
-export type FilterTab = "ready" | "discovered" | "applied" | "all";
+export type FilterTab =
+  | "inbox"
+  | "selected"
+  | "ready"
+  | "live"
+  | "backlog"
+  | "closed"
+  | "all";
 export type DateFilterPreset = "7" | "14" | "30" | "90" | "custom";
 export type DateFilterDimension = "ready" | "applied" | "closed" | "discovered";
 
@@ -153,20 +160,22 @@ export const tabs: Array<{
   label: string;
   statuses: JobStatus[];
 }> = [
+  { id: "inbox", label: "Inbox", statuses: ["discovered"] },
+  { id: "selected", label: "Selected", statuses: ["selected", "processing"] },
   { id: "ready", label: "Ready", statuses: ["ready"] },
-  {
-    id: "discovered",
-    label: "Discovered",
-    statuses: ["discovered", "processing"],
-  },
-  { id: "applied", label: "Applied", statuses: ["applied"] },
+  { id: "live", label: "Live", statuses: ["applied", "in_progress"] },
+  { id: "backlog", label: "Backlog", statuses: ["backlog"] },
+  { id: "closed", label: "Closed", statuses: ["skipped", "closed"] },
   { id: "all", label: "All Jobs", statuses: [] },
 ];
 
 export const emptyStateCopy: Record<FilterTab, string> = {
-  ready: "Run the pipeline to discover and process new jobs.",
-  discovered: "All discovered jobs have been processed.",
-  applied: "You have not applied to any jobs yet.",
+  inbox: "Run the pipeline to discover new jobs.",
+  selected: "No jobs queued for tailoring. Move rows from Inbox to Selected.",
+  ready: "Tailor selected jobs to generate PDFs.",
+  live: "You have not applied to any jobs yet.",
+  backlog: "No aged-out or backlogged jobs.",
+  closed: "No closed applications yet.",
   all: "No jobs in the system yet. Run the pipeline to get started.",
 };
 

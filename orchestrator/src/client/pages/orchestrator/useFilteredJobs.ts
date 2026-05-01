@@ -27,18 +27,30 @@ export const useFilteredJobs = (
   useMemo(() => {
     let filtered = [...jobs];
 
-    if (activeTab === "ready") {
-      filtered = filtered.filter((job) => job.status === "ready");
-    } else if (activeTab === "discovered") {
+    if (activeTab === "inbox") {
+      filtered = filtered.filter((job) => job.status === "discovered");
+    } else if (activeTab === "selected") {
       filtered = filtered.filter(
-        (job) => job.status === "discovered" || job.status === "processing",
+        (job) => job.status === "selected" || job.status === "processing",
       );
-    } else if (activeTab === "applied") {
-      filtered = filtered.filter((job) => job.status === "applied");
+    } else if (activeTab === "ready") {
+      filtered = filtered.filter((job) => job.status === "ready");
+    } else if (activeTab === "live") {
+      filtered = filtered.filter(
+        (job) => job.status === "applied" || job.status === "in_progress",
+      );
+    } else if (activeTab === "backlog") {
+      filtered = filtered.filter((job) => job.status === "backlog");
+    } else if (activeTab === "closed") {
+      filtered = filtered.filter(
+        (job) => job.status === "skipped" || job.status === "closed",
+      );
     } else if (activeTab === "all") {
       const includeClosedJobs = dateFilter.dimensions.includes("closed");
       if (!includeClosedJobs) {
-        filtered = filtered.filter((job) => job.closedAt == null);
+        filtered = filtered.filter(
+          (job) => job.status !== "skipped" && job.status !== "closed",
+        );
       }
     }
 

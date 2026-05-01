@@ -48,27 +48,45 @@ export const SHORTCUTS = {
   },
 
   // Tabs
-  tabReady: {
+  tabInbox: {
     key: "1",
     displayKey: "1",
+    label: "Inbox tab",
+    group: "tabs",
+  },
+  tabSelected: {
+    key: "2",
+    displayKey: "2",
+    label: "Selected tab",
+    group: "tabs",
+  },
+  tabReady: {
+    key: "3",
+    displayKey: "3",
     label: "Ready tab",
     group: "tabs",
   },
-  tabDiscovered: {
-    key: "2",
-    displayKey: "2",
-    label: "Discovered tab",
+  tabLive: {
+    key: "4",
+    displayKey: "4",
+    label: "Live tab",
     group: "tabs",
   },
-  tabApplied: {
-    key: "3",
-    displayKey: "3",
-    label: "Applied tab",
+  tabBacklog: {
+    key: "5",
+    displayKey: "5",
+    label: "Backlog tab",
+    group: "tabs",
+  },
+  tabClosed: {
+    key: "6",
+    displayKey: "6",
+    label: "Closed tab",
     group: "tabs",
   },
   tabAll: {
-    key: "4",
-    displayKey: "4",
+    key: "7",
+    displayKey: "7",
     label: "All Jobs tab",
     group: "tabs",
   },
@@ -91,14 +109,14 @@ export const SHORTCUTS = {
     displayKey: "s",
     label: "Skip job",
     group: "actions",
-    scope: ["discovered", "ready"],
+    scope: ["inbox", "selected", "ready", "backlog"],
   },
   moveToReady: {
     key: "r",
     displayKey: "r",
     label: "Tailor job",
     group: "actions",
-    scope: ["discovered"],
+    scope: ["inbox", "selected"],
   },
   markApplied: {
     key: "a",
@@ -106,6 +124,27 @@ export const SHORTCUTS = {
     label: "Mark applied",
     group: "actions",
     scope: ["ready"],
+  },
+  moveToSelected: {
+    key: "e",
+    displayKey: "e",
+    label: "Move to Selected",
+    group: "actions",
+    scope: ["inbox", "backlog"],
+  },
+  moveToBacklog: {
+    key: "b",
+    displayKey: "b",
+    label: "Move to Backlog",
+    group: "actions",
+    scope: ["inbox", "selected"],
+  },
+  reopenJob: {
+    key: "u",
+    displayKey: "u",
+    label: "Reopen job",
+    group: "actions",
+    scope: ["closed"],
   },
   viewPdf: {
     key: "p",
@@ -170,9 +209,23 @@ export type ShortcutId = keyof typeof SHORTCUTS;
  * Useful for rendering the bottom hint bar.
  */
 export function getShortcutsForTab(tab: FilterTab): ShortcutDef[] {
-  return (Object.values(SHORTCUTS) as ShortcutDef[]).filter(
-    (s) => !s.scope || s.scope.includes(tab),
+  return (Object.values(SHORTCUTS) as ShortcutDef[]).filter((s) =>
+    isShortcutInScope(s, tab),
   );
+}
+
+/**
+ * Whether a shortcut's `scope` allows the current tab. The SHORTCUTS table is
+ * declared with `as const satisfies`, so each `scope` narrows to a readonly
+ * tuple of string literals — `Array.includes` then rejects any FilterTab
+ * outside that tuple. This helper widens the array before the `includes`
+ * call so callers can pass the active tab without per-shortcut casts.
+ */
+export function isShortcutInScope(
+  def: { scope?: readonly FilterTab[] },
+  tab: FilterTab,
+): boolean {
+  return !def.scope || (def.scope as readonly FilterTab[]).includes(tab);
 }
 
 /**

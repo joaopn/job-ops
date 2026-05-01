@@ -50,11 +50,19 @@ export const OrchestratorPage: React.FC = () => {
   } = useOrchestratorFilters();
 
   const activeTab = useMemo(() => {
-    const validTabs: FilterTab[] = ["ready", "discovered", "applied", "all"];
+    const validTabs: FilterTab[] = [
+      "inbox",
+      "selected",
+      "ready",
+      "live",
+      "backlog",
+      "closed",
+      "all",
+    ];
     if (tab && validTabs.includes(tab as FilterTab)) {
       return tab as FilterTab;
     }
-    return "ready";
+    return "inbox";
   }, [tab]);
 
   // Helper to change URL while preserving search params
@@ -75,13 +83,27 @@ export const OrchestratorPage: React.FC = () => {
 
   // Effect to sync URL if it was invalid
   useEffect(() => {
-    if (tab === "in_progress") {
-      navigate("/applications/in-progress", { replace: true });
+    // Legacy URL redirects for the pre-5g tab names so existing bookmarks
+    // don't 404. Routes the old name to the closest 5g tab.
+    if (tab === "discovered") {
+      navigateWithContext("inbox", null, true);
       return;
     }
-    const validTabs: FilterTab[] = ["ready", "discovered", "applied", "all"];
+    if (tab === "applied" || tab === "in_progress") {
+      navigateWithContext("live", null, true);
+      return;
+    }
+    const validTabs: FilterTab[] = [
+      "inbox",
+      "selected",
+      "ready",
+      "live",
+      "backlog",
+      "closed",
+      "all",
+    ];
     if (tab && !validTabs.includes(tab as FilterTab)) {
-      navigateWithContext("ready", null, true);
+      navigateWithContext("inbox", null, true);
     }
   }, [tab, navigate, navigateWithContext]);
 
@@ -188,12 +210,18 @@ export const OrchestratorPage: React.FC = () => {
     canSkipSelected,
     canMoveSelected,
     canRescoreSelected,
+    canMoveToSelectedSelected,
+    canMoveToBacklogSelected,
+    canUnselectSelected,
+    canMarkClosedSelected,
+    canReopenSelected,
     jobActionInFlight,
     toggleSelectJob,
     toggleSelectAll,
     selectAllAboveScore,
     clearSelection,
     runJobAction,
+    runMarkClosedAction,
   } = useJobSelectionActions({
     activeJobs,
     activeTab,
@@ -358,12 +386,12 @@ export const OrchestratorPage: React.FC = () => {
   const primaryEmptyStateAction = useMemo(() => {
     if (activeTab === "ready" && counts.discovered > 0) {
       return {
-        label: "Tailor discovered jobs",
-        onClick: () => setActiveTab("discovered"),
+        label: "Review Inbox",
+        onClick: () => setActiveTab("inbox"),
       };
     }
 
-    if (activeTab === "discovered" || activeTab === "all") {
+    if (activeTab === "inbox" || activeTab === "all") {
       return {
         label: "Run pipeline",
         onClick: () => openRunMode("automatic"),
@@ -483,14 +511,25 @@ export const OrchestratorPage: React.FC = () => {
       </main>
 
       <FloatingJobActionsBar
+        activeTab={activeTab}
         selectedCount={selectedJobIds.size}
         canMoveSelected={canMoveSelected}
         canSkipSelected={canSkipSelected}
         canRescoreSelected={canRescoreSelected}
+        canMoveToSelectedSelected={canMoveToSelectedSelected}
+        canMoveToBacklogSelected={canMoveToBacklogSelected}
+        canUnselectSelected={canUnselectSelected}
+        canMarkClosedSelected={canMarkClosedSelected}
+        canReopenSelected={canReopenSelected}
         jobActionInFlight={jobActionInFlight !== null}
         onMoveToReady={() => void runJobAction("move_to_ready")}
         onSkipSelected={() => void runJobAction("skip")}
         onRescoreSelected={() => void runJobAction("rescore")}
+        onMoveToSelected={() => void runJobAction("move_to_selected")}
+        onMoveToBacklog={() => void runJobAction("move_to_backlog")}
+        onUnselect={() => void runJobAction("unselect")}
+        onMarkClosed={(outcome) => void runMarkClosedAction(outcome)}
+        onReopen={() => void runJobAction("reopen")}
         onClear={clearSelection}
       />
 

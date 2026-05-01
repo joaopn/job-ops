@@ -111,7 +111,7 @@ describe("useJobSelectionActions", () => {
     const { result } = renderHook(() =>
       useJobSelectionActions({
         activeJobs,
-        activeTab: "discovered",
+        activeTab: "inbox",
         loadJobs,
       }),
     );
@@ -131,7 +131,7 @@ describe("useJobSelectionActions", () => {
     const { result } = renderHook(() =>
       useJobSelectionActions({
         activeJobs,
-        activeTab: "discovered",
+        activeTab: "inbox",
         loadJobs,
       }),
     );
@@ -182,7 +182,7 @@ describe("useJobSelectionActions", () => {
     const { result } = renderHook(() =>
       useJobSelectionActions({
         activeJobs,
-        activeTab: "discovered",
+        activeTab: "inbox",
         loadJobs,
       }),
     );
