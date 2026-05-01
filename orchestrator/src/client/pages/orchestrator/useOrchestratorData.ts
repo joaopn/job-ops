@@ -8,12 +8,14 @@ import { queryKeys } from "@/client/lib/queryKeys";
 
 const initialStats: Record<JobStatus, number> = {
   discovered: 0,
+  selected: 0,
   processing: 0,
   ready: 0,
   applied: 0,
   in_progress: 0,
+  backlog: 0,
   skipped: 0,
-  expired: 0,
+  closed: 0,
 };
 
 const isDocumentVisible = () =>

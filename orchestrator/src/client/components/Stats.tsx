@@ -4,11 +4,12 @@
 
 import type { JobStatus } from "@shared/types.js";
 import {
+  Archive,
   CheckCircle2,
-  Clock,
   Loader2,
   Search,
   Sparkles,
+  Square,
   XCircle,
 } from "lucide-react";
 import type React from "react";
@@ -24,12 +25,14 @@ const statConfig: Array<{
   Icon: React.ComponentType<{ className?: string }>;
 }> = [
   { key: "discovered", label: "Discovered", Icon: Search },
+  { key: "selected", label: "Selected", Icon: Square },
   { key: "processing", label: "Processing", Icon: Loader2 },
   { key: "ready", label: "Ready", Icon: Sparkles },
   { key: "applied", label: "Applied", Icon: CheckCircle2 },
   { key: "in_progress", label: "In Progress", Icon: CheckCircle2 },
+  { key: "backlog", label: "Backlog", Icon: Archive },
   { key: "skipped", label: "Skipped", Icon: XCircle },
-  { key: "expired", label: "Expired", Icon: Clock },
+  { key: "closed", label: "Closed", Icon: XCircle },
 ];
 
 export const Stats: React.FC<StatsProps> = ({ stats }) => {

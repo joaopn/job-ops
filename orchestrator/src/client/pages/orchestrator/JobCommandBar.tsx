@@ -59,8 +59,6 @@ const lockDialogAccentClass: Record<StatusLock, string> = {
     "border-cyan-500/50 shadow-[0_0_0_1px_rgba(6,182,212,0.2),0_0_36px_-12px_rgba(6,182,212,0.55)]",
   skipped:
     "border-rose-500/50 shadow-[0_0_0_1px_rgba(244,63,94,0.2),0_0_36px_-12px_rgba(244,63,94,0.55)]",
-  expired:
-    "border-zinc-400/40 shadow-[0_0_0_1px_rgba(161,161,170,0.2),0_0_32px_-12px_rgba(161,161,170,0.45)]",
 };
 
 const buildSelectableRows = (rows: CommandBarRow[]) =>
@@ -535,7 +533,6 @@ export const JobCommandBar: React.FC<JobCommandBarProps> = ({
                             row.lock === "applied" && "bg-emerald-400",
                             row.lock === "in_progress" && "bg-cyan-400",
                             row.lock === "skipped" && "bg-rose-400",
-                            row.lock === "expired" && "bg-muted-foreground",
                           )}
                         />
                         <span className="truncate text-sm font-medium">

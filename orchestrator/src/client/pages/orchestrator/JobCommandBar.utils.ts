@@ -7,8 +7,7 @@ export type StatusLock =
   | "discovered"
   | "applied"
   | "in_progress"
-  | "skipped"
-  | "expired";
+  | "skipped";
 
 export type CommandBarRow =
   | {
@@ -45,7 +44,6 @@ const lockAliases: Record<StatusLock, string[]> = {
   applied: ["applied", "apply", "app"],
   in_progress: ["in-progress", "inprogress", "progress", "prog"],
   skipped: ["skipped", "skip", "skp"],
-  expired: ["expired", "expire", "exp"],
 };
 
 export const lockLabel: Record<StatusLock, string> = {
@@ -54,7 +52,6 @@ export const lockLabel: Record<StatusLock, string> = {
   applied: "applied",
   in_progress: "in-progress",
   skipped: "skipped",
-  expired: "expired",
 };
 
 const tokenRegex = /^\s*@([a-z-]*)/i;
@@ -150,7 +147,6 @@ export const jobMatchesLock = (job: JobListItem, lock: StatusLock) => {
   if (lock === "applied") return job.status === "applied";
   if (lock === "in_progress") return job.status === "in_progress";
   if (lock === "skipped") return job.status === "skipped";
-  if (lock === "expired") return job.status === "expired";
   return false;
 };
 

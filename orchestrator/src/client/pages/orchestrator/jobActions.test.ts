@@ -34,7 +34,7 @@ describe("jobActions", () => {
         createJob({ id: "2", status: "ready" }),
         createJob({ id: "3", status: "applied" }),
         createJob({ id: "4", status: "skipped" }),
-        createJob({ id: "5", status: "expired" }),
+        createJob({ id: "5", status: "closed" }),
       ]),
     ).toBe(true);
     expect(

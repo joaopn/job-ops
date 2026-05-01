@@ -56,12 +56,14 @@ const updateJobSchema = z.object({
   status: z
     .enum([
       "discovered",
+      "selected",
       "processing",
       "ready",
       "applied",
       "in_progress",
+      "backlog",
       "skipped",
-      "expired",
+      "closed",
     ])
     .optional(),
   outcome: z.enum(APPLICATION_OUTCOMES).nullable().optional(),

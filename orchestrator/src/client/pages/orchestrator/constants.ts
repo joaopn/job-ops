@@ -30,6 +30,11 @@ export const statusTokens: Record<
     badge: "border-sky-500/30 bg-sky-500/10 text-sky-200",
     dot: "bg-sky-400",
   },
+  selected: {
+    label: "Selected",
+    badge: "border-violet-500/30 bg-violet-500/10 text-violet-200",
+    dot: "bg-violet-400",
+  },
   processing: {
     label: "Processing",
     badge: "border-amber-500/30 bg-amber-500/10 text-amber-200",
@@ -50,13 +55,18 @@ export const statusTokens: Record<
     badge: "border-cyan-500/30 bg-cyan-500/10 text-cyan-200",
     dot: "bg-cyan-400",
   },
+  backlog: {
+    label: "Backlog",
+    badge: "border-muted-foreground/20 bg-muted/30 text-muted-foreground",
+    dot: "bg-muted-foreground",
+  },
   skipped: {
     label: "Skipped",
     badge: "border-rose-500/30 bg-rose-500/10 text-rose-200",
     dot: "bg-rose-400",
   },
-  expired: {
-    label: "Expired",
+  closed: {
+    label: "Closed",
     badge: "border-muted-foreground/20 bg-muted/30 text-muted-foreground",
     dot: "bg-muted-foreground",
   },

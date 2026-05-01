@@ -14,12 +14,14 @@ interface StatusBadgeProps {
 
 const statusLabels: Record<JobStatus, string> = {
   discovered: "Discovered",
+  selected: "Selected",
   processing: "Processing",
   ready: "Ready",
   applied: "Applied",
   in_progress: "In Progress",
+  backlog: "Backlog",
   skipped: "Skipped",
-  expired: "Expired",
+  closed: "Closed",
 };
 
 const statusStyles: Record<
@@ -30,6 +32,7 @@ const statusStyles: Record<
   }
 > = {
   discovered: { variant: "secondary" },
+  selected: { variant: "secondary" },
   processing: { variant: "secondary" },
   ready: { variant: "default" },
   applied: {
@@ -40,8 +43,9 @@ const statusStyles: Record<
     variant: "outline",
     className: "text-cyan-400 border-cyan-500/30",
   },
+  backlog: { variant: "outline", className: "text-muted-foreground" },
   skipped: { variant: "destructive" },
-  expired: { variant: "outline", className: "text-muted-foreground" },
+  closed: { variant: "outline", className: "text-muted-foreground" },
 };
 
 export const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {

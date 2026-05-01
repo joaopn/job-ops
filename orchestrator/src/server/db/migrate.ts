@@ -415,6 +415,133 @@ const migrations: string[] = [
      'webhookUrl',
      'pipelineWebhookUrl'
    )`,
+
+  // 5g repost-tracking columns. Additive, idempotent via duplicate-column
+  // skip below.
+  `ALTER TABLE jobs ADD COLUMN reposted_at TEXT`,
+  `ALTER TABLE jobs ADD COLUMN repost_count INTEGER NOT NULL DEFAULT 0`,
+
+  // 5g status + outcome enum migration. Status drops `expired`, adds
+  // `selected`, `backlog`, `closed`. Outcome drops `offer_accepted`,
+  // `offer_declined`, `no_response`, adds `other`. Both enums are SQLite
+  // CHECK constraints so the table-rebuild dance is unavoidable. Existing
+  // rows are remapped:
+  //   status: 'expired'        -> 'closed' (with outcome='other')
+  //   outcome: 'no_response'   -> 'ghosted'
+  //   outcome: 'offer_accepted', 'offer_declined' -> 'other'
+  // No-op on fresh DBs (round-trip with zero rows).
+  `PRAGMA foreign_keys = OFF`,
+  `DROP TABLE IF EXISTS jobs_new`,
+  `CREATE TABLE jobs_new (
+    id TEXT PRIMARY KEY,
+    source TEXT NOT NULL DEFAULT 'linkedin',
+    source_job_id TEXT,
+    job_url_direct TEXT,
+    date_posted TEXT,
+    job_type TEXT,
+    salary_source TEXT,
+    salary_interval TEXT,
+    salary_min_amount REAL,
+    salary_max_amount REAL,
+    salary_currency TEXT,
+    is_remote INTEGER,
+    job_level TEXT,
+    job_function TEXT,
+    listing_type TEXT,
+    emails TEXT,
+    company_industry TEXT,
+    company_logo TEXT,
+    company_url_direct TEXT,
+    company_addresses TEXT,
+    company_num_employees TEXT,
+    company_revenue TEXT,
+    company_description TEXT,
+    skills TEXT,
+    experience_range TEXT,
+    company_rating REAL,
+    company_reviews_count INTEGER,
+    vacancy_count INTEGER,
+    work_from_home_type TEXT,
+    title TEXT NOT NULL,
+    employer TEXT NOT NULL,
+    employer_url TEXT,
+    job_url TEXT NOT NULL UNIQUE,
+    application_link TEXT,
+    disciplines TEXT,
+    deadline TEXT,
+    salary TEXT,
+    location TEXT,
+    location_evidence TEXT,
+    degree_required TEXT,
+    starting TEXT,
+    job_description TEXT,
+    status TEXT NOT NULL DEFAULT 'discovered' CHECK(status IN ('discovered', 'selected', 'processing', 'ready', 'applied', 'in_progress', 'backlog', 'skipped', 'closed')),
+    outcome TEXT CHECK(outcome IS NULL OR outcome IN ('rejected', 'withdrawn', 'ghosted', 'other')),
+    closed_at INTEGER,
+    suitability_score REAL,
+    suitability_reason TEXT,
+    tailored_fields TEXT NOT NULL DEFAULT '{}',
+    tailoring_matched TEXT,
+    tailoring_skipped TEXT,
+    cv_document_id TEXT REFERENCES cv_documents(id) ON DELETE SET NULL,
+    pdf_path TEXT,
+    cover_letter_draft TEXT NOT NULL DEFAULT '',
+    reposted_at TEXT,
+    repost_count INTEGER NOT NULL DEFAULT 0,
+    discovered_at TEXT NOT NULL DEFAULT (datetime('now')),
+    processed_at TEXT,
+    ready_at TEXT,
+    applied_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
+  `INSERT INTO jobs_new (
+    id, source, source_job_id, job_url_direct, date_posted, job_type,
+    salary_source, salary_interval, salary_min_amount, salary_max_amount,
+    salary_currency, is_remote, job_level, job_function, listing_type, emails,
+    company_industry, company_logo, company_url_direct, company_addresses,
+    company_num_employees, company_revenue, company_description, skills,
+    experience_range, company_rating, company_reviews_count, vacancy_count,
+    work_from_home_type, title, employer, employer_url, job_url,
+    application_link, disciplines, deadline, salary, location,
+    location_evidence, degree_required, starting, job_description, status,
+    outcome, closed_at, suitability_score, suitability_reason, tailored_fields,
+    tailoring_matched, tailoring_skipped, cv_document_id,
+    pdf_path, cover_letter_draft, reposted_at, repost_count,
+    discovered_at, processed_at, ready_at,
+    applied_at, created_at, updated_at
+  )
+  SELECT
+    id, source, source_job_id, job_url_direct, date_posted, job_type,
+    salary_source, salary_interval, salary_min_amount, salary_max_amount,
+    salary_currency, is_remote, job_level, job_function, listing_type, emails,
+    company_industry, company_logo, company_url_direct, company_addresses,
+    company_num_employees, company_revenue, company_description, skills,
+    experience_range, company_rating, company_reviews_count, vacancy_count,
+    work_from_home_type, title, employer, employer_url, job_url,
+    application_link, disciplines, deadline, salary, location,
+    location_evidence, degree_required, starting, job_description,
+    CASE WHEN status = 'expired' THEN 'closed' ELSE status END AS status,
+    CASE
+      WHEN status = 'expired' AND outcome IS NULL THEN 'other'
+      WHEN outcome = 'no_response' THEN 'ghosted'
+      WHEN outcome IN ('offer_accepted', 'offer_declined') THEN 'other'
+      ELSE outcome
+    END AS outcome,
+    closed_at, suitability_score, suitability_reason, tailored_fields,
+    tailoring_matched, tailoring_skipped, cv_document_id,
+    pdf_path, cover_letter_draft, reposted_at, repost_count,
+    discovered_at, processed_at,
+    ready_at, applied_at, created_at, updated_at
+  FROM jobs`,
+  `DROP TABLE jobs`,
+  `ALTER TABLE jobs_new RENAME TO jobs`,
+  `PRAGMA foreign_keys = ON`,
+
+  // Re-create indices dropped by the table rebuild.
+  `CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)`,
+  `CREATE INDEX IF NOT EXISTS idx_jobs_discovered_at ON jobs(discovered_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_jobs_status_discovered_at ON jobs(status, discovered_at)`,
 ];
 
 console.log("🔧 Running database migrations...");

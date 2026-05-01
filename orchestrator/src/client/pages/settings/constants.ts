@@ -8,23 +8,27 @@ import type { JobStatus } from "@shared/types";
 /** All available job statuses for clearing */
 export const ALL_JOB_STATUSES: JobStatus[] = [
   "discovered",
+  "selected",
   "processing",
   "ready",
   "applied",
   "in_progress",
+  "backlog",
   "skipped",
-  "expired",
+  "closed",
 ];
 
 /** Status descriptions for UI */
 export const STATUS_DESCRIPTIONS: Record<JobStatus, string> = {
   discovered: "Crawled but not processed",
+  selected: "Shortlisted; queued for tailoring",
   processing: "Currently generating resume",
   ready: "PDF generated, waiting for user to apply",
   applied: "Application sent",
   in_progress: "Application moved beyond applied stage",
-  skipped: "User skipped this job",
-  expired: "Deadline passed",
+  backlog: "Aged-out of inbox; revivable on repost",
+  skipped: "User skipped without applying",
+  closed: "Application concluded",
 };
 
 export type WritingStylePresetId =

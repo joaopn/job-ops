@@ -124,6 +124,8 @@ export async function getJobListItems(
     salaryMinAmount: jobs.salaryMinAmount,
     salaryMaxAmount: jobs.salaryMaxAmount,
     salaryCurrency: jobs.salaryCurrency,
+    repostedAt: jobs.repostedAt,
+    repostCount: jobs.repostCount,
     discoveredAt: jobs.discoveredAt,
     readyAt: jobs.readyAt,
     appliedAt: jobs.appliedAt,
@@ -546,12 +548,14 @@ export async function getJobStats(): Promise<Record<JobStatus, number>> {
 
   const stats: Record<JobStatus, number> = {
     discovered: 0,
+    selected: 0,
     processing: 0,
     ready: 0,
     applied: 0,
     in_progress: 0,
+    backlog: 0,
     skipped: 0,
-    expired: 0,
+    closed: 0,
   };
 
   for (const row of result) {
@@ -678,6 +682,8 @@ function mapRowToJob(row: typeof jobs.$inferSelect): Job {
     companyReviewsCount: row.companyReviewsCount ?? null,
     vacancyCount: row.vacancyCount ?? null,
     workFromHomeType: row.workFromHomeType ?? null,
+    repostedAt: row.repostedAt ?? null,
+    repostCount: row.repostCount ?? 0,
     discoveredAt: row.discoveredAt,
     processedAt: row.processedAt,
     readyAt: row.readyAt,

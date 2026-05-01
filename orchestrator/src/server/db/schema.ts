@@ -98,18 +98,25 @@ export const jobs = sqliteTable("jobs", {
   status: text("status", {
     enum: [
       "discovered",
+      "selected",
       "processing",
       "ready",
       "applied",
       "in_progress",
+      "backlog",
       "skipped",
-      "expired",
+      "closed",
     ],
   })
     .notNull()
     .default("discovered"),
   outcome: text("outcome", { enum: APPLICATION_OUTCOMES }),
   closedAt: integer("closed_at", { mode: "number" }),
+  // 5g repost tracking. `repostedAt` set whenever an import collision
+  // observes a forward `datePosted` shift; `repostCount` is incremented
+  // alongside. Backlog rows re-promote to `discovered` on the same shift.
+  repostedAt: text("reposted_at"),
+  repostCount: integer("repost_count").notNull().default(0),
   suitabilityScore: real("suitability_score"),
   suitabilityReason: text("suitability_reason"),
   tailoredFields: text("tailored_fields", { mode: "json" })

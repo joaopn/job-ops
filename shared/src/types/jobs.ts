@@ -7,13 +7,15 @@ export type { LocationEvidenceQuality } from "./location";
 export type JobLocationEvidence = LocationEvidence;
 
 export type JobStatus =
-  | "discovered" // Crawled but not processed
+  | "discovered" // Inbox: crawled but not picked
+  | "selected" // User-shortlisted; queued for tailoring
   | "processing" // Currently generating resume
   | "ready" // PDF generated, waiting for user to apply
   | "applied" // Application sent
   | "in_progress" // In process beyond initial application
-  | "skipped" // User skipped this job
-  | "expired"; // Deadline passed
+  | "backlog" // Aged-out of inbox (auto or manual); revivable on repost
+  | "skipped" // User skipped without applying
+  | "closed"; // Application concluded; outcome stored
 
 export const APPLICATION_STAGES = [
   "applied",
@@ -42,12 +44,10 @@ export const STAGE_LABELS: Record<ApplicationStage, string> = {
 export type StageTransitionTarget = ApplicationStage | "no_change";
 
 export const APPLICATION_OUTCOMES = [
-  "offer_accepted",
-  "offer_declined",
   "rejected",
   "withdrawn",
-  "no_response",
   "ghosted",
+  "other",
 ] as const;
 
 export type JobOutcome = (typeof APPLICATION_OUTCOMES)[number];
@@ -209,6 +209,10 @@ export interface Job {
   vacancyCount: number | null;
   workFromHomeType: string | null;
 
+  // Repost tracking
+  repostedAt: string | null;
+  repostCount: number;
+
   // Timestamps
   discoveredAt: string;
   processedAt: string | null;
@@ -240,6 +244,8 @@ export type JobListItem = Pick<
   | "salaryMinAmount"
   | "salaryMaxAmount"
   | "salaryCurrency"
+  | "repostedAt"
+  | "repostCount"
   | "discoveredAt"
   | "readyAt"
   | "appliedAt"
