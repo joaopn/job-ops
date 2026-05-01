@@ -52,4 +52,6 @@ export type ScoringValues = {
 
 export type PipelineSettingsValues = {
   autoTailoringEnabled: EffectiveDefault<boolean>;
+  inboxStaleThresholdDays: EffectiveDefault<number>;
+  inboxAgeoutThresholdDays: EffectiveDefault<number>;
 };

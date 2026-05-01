@@ -22,7 +22,12 @@ vi.mock("./steps", () => ({
     discoveredJobs: [],
     sourceErrors: [],
   })),
-  importJobsStep: vi.fn(async () => ({ created: 0, skipped: 0 })),
+  importJobsStep: vi.fn(async () => ({
+    created: 0,
+    skipped: 0,
+    reposted: 0,
+  })),
+  ageJobsStep: vi.fn(async () => ({ moved: 0 })),
   scoreJobsStep: vi.fn(async () => ({ unprocessedJobs: [], scoredJobs: [] })),
   selectJobsStep: vi.fn(async () => []),
   processJobsStep: vi.fn(async () => ({ processedCount: 0 })),

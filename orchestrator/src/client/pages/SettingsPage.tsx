@@ -60,6 +60,8 @@ const DEFAULT_FORM_VALUES: UpdateSettingsInput = {
   missingSalaryPenalty: null,
   autoSkipScoreThreshold: null,
   autoTailoringEnabled: null,
+  inboxStaleThresholdDays: null,
+  inboxAgeoutThresholdDays: null,
 };
 
 type LlmProviderValue = LlmProviderId | null;
@@ -182,7 +184,11 @@ const SECTION_FIELD_MAP: Record<
     "basicAuthPassword",
   ],
   display: ["showSponsorInfo", "renderMarkdownInJobDescriptions"],
-  pipeline: ["autoTailoringEnabled"],
+  pipeline: [
+    "autoTailoringEnabled",
+    "inboxStaleThresholdDays",
+    "inboxAgeoutThresholdDays",
+  ],
   "danger-zone": [],
 };
 
@@ -226,6 +232,8 @@ const NULL_SETTINGS_PAYLOAD: UpdateSettingsInput = {
   missingSalaryPenalty: null,
   autoSkipScoreThreshold: null,
   autoTailoringEnabled: null,
+  inboxStaleThresholdDays: null,
+  inboxAgeoutThresholdDays: null,
 };
 
 const mapSettingsToForm = (data: AppSettings): UpdateSettingsInput => ({
@@ -256,6 +264,8 @@ const mapSettingsToForm = (data: AppSettings): UpdateSettingsInput => ({
   missingSalaryPenalty: data.missingSalaryPenalty.override,
   autoSkipScoreThreshold: data.autoSkipScoreThreshold.override,
   autoTailoringEnabled: data.autoTailoringEnabled.override,
+  inboxStaleThresholdDays: data.inboxStaleThresholdDays.override,
+  inboxAgeoutThresholdDays: data.inboxAgeoutThresholdDays.override,
 });
 
 const normalizeString = (value: string | null | undefined) => {
@@ -355,6 +365,14 @@ const getDerivedSettings = (settings: AppSettings | null) => {
       autoTailoringEnabled: {
         effective: settings?.autoTailoringEnabled?.value ?? false,
         default: settings?.autoTailoringEnabled?.default ?? false,
+      },
+      inboxStaleThresholdDays: {
+        effective: settings?.inboxStaleThresholdDays?.value ?? 7,
+        default: settings?.inboxStaleThresholdDays?.default ?? 7,
+      },
+      inboxAgeoutThresholdDays: {
+        effective: settings?.inboxAgeoutThresholdDays?.value ?? 14,
+        default: settings?.inboxAgeoutThresholdDays?.default ?? 14,
       },
     },
   };
@@ -525,6 +543,14 @@ export const SettingsPage: React.FC = () => {
         autoTailoringEnabled: nullIfSame(
           data.autoTailoringEnabled,
           pipeline.autoTailoringEnabled.default,
+        ),
+        inboxStaleThresholdDays: nullIfSame(
+          data.inboxStaleThresholdDays,
+          pipeline.inboxStaleThresholdDays.default,
+        ),
+        inboxAgeoutThresholdDays: nullIfSame(
+          data.inboxAgeoutThresholdDays,
+          pipeline.inboxAgeoutThresholdDays.default,
         ),
         ...envPayload,
       };

@@ -5,12 +5,14 @@ import { progressHelpers } from "../progress";
 
 export async function importJobsStep(args: {
   discoveredJobs: CreateJobInput[];
-}): Promise<{ created: number; skipped: number }> {
+}): Promise<{ created: number; skipped: number; reposted: number }> {
   logger.info("Importing discovered jobs");
-  const { created, skipped } = await jobsRepo.createJobs(args.discoveredJobs);
-  logger.info("Import step complete", { created, skipped });
+  const { created, skipped, reposted } = await jobsRepo.createJobs(
+    args.discoveredJobs,
+  );
+  logger.info("Import step complete", { created, skipped, reposted });
 
   progressHelpers.importComplete(created, skipped);
 
-  return { created, skipped };
+  return { created, skipped, reposted };
 }

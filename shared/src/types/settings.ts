@@ -83,6 +83,8 @@ export interface AppSettings {
   missingSalaryPenalty: Resolved<number>;
   autoSkipScoreThreshold: Resolved<number | null>;
   autoTailoringEnabled: Resolved<boolean>;
+  inboxStaleThresholdDays: Resolved<number>;
+  inboxAgeoutThresholdDays: Resolved<number>;
 
   // Model variants (no own default, fallback to model.value):
   modelScorer: ModelResolved;

@@ -451,6 +451,26 @@ export const settingsRegistry = {
     parse: parseBitBoolOrNull,
     serialize: serializeBitBool,
   },
+  inboxStaleThresholdDays: {
+    kind: "typed" as const,
+    schema: z.number().int().min(0).max(365),
+    default: (): number => 7,
+    parse: (raw: string | undefined): number | null => {
+      const parsed = raw ? parseInt(raw, 10) : NaN;
+      return Number.isNaN(parsed) ? null : Math.min(365, Math.max(0, parsed));
+    },
+    serialize: serializeNullableNumber,
+  },
+  inboxAgeoutThresholdDays: {
+    kind: "typed" as const,
+    schema: z.number().int().min(0).max(365),
+    default: (): number => 14,
+    parse: (raw: string | undefined): number | null => {
+      const parsed = raw ? parseInt(raw, 10) : NaN;
+      return Number.isNaN(parsed) ? null : Math.min(365, Math.max(0, parsed));
+    },
+    serialize: serializeNullableNumber,
+  },
 
   // --- Model Variants ---
   modelScorer: {

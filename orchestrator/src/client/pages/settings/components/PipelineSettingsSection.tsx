@@ -4,6 +4,7 @@ import type { UpdateSettingsInput } from "@shared/settings-schema.js";
 import type React from "react";
 import { Controller, useFormContext } from "react-hook-form";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 
 type PipelineSettingsSectionProps = {
   values: PipelineSettingsValues;
@@ -15,8 +16,15 @@ type PipelineSettingsSectionProps = {
 export const PipelineSettingsSection: React.FC<
   PipelineSettingsSectionProps
 > = ({ values, isLoading, isSaving, layoutMode }) => {
-  const { autoTailoringEnabled } = values;
-  const { control } = useFormContext<UpdateSettingsInput>();
+  const {
+    autoTailoringEnabled,
+    inboxStaleThresholdDays,
+    inboxAgeoutThresholdDays,
+  } = values;
+  const {
+    control,
+    formState: { errors },
+  } = useFormContext<UpdateSettingsInput>();
 
   return (
     <SettingsSectionFrame
@@ -74,6 +82,108 @@ export const PipelineSettingsSection: React.FC<
             <div className="break-words font-mono text-xs font-semibold">
               {autoTailoringEnabled.default ? "Enabled" : "Disabled"}
             </div>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label
+            htmlFor="inboxStaleThresholdDays"
+            className="text-sm font-medium"
+          >
+            Inbox stale threshold (days)
+          </label>
+          <Controller
+            name="inboxStaleThresholdDays"
+            control={control}
+            rules={{
+              validate: (v) =>
+                v === null ||
+                v === undefined ||
+                (Number.isInteger(v) && v >= 0 && v <= 365) ||
+                "Must be between 0 and 365",
+            }}
+            render={({ field }) => (
+              <Input
+                id="inboxStaleThresholdDays"
+                type="number"
+                min={0}
+                max={365}
+                step={1}
+                placeholder={String(inboxStaleThresholdDays.default)}
+                disabled={isLoading || isSaving}
+                value={field.value ?? ""}
+                onChange={(e) => {
+                  const value = e.target.valueAsNumber;
+                  field.onChange(Number.isFinite(value) ? value : null);
+                }}
+              />
+            )}
+          />
+          {errors.inboxStaleThresholdDays && (
+            <div className="text-xs text-destructive">
+              {errors.inboxStaleThresholdDays.message as string}
+            </div>
+          )}
+          <div className="text-xs text-muted-foreground">
+            Inbox rows older than this are dimmed as stale. 0 disables visual
+            staling.
+          </div>
+          <div className="text-xs text-muted-foreground">
+            Current:{" "}
+            <span className="font-mono">
+              {inboxStaleThresholdDays.effective}
+            </span>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label
+            htmlFor="inboxAgeoutThresholdDays"
+            className="text-sm font-medium"
+          >
+            Inbox age-out threshold (days)
+          </label>
+          <Controller
+            name="inboxAgeoutThresholdDays"
+            control={control}
+            rules={{
+              validate: (v) =>
+                v === null ||
+                v === undefined ||
+                (Number.isInteger(v) && v >= 0 && v <= 365) ||
+                "Must be between 0 and 365",
+            }}
+            render={({ field }) => (
+              <Input
+                id="inboxAgeoutThresholdDays"
+                type="number"
+                min={0}
+                max={365}
+                step={1}
+                placeholder={String(inboxAgeoutThresholdDays.default)}
+                disabled={isLoading || isSaving}
+                value={field.value ?? ""}
+                onChange={(e) => {
+                  const value = e.target.valueAsNumber;
+                  field.onChange(Number.isFinite(value) ? value : null);
+                }}
+              />
+            )}
+          />
+          {errors.inboxAgeoutThresholdDays && (
+            <div className="text-xs text-destructive">
+              {errors.inboxAgeoutThresholdDays.message as string}
+            </div>
+          )}
+          <div className="text-xs text-muted-foreground">
+            Inbox rows older than this auto-move to Backlog at the start of the
+            next pipeline run. 0 disables auto-aging.
+          </div>
+          <div className="text-xs text-muted-foreground">
+            Current:{" "}
+            <span className="font-mono">
+              {inboxAgeoutThresholdDays.effective}
+            </span>
           </div>
         </div>
       </div>

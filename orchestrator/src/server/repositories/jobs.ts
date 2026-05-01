@@ -413,14 +413,21 @@ async function tryInsertJob(input: CreateJobInput): Promise<Job | null> {
 
 /**
  * Create jobs (or return existing jobs for duplicate URLs).
+ *
+ * On URL collision in the bulk path, if the incoming row carries a newer
+ * `datePosted` than the existing row, treat it as a repost: bump
+ * `repostCount`, set `repostedAt = now`, advance `datePosted`, and re-promote
+ * the row to `discovered` if it had aged into `backlog`. All other statuses
+ * keep their position so user-driven state (`selected`, `skipped`, `closed`,
+ * etc.) is sacred.
  */
 export async function createJobs(input: CreateJobInput): Promise<Job>;
 export async function createJobs(
   inputs: CreateJobInput[],
-): Promise<{ created: number; skipped: number }>;
+): Promise<{ created: number; skipped: number; reposted: number }>;
 export async function createJobs(
   inputOrInputs: CreateJobInput | CreateJobInput[],
-): Promise<Job | { created: number; skipped: number }> {
+): Promise<Job | { created: number; skipped: number; reposted: number }> {
   if (!Array.isArray(inputOrInputs)) {
     const inserted = await tryInsertJob(inputOrInputs);
     if (inserted) return inserted;
@@ -448,21 +455,52 @@ export async function createJobs(
 
   let created = 0;
   let skipped = 0;
+  let reposted = 0;
 
   const uniqueUrls = Array.from(byUrl.keys());
   if (uniqueUrls.length === 0) {
-    return { created, skipped };
+    return { created, skipped, reposted };
   }
 
   const existingRows = await db
-    .select({ jobUrl: jobs.jobUrl })
+    .select({
+      id: jobs.id,
+      jobUrl: jobs.jobUrl,
+      datePosted: jobs.datePosted,
+      status: jobs.status,
+      repostCount: jobs.repostCount,
+    })
     .from(jobs)
     .where(inArray(jobs.jobUrl, uniqueUrls));
-  const existingUrlSet = new Set(existingRows.map((row) => row.jobUrl));
+  const existingByUrl = new Map(existingRows.map((row) => [row.jobUrl, row]));
 
   for (const { input, count } of byUrl.values()) {
-    if (existingUrlSet.has(input.jobUrl)) {
-      skipped += count;
+    const existing = existingByUrl.get(input.jobUrl);
+    if (existing) {
+      const incomingDate = input.datePosted ?? null;
+      const isForwardShift =
+        incomingDate !== null &&
+        existing.datePosted !== null &&
+        incomingDate > existing.datePosted;
+      if (isForwardShift) {
+        const now = new Date().toISOString();
+        const nextStatus =
+          existing.status === "backlog" ? "discovered" : existing.status;
+        await db
+          .update(jobs)
+          .set({
+            datePosted: incomingDate,
+            repostedAt: now,
+            repostCount: existing.repostCount + 1,
+            status: nextStatus,
+            updatedAt: now,
+          })
+          .where(eq(jobs.id, existing.id));
+        reposted += 1;
+        skipped += count - 1;
+      } else {
+        skipped += count;
+      }
       continue;
     }
 
@@ -476,7 +514,7 @@ export async function createJobs(
     skipped += count - 1;
   }
 
-  return { created, skipped };
+  return { created, skipped, reposted };
 }
 
 /**
