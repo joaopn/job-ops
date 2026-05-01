@@ -3,7 +3,7 @@ import type {
   LocationMatchStrictness,
   LocationSearchScope,
 } from "../location-preferences";
-import type { Job, JobStatus } from "./jobs";
+import type { Job, JobOutcome, JobStatus } from "./jobs";
 import type { LocationIntent } from "./location";
 
 export interface PipelineConfig {
@@ -143,11 +143,25 @@ export interface JobsRevisionResponse {
   statusFilter: string | null;
 }
 
-export type JobAction = "skip" | "move_to_ready" | "rescore";
+export type JobAction =
+  | "skip"
+  | "move_to_ready"
+  | "rescore"
+  | "move_to_selected"
+  | "unselect"
+  | "move_to_backlog"
+  | "mark_closed"
+  | "reopen";
 
 export type JobActionRequest =
   | {
-      action: "skip" | "rescore";
+      action:
+        | "skip"
+        | "rescore"
+        | "move_to_selected"
+        | "unselect"
+        | "move_to_backlog"
+        | "reopen";
       jobIds: string[];
     }
   | {
@@ -155,6 +169,13 @@ export type JobActionRequest =
       jobIds: string[];
       options?: {
         force?: boolean;
+      };
+    }
+  | {
+      action: "mark_closed";
+      jobIds: string[];
+      options: {
+        outcome: JobOutcome;
       };
     };
 

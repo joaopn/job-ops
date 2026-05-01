@@ -27,6 +27,7 @@ import {
   type JobActionResult,
   type JobActionStreamEvent,
   type JobListItem,
+  type JobOutcome,
   type JobStatus,
   type JobsListResponse,
   type JobsRevisionResponse,
@@ -103,6 +104,29 @@ const jobActionRequestSchema = z.discriminatedUnion("action", [
       })
       .optional(),
   }),
+  z.object({
+    action: z.literal("move_to_selected"),
+    jobIds: z.array(z.string().min(1)).min(1).max(100),
+  }),
+  z.object({
+    action: z.literal("unselect"),
+    jobIds: z.array(z.string().min(1)).min(1).max(100),
+  }),
+  z.object({
+    action: z.literal("move_to_backlog"),
+    jobIds: z.array(z.string().min(1)).min(1).max(100),
+  }),
+  z.object({
+    action: z.literal("mark_closed"),
+    jobIds: z.array(z.string().min(1)).min(1).max(100),
+    options: z.object({
+      outcome: z.enum(APPLICATION_OUTCOMES),
+    }),
+  }),
+  z.object({
+    action: z.literal("reopen"),
+    jobIds: z.array(z.string().min(1)).min(1).max(100),
+  }),
 ]);
 
 const listJobsQuerySchema = z.object({
@@ -116,7 +140,29 @@ const jobsRevisionQuerySchema = z.object({
 
 const SKIPPABLE_STATUSES: ReadonlySet<JobStatus> = new Set([
   "discovered",
+  "selected",
   "ready",
+  "backlog",
+]);
+
+const SELECTABLE_FROM_STATUSES: ReadonlySet<JobStatus> = new Set([
+  "discovered",
+  "backlog",
+]);
+
+const BACKLOG_FROM_STATUSES: ReadonlySet<JobStatus> = new Set([
+  "discovered",
+  "selected",
+]);
+
+const REOPENABLE_STATUSES: ReadonlySet<JobStatus> = new Set([
+  "skipped",
+  "closed",
+]);
+
+const CLOSABLE_STATUSES: ReadonlySet<JobStatus> = new Set([
+  "applied",
+  "in_progress",
 ]);
 const JOBS_BENCHMARK_ENABLED =
   process.env.BENCHMARK_JOBS_TIMING === "1" ||
@@ -189,6 +235,7 @@ type JobActionExecutionOptions = {
   getBriefForRescore?: () => Promise<string>;
   forceMoveToReady?: boolean;
   requestOrigin?: string | null;
+  markClosedOutcome?: JobOutcome;
 };
 
 function createSharedRescoreBriefLoader(): () => Promise<string> {
@@ -222,11 +269,15 @@ async function executeJobActionForJob(
         throw badRequest(`Job is not skippable from status "${job.status}"`, {
           jobId,
           status: job.status,
-          allowedStatuses: ["discovered", "ready"],
+          allowedStatuses: Array.from(SKIPPABLE_STATUSES),
         });
       }
 
-      const updated = await jobsRepo.updateJob(jobId, { status: "skipped" });
+      const updated = await jobsRepo.updateJob(jobId, {
+        status: "skipped",
+        outcome: null,
+        closedAt: null,
+      });
       if (!updated) {
         throw new AppError({
           status: 404,
@@ -239,13 +290,13 @@ async function executeJobActionForJob(
     }
 
     if (action === "move_to_ready") {
-      if (job.status !== "discovered") {
+      if (job.status !== "discovered" && job.status !== "selected") {
         throw badRequest(
           `Job is not movable to Ready from status "${job.status}"`,
           {
             jobId,
             status: job.status,
-            requiredStatus: "discovered",
+            allowedStatuses: ["discovered", "selected"],
           },
         );
       }
@@ -268,6 +319,131 @@ async function executeJobActionForJob(
           status: 404,
           code: "NOT_FOUND",
           message: "Job not found after processing",
+        });
+      }
+
+      return { jobId, ok: true, job: updated };
+    }
+
+    if (action === "move_to_selected") {
+      if (!SELECTABLE_FROM_STATUSES.has(job.status)) {
+        throw badRequest(
+          `Job is not movable to Selected from status "${job.status}"`,
+          {
+            jobId,
+            status: job.status,
+            allowedStatuses: Array.from(SELECTABLE_FROM_STATUSES),
+          },
+        );
+      }
+
+      const updated = await jobsRepo.updateJob(jobId, { status: "selected" });
+      if (!updated) {
+        throw new AppError({
+          status: 404,
+          code: "NOT_FOUND",
+          message: "Job not found",
+        });
+      }
+
+      return { jobId, ok: true, job: updated };
+    }
+
+    if (action === "unselect") {
+      if (job.status !== "selected") {
+        throw badRequest(
+          `Job is not unselectable from status "${job.status}"`,
+          {
+            jobId,
+            status: job.status,
+            requiredStatus: "selected",
+          },
+        );
+      }
+
+      const updated = await jobsRepo.updateJob(jobId, { status: "discovered" });
+      if (!updated) {
+        throw new AppError({
+          status: 404,
+          code: "NOT_FOUND",
+          message: "Job not found",
+        });
+      }
+
+      return { jobId, ok: true, job: updated };
+    }
+
+    if (action === "move_to_backlog") {
+      if (!BACKLOG_FROM_STATUSES.has(job.status)) {
+        throw badRequest(
+          `Job is not movable to Backlog from status "${job.status}"`,
+          {
+            jobId,
+            status: job.status,
+            allowedStatuses: Array.from(BACKLOG_FROM_STATUSES),
+          },
+        );
+      }
+
+      const updated = await jobsRepo.updateJob(jobId, { status: "backlog" });
+      if (!updated) {
+        throw new AppError({
+          status: 404,
+          code: "NOT_FOUND",
+          message: "Job not found",
+        });
+      }
+
+      return { jobId, ok: true, job: updated };
+    }
+
+    if (action === "mark_closed") {
+      if (!CLOSABLE_STATUSES.has(job.status)) {
+        throw badRequest(`Job is not closable from status "${job.status}"`, {
+          jobId,
+          status: job.status,
+          allowedStatuses: Array.from(CLOSABLE_STATUSES),
+        });
+      }
+      if (!options?.markClosedOutcome) {
+        throw badRequest("Mark closed requires an outcome", { jobId });
+      }
+
+      const updated = await jobsRepo.updateJob(jobId, {
+        status: "closed",
+        outcome: options.markClosedOutcome,
+        closedAt: Math.floor(Date.now() / 1000),
+      });
+      if (!updated) {
+        throw new AppError({
+          status: 404,
+          code: "NOT_FOUND",
+          message: "Job not found",
+        });
+      }
+
+      return { jobId, ok: true, job: updated };
+    }
+
+    if (action === "reopen") {
+      if (!REOPENABLE_STATUSES.has(job.status)) {
+        throw badRequest(`Job is not reopenable from status "${job.status}"`, {
+          jobId,
+          status: job.status,
+          allowedStatuses: Array.from(REOPENABLE_STATUSES),
+        });
+      }
+
+      const updated = await jobsRepo.updateJob(jobId, {
+        status: "selected",
+        outcome: null,
+        closedAt: null,
+      });
+      if (!updated) {
+        throw new AppError({
+          status: 404,
+          code: "NOT_FOUND",
+          message: "Job not found",
         });
       }
 
@@ -507,6 +683,9 @@ jobsRouter.post("/actions", async (req: Request, res: Response) => {
         ? { forceMoveToReady: parsed.options.force }
         : {}),
       ...(parsed.action === "move_to_ready" ? { requestOrigin } : {}),
+      ...(parsed.action === "mark_closed"
+        ? { markClosedOutcome: parsed.options.outcome }
+        : {}),
     };
 
     const results = await asyncPool({
@@ -576,13 +755,17 @@ jobsRouter.post("/actions/stream", async (req: Request, res: Response) => {
   const requestId = String(res.getHeader("x-request-id") || "unknown");
   const action = parsed.data.action;
   const executionOptions: JobActionExecutionOptions = {
-    ...(action === "rescore"
+    ...(parsed.data.action === "rescore"
       ? { getBriefForRescore: createSharedRescoreBriefLoader() }
       : {}),
-    ...(action === "move_to_ready" && parsed.data.options?.force !== undefined
+    ...(parsed.data.action === "move_to_ready" &&
+    parsed.data.options?.force !== undefined
       ? { forceMoveToReady: parsed.data.options.force }
       : {}),
-    ...(action === "move_to_ready" ? { requestOrigin } : {}),
+    ...(parsed.data.action === "move_to_ready" ? { requestOrigin } : {}),
+    ...(parsed.data.action === "mark_closed"
+      ? { markClosedOutcome: parsed.data.options.outcome }
+      : {}),
   };
   const requested = dedupedJobIds.length;
   const results: JobActionResult[] = [];

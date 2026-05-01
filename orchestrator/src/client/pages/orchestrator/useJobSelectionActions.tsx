@@ -22,12 +22,22 @@ const jobActionLabel: Record<JobAction, string> = {
   move_to_ready: "Tailoring selected jobs...",
   skip: "Skipping selected jobs...",
   rescore: "Calculating match scores...",
+  move_to_selected: "Moving to Selected...",
+  unselect: "Unselecting...",
+  move_to_backlog: "Moving to Backlog...",
+  mark_closed: "Closing applications...",
+  reopen: "Reopening...",
 };
 
 const jobActionSuccessLabel: Record<JobAction, string> = {
   move_to_ready: "jobs tailored",
   skip: "jobs skipped",
   rescore: "matches recalculated",
+  move_to_selected: "jobs moved to Selected",
+  unselect: "jobs unselected",
+  move_to_backlog: "jobs moved to Backlog",
+  mark_closed: "applications closed",
+  reopen: "jobs reopened",
 };
 
 interface UseJobSelectionActionsArgs {
@@ -138,7 +148,10 @@ export function useJobSelectionActions({
   }, []);
 
   const runJobAction = useCallback(
-    async (action: JobAction) => {
+    // mark_closed needs an outcome; 5g.3b adds a dedicated path through
+    // MarkClosedPopover. The bulk progress-toast hook only handles
+    // option-less variants.
+    async (action: Exclude<JobAction, "mark_closed">) => {
       const selectedAtStart = Array.from(selectedJobIds);
       if (selectedAtStart.length === 0) return;
       if (selectedAtStart.length > MAX_JOB_ACTION_JOB_IDS) {
