@@ -451,6 +451,13 @@ export const settingsRegistry = {
     parse: parseBitBoolOrNull,
     serialize: serializeBitBool,
   },
+  enableJobScoring: {
+    kind: "typed" as const,
+    schema: z.boolean(),
+    default: (): boolean => true,
+    parse: parseBitBoolOrNull,
+    serialize: serializeBitBool,
+  },
   inboxStaleThresholdDays: {
     kind: "typed" as const,
     schema: z.number().int().min(0).max(365),

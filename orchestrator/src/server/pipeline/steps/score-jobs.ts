@@ -13,6 +13,17 @@ export async function scoreJobsStep(args: {
   brief: string;
   shouldCancel?: () => boolean;
 }): Promise<{ unprocessedJobs: Job[]; scoredJobs: ScoredJob[] }> {
+  const enableJobScoringRaw =
+    await settingsRepo.getSetting("enableJobScoring");
+  const scoringEnabled = enableJobScoringRaw === null
+    ? true
+    : enableJobScoringRaw === "1" || enableJobScoringRaw === "true";
+
+  if (!scoringEnabled) {
+    logger.info("Scoring step disabled by setting");
+    return { unprocessedJobs: [], scoredJobs: [] };
+  }
+
   logger.info("Running scoring step");
   const unprocessedJobs = await jobsRepo.getUnscoredDiscoveredJobs();
 

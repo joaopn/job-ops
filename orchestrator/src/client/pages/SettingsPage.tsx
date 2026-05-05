@@ -61,6 +61,7 @@ const DEFAULT_FORM_VALUES: UpdateSettingsInput = {
   missingSalaryPenalty: null,
   autoSkipScoreThreshold: null,
   autoTailoringEnabled: null,
+  enableJobScoring: null,
   inboxStaleThresholdDays: null,
   inboxAgeoutThresholdDays: null,
 };
@@ -207,6 +208,7 @@ const SECTION_FIELD_MAP: Record<
   display: ["showSponsorInfo", "renderMarkdownInJobDescriptions"],
   pipeline: [
     "autoTailoringEnabled",
+    "enableJobScoring",
     "inboxStaleThresholdDays",
     "inboxAgeoutThresholdDays",
   ],
@@ -254,6 +256,7 @@ const NULL_SETTINGS_PAYLOAD: UpdateSettingsInput = {
   missingSalaryPenalty: null,
   autoSkipScoreThreshold: null,
   autoTailoringEnabled: null,
+  enableJobScoring: null,
   inboxStaleThresholdDays: null,
   inboxAgeoutThresholdDays: null,
 };
@@ -286,6 +289,7 @@ const mapSettingsToForm = (data: AppSettings): UpdateSettingsInput => ({
   missingSalaryPenalty: data.missingSalaryPenalty.override,
   autoSkipScoreThreshold: data.autoSkipScoreThreshold.override,
   autoTailoringEnabled: data.autoTailoringEnabled.override,
+  enableJobScoring: data.enableJobScoring.override,
   inboxStaleThresholdDays: data.inboxStaleThresholdDays.override,
   inboxAgeoutThresholdDays: data.inboxAgeoutThresholdDays.override,
 });
@@ -387,6 +391,10 @@ const getDerivedSettings = (settings: AppSettings | null) => {
       autoTailoringEnabled: {
         effective: settings?.autoTailoringEnabled?.value ?? false,
         default: settings?.autoTailoringEnabled?.default ?? false,
+      },
+      enableJobScoring: {
+        effective: settings?.enableJobScoring?.value ?? true,
+        default: settings?.enableJobScoring?.default ?? true,
       },
       inboxStaleThresholdDays: {
         effective: settings?.inboxStaleThresholdDays?.value ?? 7,
@@ -565,6 +573,10 @@ export const SettingsPage: React.FC = () => {
         autoTailoringEnabled: nullIfSame(
           data.autoTailoringEnabled,
           pipeline.autoTailoringEnabled.default,
+        ),
+        enableJobScoring: nullIfSame(
+          data.enableJobScoring,
+          pipeline.enableJobScoring.default,
         ),
         inboxStaleThresholdDays: nullIfSame(
           data.inboxStaleThresholdDays,

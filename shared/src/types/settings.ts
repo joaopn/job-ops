@@ -83,6 +83,7 @@ export interface AppSettings {
   missingSalaryPenalty: Resolved<number>;
   autoSkipScoreThreshold: Resolved<number | null>;
   autoTailoringEnabled: Resolved<boolean>;
+  enableJobScoring: Resolved<boolean>;
   inboxStaleThresholdDays: Resolved<number>;
   inboxAgeoutThresholdDays: Resolved<number>;
 

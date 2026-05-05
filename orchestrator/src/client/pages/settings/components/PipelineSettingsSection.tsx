@@ -18,6 +18,7 @@ export const PipelineSettingsSection: React.FC<
 > = ({ values, isLoading, isSaving, layoutMode }) => {
   const {
     autoTailoringEnabled,
+    enableJobScoring,
     inboxStaleThresholdDays,
     inboxAgeoutThresholdDays,
   } = values;
@@ -82,6 +83,38 @@ export const PipelineSettingsSection: React.FC<
             <div className="break-words font-mono text-xs font-semibold">
               {autoTailoringEnabled.default ? "Enabled" : "Disabled"}
             </div>
+          </div>
+        </div>
+
+        <div className="flex items-start space-x-3">
+          <Controller
+            name="enableJobScoring"
+            control={control}
+            render={({ field }) => (
+              <Checkbox
+                id="enableJobScoring"
+                checked={field.value ?? enableJobScoring.default}
+                onCheckedChange={(checked) => {
+                  field.onChange(
+                    checked === "indeterminate" ? null : checked === true,
+                  );
+                }}
+                disabled={isLoading || isSaving}
+              />
+            )}
+          />
+          <div className="flex flex-col gap-1.5">
+            <label
+              htmlFor="enableJobScoring"
+              className="text-sm font-medium leading-none cursor-pointer"
+            >
+              Score discovered jobs with the LLM
+            </label>
+            <p className="text-xs text-muted-foreground">
+              When on (default), each new job is scored 0–100 for fit and gets a
+              one-line reason. Turn off to skip the LLM scoring step entirely;
+              jobs land in the inbox unscored and you triage them manually.
+            </p>
           </div>
         </div>
 

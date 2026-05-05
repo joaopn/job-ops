@@ -204,6 +204,7 @@ export const createAppSettings = (
   missingSalaryPenalty: { value: 10, default: 10, override: null },
   autoSkipScoreThreshold: { value: null, default: null, override: null },
   autoTailoringEnabled: { value: false, default: false, override: null },
+  enableJobScoring: { value: true, default: true, override: null },
   inboxStaleThresholdDays: { value: 7, default: 7, override: null },
   inboxAgeoutThresholdDays: { value: 14, default: 14, override: null },
   ...overrides,

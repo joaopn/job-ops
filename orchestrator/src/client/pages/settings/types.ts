@@ -52,6 +52,7 @@ export type ScoringValues = {
 
 export type PipelineSettingsValues = {
   autoTailoringEnabled: EffectiveDefault<boolean>;
+  enableJobScoring: EffectiveDefault<boolean>;
   inboxStaleThresholdDays: EffectiveDefault<number>;
   inboxAgeoutThresholdDays: EffectiveDefault<number>;
 };
