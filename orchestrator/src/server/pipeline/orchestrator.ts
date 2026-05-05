@@ -389,16 +389,16 @@ export async function summarizeJob(
       });
 
       if (!adjust.success) {
-        jobLogger.warn("cv-adjust failed; pinning CV with no overrides", {
-          error: adjust.error,
-        });
-        await jobsRepo.updateJob(job.id, {
-          cvDocumentId: cv.id,
-          tailoredFields: {},
-          tailoringMatched: [],
-          tailoringSkipped: [],
-        });
-        return { success: true };
+        // Hard-fail. The previous "pin with no overrides" fallback shipped
+        // a baseline-identical PDF as if it were tailored.
+        jobLogger.error(
+          "Tailoring failed; refusing to ship a baseline-identical PDF",
+          { error: adjust.error },
+        );
+        return {
+          success: false,
+          error: `Tailoring failed: ${adjust.error}`,
+        };
       }
 
       const fieldIds = new Set(cv.fields.map((field) => field.id));
@@ -409,9 +409,26 @@ export async function summarizeJob(
         }
       }
 
-      jobLogger.info("cv-adjust applied", {
+      if (Object.keys(overrides).length === 0) {
+        jobLogger.error(
+          "Tailoring returned changes but none matched the active CV's fields",
+          {
+            proposedCount: adjust.patches.length,
+            cvFieldCount: cv.fields.length,
+            proposedFieldIds: adjust.patches.slice(0, 10).map((p) => p.fieldId),
+            knownCvFieldIds: cv.fields.slice(0, 5).map((f) => f.id),
+          },
+        );
+        return {
+          success: false,
+          error:
+            "Tailoring produced no usable changes — every proposed change targeted a CV field that doesn't exist in the active CV.",
+        };
+      }
+
+      jobLogger.info("Tailoring applied", {
         cvDocumentId: cv.id,
-        adjustPatchCount: adjust.patches.length,
+        proposedCount: adjust.patches.length,
         overrideCount: Object.keys(overrides).length,
         cvFieldCount: cv.fields.length,
         matched: adjust.matched.length,
@@ -462,7 +479,21 @@ export async function generateFinalPdf(
         };
       }
 
-      await jobsRepo.updateJob(job.id, { status: "processing" });
+      // Status mutation only applies to the initial tailoring funnel
+      // (discovered / selected → processing → ready). Re-tailoring a job
+      // that's already past tailoring (ready / applied / in_progress /
+      // closed / backlog / skipped) must preserve status: the user is
+      // refreshing the PDF, not re-promoting the job. The previous
+      // unconditional flip-to-processing → revert-to-discovered path
+      // silently moved closed jobs into the Inbox tab, making them appear
+      // to vanish.
+      const originalStatus = job.status;
+      const isInitialTailoringFunnel =
+        originalStatus === "discovered" || originalStatus === "selected";
+
+      if (isInitialTailoringFunnel) {
+        await jobsRepo.updateJob(job.id, { status: "processing" });
+      }
 
       const pdfResult = await generatePdf({
         jobId: job.id,
@@ -471,14 +502,20 @@ export async function generateFinalPdf(
       });
 
       if (!pdfResult.success) {
-        await jobsRepo.updateJob(job.id, { status: "discovered" });
+        if (isInitialTailoringFunnel) {
+          await jobsRepo.updateJob(job.id, { status: originalStatus });
+        }
         return { success: false, error: pdfResult.error };
       }
 
-      await jobsRepo.updateJob(job.id, {
-        status: "ready",
-        pdfPath: pdfResult.pdfPath,
-      });
+      if (isInitialTailoringFunnel) {
+        await jobsRepo.updateJob(job.id, {
+          status: "ready",
+          pdfPath: pdfResult.pdfPath,
+        });
+      } else {
+        await jobsRepo.updateJob(job.id, { pdfPath: pdfResult.pdfPath });
+      }
 
       return { success: true };
     } catch (error) {

@@ -3,7 +3,10 @@ import { join } from "node:path";
 import { logger } from "@infra/logger";
 import { getDataDir } from "@server/config/dataDir";
 import * as cvRepo from "@server/repositories/cv-documents";
-import { renderCv, RenderCvError } from "@server/services/cv/render";
+import {
+  RenderTemplateError,
+  renderTemplate,
+} from "@server/services/cv/render-template";
 import {
   RunTectonicError,
   runTectonic,
@@ -14,8 +17,9 @@ export interface GeneratePdfArgs {
   jobId: string;
   cvDocumentId: string;
   /**
-   * Per-field overrides. Empty/missing → render the original `flattened_tex`
-   * byte-for-byte.
+   * Per-field overrides. Empty/missing → render `templatedTex` against
+   * `defaultFieldValues` only, producing a PDF equivalent to the original
+   * source CV.
    */
   overrides?: CvFieldOverrides;
 }
@@ -36,41 +40,74 @@ export async function generatePdf(args: GeneratePdfArgs): Promise<PdfResult> {
     return { success: false, error: "CV archive missing for document." };
   }
 
+  // Render the rendered-template via literal placeholder replacement.
+  // The legacy cursor-walk path is retired — it silently dropped overrides
+  // whenever the extracted field value didn't match the source byte-for-
+  // byte, which produced baseline-identical "tailored" PDFs.
+  if (!document.templatedTex || document.templatedTex.trim().length === 0) {
+    return {
+      success: false,
+      error:
+        "This CV does not have an extracted template yet. Re-upload the CV from the CV page to rebuild it.",
+    };
+  }
+
+  const overrides = args.overrides ?? {};
+  const effectiveValues: CvFieldOverrides = {
+    ...document.defaultFieldValues,
+    ...overrides,
+  };
+
   let renderedTex: string;
   try {
-    renderedTex = renderCv(
-      document.flattenedTex,
-      document.fields,
-      args.overrides ?? {},
-    );
+    renderedTex = renderTemplate(document.templatedTex, effectiveValues);
   } catch (error) {
-    if (error instanceof RenderCvError) {
-      return { success: false, error: `Template render failed: ${error.message}` };
+    if (error instanceof RenderTemplateError) {
+      return {
+        success: false,
+        error: `Could not render the CV template: ${error.message}`,
+      };
     }
     throw error;
   }
 
-  const overrideCount = Object.keys(args.overrides ?? {}).length;
-  const identicalToBaseline = renderedTex === document.flattenedTex;
+  const overrideCount = Object.keys(overrides).length;
+  const baselineRender = renderTemplate(
+    document.templatedTex,
+    document.defaultFieldValues,
+  );
+  const identicalToBaseline = renderedTex === baselineRender;
   logger.info("CV render result", {
     jobId: args.jobId,
     cvDocumentId: args.cvDocumentId,
     overrideCount,
     cvFieldCount: document.fields.length,
-    flattenedTexLength: document.flattenedTex.length,
+    templatedTexLength: document.templatedTex.length,
     renderedTexLength: renderedTex.length,
     identicalToBaseline,
   });
+
+  // Hard-fail when overrides were supplied but the rendered output equals
+  // the default-substituted baseline. Either every tailored field was
+  // missing from the CV's extracted fields OR every tailored value was
+  // identical to the original. Shipping a baseline PDF as a "tailored" one
+  // is forbidden.
   if (overrideCount > 0 && identicalToBaseline) {
-    logger.warn(
-      "CV render produced byte-identical output despite overrides — fieldId mismatch or unfindable values",
+    const overrideIds = Object.keys(overrides);
+    const knownFieldIds = document.fields.slice(0, 5).map((f) => f.id);
+    logger.error(
+      "Tailoring produced no actual change to the CV — failing hard",
       {
         jobId: args.jobId,
         cvDocumentId: args.cvDocumentId,
-        overrideIds: Object.keys(args.overrides ?? {}).slice(0, 10),
-        cvFieldIdSample: document.fields.slice(0, 5).map((f) => f.id),
+        overrideIds: overrideIds.slice(0, 10),
+        knownFieldIds,
       },
     );
+    return {
+      success: false,
+      error: `Tailoring produced no actual change to the CV. The ${overrideCount} proposed change(s) either targeted unknown CV fields or matched the original values exactly. Try re-uploading the CV from the CV page.`,
+    };
   }
 
   const pdfDir = join(getDataDir(), "pdfs");

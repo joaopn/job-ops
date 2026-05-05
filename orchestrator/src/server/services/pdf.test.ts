@@ -12,12 +12,11 @@ const SAMPLE_FIELDS: CvField[] = [
 const FAKE_CV: CvDocument = {
   id: "cv-1",
   name: "Ada CV",
-  flattenedTex:
-    "\\documentclass{article}\n\\name{Ada Lovelace}\n",
+  flattenedTex: "\\documentclass{article}\n\\name{Ada Lovelace}\n",
   fields: SAMPLE_FIELDS,
   personalBrief: "",
-  templatedTex: "",
-  defaultFieldValues: {},
+  templatedTex: "\\documentclass{article}\n\\name{«basics.name»}\n",
+  defaultFieldValues: { "basics.name": "Ada Lovelace" },
   lastCompileStderr: null,
   compileAttempts: 0,
   extractionPrompt: "",
@@ -30,16 +29,6 @@ vi.mock("@server/repositories/cv-documents", () => ({
   getCvDocumentArchive: vi.fn(),
 }));
 
-vi.mock("@server/services/cv/render", async () => {
-  const actual = await vi.importActual<typeof import("@server/services/cv/render")>(
-    "@server/services/cv/render",
-  );
-  return {
-    ...actual,
-    renderCv: vi.fn(),
-  };
-});
-
 vi.mock("@server/services/cv/run-tectonic", async () => {
   const actual = await vi.importActual<
     typeof import("@server/services/cv/run-tectonic")
@@ -51,7 +40,6 @@ vi.mock("@server/services/cv/run-tectonic", async () => {
 });
 
 import * as cvRepo from "@server/repositories/cv-documents";
-import { RenderCvError, renderCv } from "@server/services/cv/render";
 import { RunTectonicError, runTectonic } from "@server/services/cv/run-tectonic";
 import { generatePdf } from "./pdf";
 
@@ -64,7 +52,6 @@ beforeEach(async () => {
   vi.mocked(cvRepo.getCvDocumentArchive).mockResolvedValue(
     Buffer.from("\\documentclass{article}\n", "utf8"),
   );
-  vi.mocked(renderCv).mockReturnValue(FAKE_CV.flattenedTex);
   vi.mocked(runTectonic).mockResolvedValue({
     pdf: new Uint8Array([0x25, 0x50, 0x44, 0x46]),
     log: "",
@@ -77,7 +64,7 @@ afterEach(async () => {
 });
 
 describe("generatePdf", () => {
-  it("renders the source verbatim and writes a PDF when no overrides are supplied", async () => {
+  it("renders the templated CV with default field values when no overrides are supplied", async () => {
     const result = await generatePdf({
       jobId: "job-42",
       cvDocumentId: "cv-1",
@@ -90,25 +77,61 @@ describe("generatePdf", () => {
     const written = await fs.readFile(expectedPath);
     expect(written.subarray(0, 4).toString("ascii")).toBe("%PDF");
 
-    expect(renderCv).toHaveBeenCalledWith(
-      FAKE_CV.flattenedTex,
-      SAMPLE_FIELDS,
-      {},
+    expect(runTectonic).toHaveBeenCalledWith(
+      expect.objectContaining({
+        renderedTex: "\\documentclass{article}\n\\name{Ada Lovelace}\n",
+      }),
     );
   });
 
-  it("threads field overrides into the renderer", async () => {
-    await generatePdf({
+  it("substitutes overrides on top of defaults via the «marker» path", async () => {
+    const result = await generatePdf({
       jobId: "job-43",
       cvDocumentId: "cv-1",
       overrides: { "basics.name": "Ada L. Byron" },
     });
 
-    expect(renderCv).toHaveBeenCalledWith(
-      FAKE_CV.flattenedTex,
-      SAMPLE_FIELDS,
-      { "basics.name": "Ada L. Byron" },
+    expect(result.success).toBe(true);
+    expect(runTectonic).toHaveBeenCalledWith(
+      expect.objectContaining({
+        renderedTex: "\\documentclass{article}\n\\name{Ada L. Byron}\n",
+      }),
     );
+  });
+
+  it("hard-fails when overrides are non-empty but the rendered tex equals the default-substituted baseline", async () => {
+    vi.mocked(cvRepo.getCvDocumentById).mockResolvedValueOnce({
+      ...FAKE_CV,
+      // CV with a marker the override doesn't address — render falls back
+      // to defaults and is identical to the default-only baseline.
+      templatedTex: "\\documentclass{article}\n\\name{«basics.name»}\n",
+      defaultFieldValues: { "basics.name": "Ada Lovelace" },
+    });
+
+    const result = await generatePdf({
+      jobId: "job-44",
+      cvDocumentId: "cv-1",
+      overrides: { "ghost.field": "ignored" },
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/no actual change to the CV/);
+  });
+
+  it("hard-fails when the CV has no templatedTex (legacy upload)", async () => {
+    vi.mocked(cvRepo.getCvDocumentById).mockResolvedValueOnce({
+      ...FAKE_CV,
+      templatedTex: "",
+      defaultFieldValues: {},
+    });
+
+    const result = await generatePdf({
+      jobId: "job-45",
+      cvDocumentId: "cv-1",
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/does not have an extracted template/);
   });
 
   it("returns a failure when the CV document does not exist", async () => {
@@ -119,18 +142,6 @@ describe("generatePdf", () => {
     });
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/CV document not found/);
-  });
-
-  it("returns a failure when the renderer throws", async () => {
-    vi.mocked(renderCv).mockImplementationOnce(() => {
-      throw new RenderCvError("forbidden", "FORBIDDEN_PATTERN");
-    });
-    const result = await generatePdf({
-      jobId: "job-1",
-      cvDocumentId: "cv-1",
-    });
-    expect(result.success).toBe(false);
-    expect(result.error).toMatch(/Template render failed/);
   });
 
   it("returns a failure when tectonic exits non-zero", async () => {

@@ -148,7 +148,7 @@ export async function llmAdjustContent(
   if (typeof patchesJson !== "string" || patchesJson.trim().length === 0) {
     return {
       success: false,
-      error: "LLM returned empty or non-string patchesJson.",
+      error: "The model returned an empty list of changes.",
     };
   }
 
@@ -158,14 +158,14 @@ export async function llmAdjustContent(
   } catch (error) {
     return {
       success: false,
-      error: `LLM returned patchesJson that is not parseable JSON: ${error instanceof Error ? error.message : String(error)}`,
+      error: `The model returned a malformed list of changes: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
 
   if (!Array.isArray(parsed)) {
     return {
       success: false,
-      error: "LLM returned patchesJson that is not a JSON array.",
+      error: "The model returned the list of changes in an unexpected shape.",
     };
   }
 
@@ -207,7 +207,7 @@ export async function llmAdjustContent(
     patches.push({ fieldId, newValue });
   }
 
-  logger.info("cv-adjust patches resolved", {
+  logger.info("Tailoring patches resolved", {
     jobId: args.jobId ?? null,
     rawCount: parsed.length,
     appliedCount: patches.length,
@@ -220,6 +220,43 @@ export async function llmAdjustContent(
     matchedCount: Array.isArray(matched) ? matched.length : 0,
     skippedCount: Array.isArray(skipped) ? skipped.length : 0,
   });
+
+  // Hard-fail any path where the LLM produced no usable changes. A
+  // tailoring run that ships zero changes means the rendered PDF would be
+  // byte-identical to the baseline CV — silently dropping that as a
+  // success is forbidden.
+  if (patches.length === 0) {
+    const reasons: string[] = [];
+    if (parsed.length === 0) reasons.push("the model proposed no changes");
+    if (droppedUnknownFieldIds.length > 0) {
+      reasons.push(
+        `${droppedUnknownFieldIds.length} change(s) targeted unknown CV fields (e.g. ${droppedUnknownFieldIds
+          .slice(0, 3)
+          .map((id) => `"${id}"`)
+          .join(", ")})`,
+      );
+    }
+    if (droppedMalformed > 0) {
+      reasons.push(`${droppedMalformed} change(s) were malformed`);
+    }
+    if (droppedForbidden > 0) {
+      reasons.push(
+        `${droppedForbidden} change(s) contained forbidden LaTeX patterns`,
+      );
+    }
+    if (droppedNoChange > 0) {
+      reasons.push(
+        `${droppedNoChange} change(s) re-emitted the original value`,
+      );
+    }
+    if (reasons.length === 0) {
+      reasons.push("no changes survived validation (cause unknown)");
+    }
+    return {
+      success: false,
+      error: `Tailoring produced no usable changes — ${reasons.join("; ")}.`,
+    };
+  }
 
   return {
     success: true,

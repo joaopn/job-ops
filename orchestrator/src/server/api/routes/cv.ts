@@ -129,7 +129,7 @@ cvRouter.post("/upload-template", async (req: Request, res: Response) => {
     });
 
     if (!result.ok) {
-      logger.warn("CV upload-template rejected", {
+      logger.warn("CV upload rejected", {
         filename: upload.filename,
         stage: result.stage,
         attempts: result.attempts?.length ?? 0,
@@ -174,7 +174,7 @@ cvRouter.post("/upload-template", async (req: Request, res: Response) => {
       extractionPrompt: extractionPromptRaw,
     });
 
-    logger.info("CV document created via upload-template", {
+    logger.info("CV document created", {
       cvDocumentId: document.id,
       filename: upload.filename,
       assetCount: result.assetReferences.length,

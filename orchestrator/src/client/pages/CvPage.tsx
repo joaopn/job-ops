@@ -493,7 +493,7 @@ function CvEditor({ cv }: { cv: CvDocument }) {
     setPersonalBrief(cv.personalBrief);
   };
 
-  const isLegacy5d = cv.templatedTex.length === 0;
+  const isLegacyCv = cv.templatedTex.length === 0;
 
   return (
     <div className="space-y-6">
@@ -506,9 +506,9 @@ function CvEditor({ cv }: { cv: CvDocument }) {
               {new Date(cv.updatedAt).toLocaleString()}
             </CardDescription>
             <div className="flex flex-wrap items-center gap-2 text-xs">
-              {isLegacy5d ? (
+              {isLegacyCv ? (
                 <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-amber-900">
-                  Pre-template substrate — re-extract to migrate
+                  Older CV format — re-extract to enable tailoring
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-emerald-900">
@@ -783,8 +783,8 @@ function CvEditor({ cv }: { cv: CvDocument }) {
           <CardTitle>Compile log</CardTitle>
           <CardDescription>
             Tectonic stderr from the most recent successful template
-            compile. Empty when this CV was uploaded under the pre-template
-            substrate (re-extract to populate).
+            compile. Empty when this CV was uploaded in the older format
+            (re-extract to populate).
           </CardDescription>
         </CardHeader>
         <CardContent>
