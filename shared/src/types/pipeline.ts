@@ -3,12 +3,12 @@ import type {
   LocationMatchStrictness,
   LocationSearchScope,
 } from "../location-preferences";
-import type { Job, JobOutcome, JobStatus } from "./jobs";
+import type { Job, JobOutcome, JobStatus, SuitabilityCategory } from "./jobs";
 import type { LocationIntent } from "./location";
 
 export interface PipelineConfig {
   topN: number; // Number of top jobs to process
-  minSuitabilityScore: number; // Minimum score to auto-process
+  minSuitabilityCategory: SuitabilityCategory; // Minimum category to auto-process
   sources: ExtractorSourceId[]; // Job sources to crawl
   outputDir: string; // Directory for generated PDFs
   locationIntent?: LocationIntent;
@@ -20,7 +20,7 @@ export interface PipelineConfig {
 
 export interface PipelineRunConfigSnapshot {
   topN: number;
-  minSuitabilityScore: number;
+  minSuitabilityCategory: SuitabilityCategory;
   sources: ExtractorSourceId[];
   locationIntent: LocationIntent;
 }
@@ -48,7 +48,7 @@ export type PipelineRunExecutionStage =
 
 export interface PipelineRunRequestedConfig {
   topN: number;
-  minSuitabilityScore: number;
+  minSuitabilityCategory: SuitabilityCategory;
   sources: ExtractorSourceId[];
   enableCrawling: boolean;
   enableScoring: boolean;
@@ -83,7 +83,7 @@ export interface PipelineRunEffectiveConfig {
   skippedSources: PipelineRunSkippedSource[];
   blockedCompanyKeywordsCount: number;
   sourceLimits: PipelineRunSourceLimitSnapshot;
-  autoSkipScoreThreshold: number | null;
+  autoSkipCategory: SuitabilityCategory | null;
   models: PipelineRunModelSnapshot;
 }
 

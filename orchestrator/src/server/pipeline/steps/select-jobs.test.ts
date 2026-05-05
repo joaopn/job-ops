@@ -8,7 +8,7 @@ vi.mock("@server/repositories/settings", () => ({
 
 const baseConfig: PipelineConfig = {
   topN: 2,
-  minSuitabilityScore: 50,
+  minSuitabilityCategory: "good_fit",
   sources: ["linkedin"],
   outputDir: "./tmp",
   enableCrawling: true,
@@ -18,12 +18,32 @@ const baseConfig: PipelineConfig = {
 };
 
 describe("selectJobsStep", () => {
-  it("filters by min score, sorts descending, and limits topN", async () => {
+  it("filters by min category, ranks best-first, and respects topN", async () => {
     const jobs = [
-      { id: "a", suitabilityScore: 90, suitabilityReason: "high" },
-      { id: "b", suitabilityScore: 45, suitabilityReason: "low" },
-      { id: "c", suitabilityScore: 80, suitabilityReason: "med" },
-      { id: "d", suitabilityScore: 70, suitabilityReason: "ok" },
+      {
+        id: "a",
+        suitabilityCategory: "very_good_fit",
+        suitabilityReason: "high",
+        discoveredAt: "2026-05-01T00:00:00Z",
+      },
+      {
+        id: "b",
+        suitabilityCategory: "bad_fit",
+        suitabilityReason: "low",
+        discoveredAt: "2026-05-01T00:00:00Z",
+      },
+      {
+        id: "c",
+        suitabilityCategory: "very_good_fit",
+        suitabilityReason: "med",
+        discoveredAt: "2026-04-30T00:00:00Z",
+      },
+      {
+        id: "d",
+        suitabilityCategory: "good_fit",
+        suitabilityReason: "ok",
+        discoveredAt: "2026-05-02T00:00:00Z",
+      },
     ] as any;
 
     const selected = await selectJobsStep({
@@ -36,10 +56,30 @@ describe("selectJobsStep", () => {
 
   it("does not apply topN cap when auto-tailoring is disabled", async () => {
     const jobs = [
-      { id: "a", suitabilityScore: 90, suitabilityReason: "high" },
-      { id: "b", suitabilityScore: 45, suitabilityReason: "low" },
-      { id: "c", suitabilityScore: 80, suitabilityReason: "med" },
-      { id: "d", suitabilityScore: 70, suitabilityReason: "ok" },
+      {
+        id: "a",
+        suitabilityCategory: "very_good_fit",
+        suitabilityReason: "high",
+        discoveredAt: "2026-05-03T00:00:00Z",
+      },
+      {
+        id: "b",
+        suitabilityCategory: "bad_fit",
+        suitabilityReason: "low",
+        discoveredAt: "2026-05-02T00:00:00Z",
+      },
+      {
+        id: "c",
+        suitabilityCategory: "very_good_fit",
+        suitabilityReason: "med",
+        discoveredAt: "2026-05-01T00:00:00Z",
+      },
+      {
+        id: "d",
+        suitabilityCategory: "good_fit",
+        suitabilityReason: "ok",
+        discoveredAt: "2026-04-30T00:00:00Z",
+      },
     ] as any;
 
     const selected = await selectJobsStep({
@@ -50,7 +90,7 @@ describe("selectJobsStep", () => {
     expect(selected.map((job) => job.id)).toEqual(["a", "c", "d"]);
   });
 
-  it("breaks score ties toward selected locations when requested", async () => {
+  it("breaks category ties toward selected locations when requested", async () => {
     const settingsRepo = await import("@server/repositories/settings");
     vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
       locationSearchScope: "remote_worldwide_prioritize_selected",
@@ -61,19 +101,21 @@ describe("selectJobsStep", () => {
     const jobs = [
       {
         id: "remote-anywhere",
-        suitabilityScore: 80,
+        suitabilityCategory: "very_good_fit",
         suitabilityReason: "tie",
         location: "Remote - Worldwide",
+        discoveredAt: "2026-05-01T00:00:00Z",
       },
       {
         id: "zagreb",
-        suitabilityScore: 80,
+        suitabilityCategory: "very_good_fit",
         suitabilityReason: "tie",
         location: null,
         locationEvidence: {
           location: "Zagreb, Croatia",
           country: "croatia",
         },
+        discoveredAt: "2026-05-01T00:00:00Z",
       },
     ] as any;
 

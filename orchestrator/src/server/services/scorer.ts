@@ -1,19 +1,28 @@
 /**
  * Service for scoring job suitability using AI.
+ *
+ * Emits a categorical suitability assessment (`very_good_fit | good_fit |
+ * bad_fit`) instead of a 0-100 numeric score. The "missing salary" penalty
+ * (when enabled) demotes the category by one tier so a great-on-paper match
+ * with no salary disclosure surfaces below other comparable matches.
  */
 
 import { logger } from "@infra/logger";
-import type { Job } from "@shared/types";
+import {
+  SUITABILITY_CATEGORIES,
+  SUITABILITY_CATEGORY_RANK,
+  type Job,
+  type SuitabilityCategory,
+} from "@shared/types";
 import { LlmService } from "./llm/service";
 import type { JsonSchemaDefinition } from "./llm/types";
-import { stripMarkdownCodeFences } from "./llm/utils/json";
 import { resolveLlmModel } from "./modelSelection";
 import { loadPrompt } from "./prompts";
 import { getEffectiveSettings } from "./settings";
 
 interface SuitabilityResult {
-  score: number; // 0-100
-  reason: string; // Explanation
+  category: SuitabilityCategory;
+  reason: string;
 }
 
 type ScoringPreferences = {
@@ -24,63 +33,60 @@ const MAX_BRIEF_CHARS = 6000;
 
 /** JSON schema for suitability scoring response */
 const SCORING_SCHEMA: JsonSchemaDefinition = {
-  name: "job_suitability_score",
+  name: "job_suitability_category",
   schema: {
     type: "object",
     properties: {
-      score: {
-        type: "integer",
-        description: "Suitability score from 0 to 100",
+      category: {
+        type: "string",
+        enum: [...SUITABILITY_CATEGORIES],
+        description:
+          "Categorical fit: very_good_fit, good_fit, or bad_fit.",
       },
       reason: {
         type: "string",
-        description: "Brief 1-2 sentence explanation of the score",
+        description: "Brief 1-2 sentence explanation of the category.",
       },
     },
-    required: ["score", "reason"],
+    required: ["category", "reason"],
     additionalProperties: false,
   },
 };
 
-/**
- * Check if a job's salary field is missing/empty.
- * Returns true for null, empty string, or whitespace-only strings.
- */
 function isSalaryMissing(salary: string | null): boolean {
   return salary === null || salary.trim() === "";
 }
 
-/**
- * Apply salary penalty to a score if enabled.
- * Returns the adjusted score, adjusted reason, and whether penalty was applied.
- */
+const RANK_TO_CATEGORY: Record<number, SuitabilityCategory> = {
+  0: "bad_fit",
+  1: "good_fit",
+  2: "very_good_fit",
+};
+
+function demoteOneTier(category: SuitabilityCategory): SuitabilityCategory {
+  const rank = SUITABILITY_CATEGORY_RANK[category];
+  if (rank <= 0) return "bad_fit";
+  return RANK_TO_CATEGORY[rank - 1];
+}
+
 function applySalaryPenalty(
   job: Job,
-  originalScore: number,
-  originalReason: string,
-  settings: { penalizeMissingSalary: boolean; missingSalaryPenalty: number },
-): { score: number; reason: string; penaltyApplied: boolean } {
+  category: SuitabilityCategory,
+  reason: string,
+  settings: { penalizeMissingSalary: boolean },
+): SuitabilityResult {
   if (!settings.penalizeMissingSalary || !isSalaryMissing(job.salary)) {
-    return {
-      score: originalScore,
-      reason: originalReason,
-      penaltyApplied: false,
-    };
+    return { category, reason };
   }
-
-  const penalty = settings.missingSalaryPenalty;
-  const adjustedScore = Math.max(0, originalScore - penalty);
-  const penaltyText = `Score reduced by ${penalty} points due to missing salary information.`;
-  const adjustedReason = `${originalReason} ${penaltyText}`;
-
+  const demoted = demoteOneTier(category);
+  if (demoted === category) return { category, reason };
+  const note = "Demoted one tier due to missing salary information.";
   logger.info("Applied salary penalty", {
     jobId: job.id,
-    originalScore,
-    penalty,
-    finalScore: adjustedScore,
+    originalCategory: category,
+    demotedCategory: demoted,
   });
-
-  return { score: adjustedScore, reason: adjustedReason, penaltyApplied: true };
+  return { category: demoted, reason: `${reason} ${note}` };
 }
 
 function truncateBrief(brief: string): string {
@@ -89,10 +95,13 @@ function truncateBrief(brief: string): string {
   return `${trimmed.slice(0, MAX_BRIEF_CHARS)}\n[brief truncated]`;
 }
 
-/**
- * Score a job's suitability based on the candidate's personal brief and the
- * job description. Falls back to keyword-based mock scoring on LLM failure.
- */
+function isSuitabilityCategory(value: unknown): value is SuitabilityCategory {
+  return (
+    typeof value === "string" &&
+    (SUITABILITY_CATEGORIES as readonly string[]).includes(value)
+  );
+}
+
 export async function scoreJobSuitability(
   job: Job,
   brief: string,
@@ -113,7 +122,7 @@ export async function scoreJobSuitability(
   }
   messages.push({ role: "user", content: prompt.user });
 
-  const result = await llm.callJson<{ score: number; reason: string }>({
+  const result = await llm.callJson<{ category: unknown; reason: unknown }>({
     model,
     messages,
     jsonSchema: SCORING_SCHEMA,
@@ -133,136 +142,29 @@ export async function scoreJobSuitability(
     });
     return mockScore(job, {
       penalizeMissingSalary: settings.penalizeMissingSalary.value,
-      missingSalaryPenalty: settings.missingSalaryPenalty.value,
     });
   }
 
-  const { score, reason } = result.data;
+  const { category: rawCategory, reason: rawReason } = result.data;
 
-  // Validate we got a reasonable response
-  if (typeof score !== "number" || Number.isNaN(score)) {
-    logger.error("Invalid score in AI response, using mock scoring", {
+  if (!isSuitabilityCategory(rawCategory)) {
+    logger.error("Invalid category in AI response, using mock scoring", {
       jobId: job.id,
+      rawCategory,
     });
     return mockScore(job, {
       penalizeMissingSalary: settings.penalizeMissingSalary.value,
-      missingSalaryPenalty: settings.missingSalaryPenalty.value,
     });
   }
 
-  const clampedScore = Math.min(100, Math.max(0, Math.round(score)));
-  const clampedReason = reason || "No explanation provided";
+  const reason =
+    typeof rawReason === "string" && rawReason.trim().length > 0
+      ? rawReason.trim()
+      : "No explanation provided";
 
-  // Apply salary penalty if enabled
-  const penaltyResult = applySalaryPenalty(job, clampedScore, clampedReason, {
+  return applySalaryPenalty(job, rawCategory, reason, {
     penalizeMissingSalary: settings.penalizeMissingSalary.value,
-    missingSalaryPenalty: settings.missingSalaryPenalty.value,
   });
-
-  return {
-    score: penaltyResult.score,
-    reason: penaltyResult.reason,
-  };
-}
-
-/**
- * Robustly parse JSON from AI-generated content.
- * Handles common AI quirks: markdown fences, extra text, trailing commas, etc.
- *
- * @deprecated Use LlmService with structured outputs instead. Kept for backwards compatibility with tests.
- */
-export function parseJsonFromContent(
-  content: string,
-  jobId?: string,
-): { score?: number; reason?: string } {
-  const originalContent = content;
-  let candidate = content.trim();
-
-  // Step 1: Remove markdown code fences (with or without language specifier)
-  candidate = stripMarkdownCodeFences(candidate);
-
-  // Step 2: Try to extract JSON object if there's surrounding text
-  const jsonMatch = candidate.match(/\{[\s\S]*\}/);
-  if (jsonMatch) {
-    candidate = jsonMatch[0];
-  }
-
-  // Step 3: Try direct parse first
-  try {
-    return JSON.parse(candidate);
-  } catch {
-    // Continue with sanitization
-  }
-
-  // Step 4: Fix common JSON issues
-  let sanitized = candidate;
-
-  // Remove JavaScript-style comments (// and /* */)
-  sanitized = sanitized.replace(/\/\/[^\n]*/g, "");
-  sanitized = sanitized.replace(/\/\*[\s\S]*?\*\//g, "");
-
-  // Remove trailing commas before } or ]
-  sanitized = sanitized.replace(/,\s*([\]}])/g, "$1");
-
-  // Fix unquoted keys: word: -> "word":
-  // Be more careful - only match at start of object or after comma
-  sanitized = sanitized.replace(
-    /([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g,
-    '$1"$2":',
-  );
-
-  // Fix single quotes to double quotes
-  sanitized = sanitized.replace(/'/g, '"');
-
-  // Remove ALL control characters (including newlines/tabs INSIDE string values which break JSON)
-  // First, let's normalize the string - escape actual newlines inside strings
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: needed to fix broken JSON from AI
-  const controlCharsRegex = /[\x00-\x1F\x7F]/g;
-  sanitized = sanitized.replace(controlCharsRegex, (match) => {
-    if (match === "\n") return "\\n";
-    if (match === "\r") return "\\r";
-    if (match === "\t") return "\\t";
-    return "";
-  });
-
-  // Step 5: Try parsing the sanitized version
-  try {
-    return JSON.parse(sanitized);
-  } catch {
-    // Continue with more aggressive extraction
-  }
-
-  // Step 6: Even more aggressive - try to rebuild a minimal valid JSON
-  // by extracting just the score and reason values
-  const scoreMatch = originalContent.match(
-    /["']?score["']?\s*[:=]\s*(\d+(?:\.\d+)?)/i,
-  );
-  const reasonMatch =
-    originalContent.match(/["']?reason["']?\s*[:=]\s*["']([^"'\n]+)["']/i) ||
-    originalContent.match(
-      /["']?reason["']?\s*[:=]\s*["']?(.*?)["']?\s*[,}\n]/is,
-    );
-
-  if (scoreMatch) {
-    const score = Math.round(parseFloat(scoreMatch[1]));
-    const reason = reasonMatch
-      ? reasonMatch[1].trim().replace(controlCharsRegex, "")
-      : "Score extracted from malformed response";
-    logger.warn("Parsed score via regex fallback", {
-      jobId: jobId || "unknown",
-      score,
-    });
-    return { score, reason };
-  }
-
-  // Log the failure with full content for debugging
-  logger.error("Failed to parse AI response", {
-    jobId: jobId || "unknown",
-    rawSample: originalContent.substring(0, 500),
-    sanitizedSample: sanitized.substring(0, 500),
-  });
-
-  throw new Error("Unable to parse JSON from model response");
 }
 
 async function buildScoringPrompt(
@@ -288,9 +190,8 @@ async function buildScoringPrompt(
 
 async function mockScore(
   job: Job,
-  settings: { penalizeMissingSalary: boolean; missingSalaryPenalty: number },
+  settings: { penalizeMissingSalary: boolean },
 ): Promise<SuitabilityResult> {
-  // Simple keyword-based scoring as fallback
   const jd = (job.jobDescription || "").toLowerCase();
   const title = job.title.toLowerCase();
 
@@ -316,48 +217,53 @@ async function mockScore(
     "manager",
   ];
 
-  let score = 50;
-
+  let goodHits = 0;
+  let badHits = 0;
   for (const kw of goodKeywords) {
-    if (jd.includes(kw) || title.includes(kw)) score += 5;
+    if (jd.includes(kw) || title.includes(kw)) goodHits += 1;
   }
-
   for (const kw of badKeywords) {
-    if (jd.includes(kw) || title.includes(kw)) score -= 10;
+    if (jd.includes(kw) || title.includes(kw)) badHits += 1;
   }
 
-  score = Math.min(100, Math.max(0, score));
+  const heuristic: SuitabilityCategory =
+    goodHits >= 4 && badHits === 0
+      ? "very_good_fit"
+      : goodHits >= 2 && badHits <= 1
+        ? "good_fit"
+        : "bad_fit";
 
   const baseReason = "Scored using keyword matching (API key not configured)";
 
-  // Apply salary penalty if enabled
-  const penaltyResult = applySalaryPenalty(job, score, baseReason, settings);
-
-  return {
-    score: penaltyResult.score,
-    reason: penaltyResult.reason,
-  };
+  return applySalaryPenalty(job, heuristic, baseReason, settings);
 }
 
 /**
- * Score multiple jobs and return sorted by score (descending).
+ * Score multiple jobs and return sorted by category rank (best first), with
+ * `discoveredAt` desc as the tiebreaker.
  */
 export async function scoreAndRankJobs(
   jobs: Job[],
   brief: string,
 ): Promise<
-  Array<Job & { suitabilityScore: number; suitabilityReason: string }>
+  Array<Job & { suitabilityCategory: SuitabilityCategory; suitabilityReason: string }>
 > {
   const scoredJobs = await Promise.all(
     jobs.map(async (job) => {
-      const { score, reason } = await scoreJobSuitability(job, brief);
+      const { category, reason } = await scoreJobSuitability(job, brief);
       return {
         ...job,
-        suitabilityScore: score,
+        suitabilityCategory: category,
         suitabilityReason: reason,
       };
     }),
   );
 
-  return scoredJobs.sort((a, b) => b.suitabilityScore - a.suitabilityScore);
+  return scoredJobs.sort((a, b) => {
+    const rankDiff =
+      SUITABILITY_CATEGORY_RANK[b.suitabilityCategory] -
+      SUITABILITY_CATEGORY_RANK[a.suitabilityCategory];
+    if (rankDiff !== 0) return rankDiff;
+    return b.discoveredAt.localeCompare(a.discoveredAt);
+  });
 }

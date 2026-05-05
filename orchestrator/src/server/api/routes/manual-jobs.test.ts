@@ -68,7 +68,7 @@ describe.sequential("Manual jobs API routes", () => {
     const { processJob } = await import("@server/pipeline/index");
     const { scoreJobSuitability } = await import("@server/services/scorer");
     vi.mocked(scoreJobSuitability).mockResolvedValue({
-      score: 88,
+      category: "very_good_fit",
       reason: "Strong fit",
     });
 

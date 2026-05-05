@@ -89,7 +89,7 @@ const migrations: string[] = [
     status TEXT NOT NULL DEFAULT 'discovered' CHECK(status IN ('discovered', 'processing', 'ready', 'applied', 'in_progress', 'skipped', 'expired')),
     outcome TEXT,
     closed_at INTEGER,
-    suitability_score REAL,
+    suitability_category TEXT CHECK(suitability_category IS NULL OR suitability_category IN ('very_good_fit', 'good_fit', 'bad_fit')),
     suitability_reason TEXT,
     tailored_fields TEXT NOT NULL DEFAULT '{}',
     tailoring_matched TEXT,
@@ -226,6 +226,10 @@ const migrations: string[] = [
   // tailored_fields`. Without this, every boot wipes per-job tailoring back
   // to '{}' (the rebuild runs on every startup).
   `ALTER TABLE jobs ADD COLUMN tailored_fields TEXT NOT NULL DEFAULT '{}'`,
+  // suitability_category replaces suitability_score (numeric → categorical
+  // enum). Idempotent ALTER lets the rebuild's SELECT reference the new
+  // column directly. Legacy DBs without it pick up NULL on first boot.
+  `ALTER TABLE jobs ADD COLUMN suitability_category TEXT`,
   `ALTER TABLE job_chat_messages ADD COLUMN proposed_edit TEXT`,
   `ALTER TABLE job_chat_messages ADD COLUMN edit_status TEXT`,
   `ALTER TABLE cv_documents ADD COLUMN personal_brief TEXT NOT NULL DEFAULT ''`,
@@ -328,7 +332,7 @@ const migrations: string[] = [
     status TEXT NOT NULL DEFAULT 'discovered' CHECK(status IN ('discovered', 'selected', 'processing', 'ready', 'applied', 'in_progress', 'backlog', 'skipped', 'closed')),
     outcome TEXT CHECK(outcome IS NULL OR outcome IN ('rejected', 'withdrawn', 'ghosted', 'other')),
     closed_at INTEGER,
-    suitability_score REAL,
+    suitability_category TEXT CHECK(suitability_category IS NULL OR suitability_category IN ('very_good_fit', 'good_fit', 'bad_fit')),
     suitability_reason TEXT,
     tailored_fields TEXT NOT NULL DEFAULT '{}',
     tailoring_matched TEXT,
@@ -355,7 +359,7 @@ const migrations: string[] = [
     work_from_home_type, title, employer, employer_url, job_url,
     application_link, disciplines, deadline, salary, location,
     location_evidence, degree_required, starting, job_description, status,
-    outcome, closed_at, suitability_score, suitability_reason, tailored_fields,
+    outcome, closed_at, suitability_category, suitability_reason, tailored_fields,
     tailoring_matched, tailoring_skipped, cv_document_id,
     pdf_path, cover_letter_draft, reposted_at, repost_count,
     discovered_at, processed_at, ready_at,
@@ -378,7 +382,7 @@ const migrations: string[] = [
       WHEN outcome IN ('offer_accepted', 'offer_declined') THEN 'other'
       ELSE outcome
     END AS outcome,
-    closed_at, suitability_score, suitability_reason,
+    closed_at, suitability_category, suitability_reason,
     tailored_fields,
     tailoring_matched, tailoring_skipped, cv_document_id,
     pdf_path, cover_letter_draft,

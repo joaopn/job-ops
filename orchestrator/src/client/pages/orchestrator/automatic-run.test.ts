@@ -62,7 +62,7 @@ describe("automatic-run utilities", () => {
   it("exposes the expected preset values", () => {
     expect(AUTOMATIC_PRESETS.fast).toEqual({
       topN: 5,
-      minSuitabilityScore: 75,
+      minSuitabilityCategory: "very_good_fit",
       runBudget: 300,
     });
 
@@ -75,7 +75,7 @@ describe("automatic-run utilities", () => {
     const estimate = calculateAutomaticEstimate({
       values: {
         topN: 10,
-        minSuitabilityScore: 50,
+        minSuitabilityCategory: "good_fit",
         searchTerms: ["backend", "platform"],
         runBudget: 100,
         country: "united kingdom",
@@ -120,13 +120,13 @@ describe("automatic-run utilities", () => {
       RUN_MEMORY_STORAGE_KEY,
       JSON.stringify({
         topN: AUTOMATIC_PRESETS.balanced.topN,
-        minSuitabilityScore: AUTOMATIC_PRESETS.balanced.minSuitabilityScore,
+        minSuitabilityCategory: AUTOMATIC_PRESETS.balanced.minSuitabilityCategory,
       }),
     );
 
     expect(loadAutomaticRunMemory()).toEqual({
       topN: AUTOMATIC_PRESETS.balanced.topN,
-      minSuitabilityScore: AUTOMATIC_PRESETS.balanced.minSuitabilityScore,
+      minSuitabilityCategory: AUTOMATIC_PRESETS.balanced.minSuitabilityCategory,
       runBudget: AUTOMATIC_PRESETS.balanced.runBudget,
       presetId: "balanced",
     });
@@ -137,7 +137,7 @@ describe("automatic-run utilities", () => {
       RUN_MEMORY_STORAGE_KEY,
       JSON.stringify({
         topN: AUTOMATIC_PRESETS.balanced.topN,
-        minSuitabilityScore: AUTOMATIC_PRESETS.balanced.minSuitabilityScore,
+        minSuitabilityCategory: AUTOMATIC_PRESETS.balanced.minSuitabilityCategory,
         runBudget: AUTOMATIC_PRESETS.balanced.runBudget,
         presetId: "custom",
       }),
@@ -145,7 +145,7 @@ describe("automatic-run utilities", () => {
 
     expect(loadAutomaticRunMemory()).toEqual({
       topN: AUTOMATIC_PRESETS.balanced.topN,
-      minSuitabilityScore: AUTOMATIC_PRESETS.balanced.minSuitabilityScore,
+      minSuitabilityCategory: AUTOMATIC_PRESETS.balanced.minSuitabilityCategory,
       runBudget: AUTOMATIC_PRESETS.balanced.runBudget,
       presetId: "custom",
     });
@@ -155,7 +155,7 @@ describe("automatic-run utilities", () => {
     expect(
       inferAutomaticPresetSelection({
         topN: 7,
-        minSuitabilityScore: 60,
+        minSuitabilityCategory: "good_fit",
       }),
     ).toBe("custom");
   });
@@ -164,7 +164,7 @@ describe("automatic-run utilities", () => {
     const estimate = calculateAutomaticEstimate({
       values: {
         topN: 10,
-        minSuitabilityScore: 50,
+        minSuitabilityCategory: "good_fit",
         searchTerms: [],
         runBudget: 750,
         country: "united kingdom",
@@ -194,7 +194,7 @@ describe("automatic-run utilities", () => {
     const estimate = calculateAutomaticEstimate({
       values: {
         topN: 10,
-        minSuitabilityScore: 50,
+        minSuitabilityCategory: "good_fit",
         searchTerms: ["backend", "platform"],
         runBudget: 120,
         country: "united kingdom",
@@ -214,7 +214,7 @@ describe("automatic-run utilities", () => {
     const estimate = calculateAutomaticEstimate({
       values: {
         topN: 10,
-        minSuitabilityScore: 50,
+        minSuitabilityCategory: "good_fit",
         searchTerms: ["backend", "platform"],
         runBudget: 120,
         country: "united kingdom",
@@ -234,7 +234,7 @@ describe("automatic-run utilities", () => {
     const estimate = calculateAutomaticEstimate({
       values: {
         topN: 10,
-        minSuitabilityScore: 50,
+        minSuitabilityCategory: "good_fit",
         searchTerms: ["backend", "platform"],
         runBudget: 120,
         country: "united kingdom",
@@ -254,7 +254,7 @@ describe("automatic-run utilities", () => {
     const estimate = calculateAutomaticEstimate({
       values: {
         topN: 10,
-        minSuitabilityScore: 50,
+        minSuitabilityCategory: "good_fit",
         searchTerms: ["backend", "platform"],
         runBudget: 120,
         country: "united kingdom",

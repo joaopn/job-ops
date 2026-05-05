@@ -52,7 +52,7 @@ import { JobDetailsEditDrawer } from "./JobDetailsEditDrawer";
 import { KbdHint } from "./KbdHint";
 import { OpenJobListingButton } from "./OpenJobListingButton";
 import { ReadySummaryAccordion } from "./ReadySummaryAccordion";
-import { ScoreIndicator } from "./ScoreIndicator";
+import { FitIndicator } from "./ScoreIndicator";
 import { buildReadyPanelGoogleDorks } from "./ready-panel-google-dorks";
 
 interface ReadyPanelProps {
@@ -246,9 +246,7 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
               <p className="text-xs text-muted-foreground">{job.location}</p>
             ) : null}
           </div>
-          {typeof job.suitabilityScore === "number" ? (
-            <ScoreIndicator score={job.suitabilityScore} />
-          ) : null}
+          <FitIndicator category={job.suitabilityCategory ?? null} />
         </div>
       </div>
 

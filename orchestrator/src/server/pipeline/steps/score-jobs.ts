@@ -3,11 +3,25 @@ import * as jobsRepo from "@server/repositories/jobs";
 import * as settingsRepo from "@server/repositories/settings";
 import { scoreJobSuitability } from "@server/services/scorer";
 import { asyncPool } from "@server/utils/async-pool";
-import type { Job } from "@shared/types";
+import {
+  SUITABILITY_CATEGORIES,
+  SUITABILITY_CATEGORY_RANK,
+  type Job,
+  type SuitabilityCategory,
+} from "@shared/types";
 import { progressHelpers, updateProgress } from "../progress";
 import type { ScoredJob } from "./types";
 
 const SCORING_CONCURRENCY = 4;
+
+function parseCategoryOrNull(
+  raw: string | null | undefined,
+): SuitabilityCategory | null {
+  if (!raw) return null;
+  return (SUITABILITY_CATEGORIES as readonly string[]).includes(raw)
+    ? (raw as SuitabilityCategory)
+    : null;
+}
 
 export async function scoreJobsStep(args: {
   brief: string;
@@ -27,13 +41,9 @@ export async function scoreJobsStep(args: {
   logger.info("Running scoring step");
   const unprocessedJobs = await jobsRepo.getUnscoredDiscoveredJobs();
 
-  // Check if auto-skip threshold is configured
-  const autoSkipThresholdRaw = await settingsRepo.getSetting(
-    "autoSkipScoreThreshold",
+  const autoSkipCategory = parseCategoryOrNull(
+    await settingsRepo.getSetting("autoSkipCategory"),
   );
-  const autoSkipThreshold = autoSkipThresholdRaw
-    ? parseInt(autoSkipThresholdRaw, 10)
-    : null;
 
   updateProgress({
     step: "scoring",
@@ -54,11 +64,7 @@ export async function scoreJobsStep(args: {
     task: async (job) => {
       if (args.shouldCancel?.()) return;
 
-      const hasCachedScore =
-        typeof job.suitabilityScore === "number" &&
-        !Number.isNaN(job.suitabilityScore);
-
-      if (hasCachedScore) {
+      if (job.suitabilityCategory) {
         completed += 1;
         progressHelpers.scoringJob(
           completed,
@@ -67,34 +73,33 @@ export async function scoreJobsStep(args: {
         );
         scoredJobs.push({
           ...job,
-          suitabilityScore: job.suitabilityScore as number,
+          suitabilityCategory: job.suitabilityCategory,
           suitabilityReason: job.suitabilityReason ?? "",
         });
         return;
       }
 
-      const { score, reason } = await scoreJobSuitability(job, args.brief);
+      const { category, reason } = await scoreJobSuitability(job, args.brief);
       if (args.shouldCancel?.()) return;
 
-      // Check if job should be auto-skipped based on score threshold
       const shouldAutoSkip =
         job.status !== "applied" &&
-        autoSkipThreshold !== null &&
-        !Number.isNaN(autoSkipThreshold) &&
-        score < autoSkipThreshold;
+        autoSkipCategory !== null &&
+        SUITABILITY_CATEGORY_RANK[category] <=
+          SUITABILITY_CATEGORY_RANK[autoSkipCategory];
 
       await jobsRepo.updateJob(job.id, {
-        suitabilityScore: score,
+        suitabilityCategory: category,
         suitabilityReason: reason,
         ...(shouldAutoSkip ? { status: "skipped" } : {}),
       });
 
       if (shouldAutoSkip) {
-        logger.info("Auto-skipped job due to low score", {
+        logger.info("Auto-skipped job due to low category", {
           jobId: job.id,
           title: job.title,
-          score,
-          threshold: autoSkipThreshold,
+          category,
+          autoSkipCategory,
         });
       }
 
@@ -102,7 +107,7 @@ export async function scoreJobsStep(args: {
       progressHelpers.scoringJob(completed, unprocessedJobs.length, job.title);
       scoredJobs.push({
         ...job,
-        suitabilityScore: score,
+        suitabilityCategory: category,
         suitabilityReason: reason,
       });
     },

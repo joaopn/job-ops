@@ -3,7 +3,11 @@ import { ListItem } from "@client/components/layout";
 import { PipelineProgress } from "@client/components/PipelineProgress";
 import { queryKeys } from "@client/lib/queryKeys";
 import { sourceLabel } from "@shared/extractors";
-import type { PipelineRun, PipelineRunInsights } from "@shared/types";
+import {
+  SUITABILITY_CATEGORY_LABELS,
+  type PipelineRun,
+  type PipelineRunInsights,
+} from "@shared/types";
 import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
@@ -243,8 +247,12 @@ function RunInsightsBody(props: {
                   value={savedDetails.requestedConfig.topN.toLocaleString()}
                 />
                 <MetricCard
-                  label="Min suitability score"
-                  value={savedDetails.requestedConfig.minSuitabilityScore.toLocaleString()}
+                  label="Min suitability"
+                  value={
+                    SUITABILITY_CATEGORY_LABELS[
+                      savedDetails.requestedConfig.minSuitabilityCategory
+                    ]
+                  }
                 />
                 <MetricCard
                   label="Sources"
@@ -347,11 +355,11 @@ function RunInsightsBody(props: {
                   value={savedDetails.effectiveConfig.blockedCompanyKeywordsCount.toLocaleString()}
                 />
                 <MetricCard
-                  label="Auto-skip threshold"
+                  label="Auto-skip"
                   value={
-                    savedDetails.effectiveConfig.autoSkipScoreThreshold == null
+                    savedDetails.effectiveConfig.autoSkipCategory == null
                       ? "Off"
-                      : savedDetails.effectiveConfig.autoSkipScoreThreshold.toLocaleString()
+                      : `${SUITABILITY_CATEGORY_LABELS[savedDetails.effectiveConfig.autoSkipCategory]} and worse`
                   }
                 />
                 <MetricCard

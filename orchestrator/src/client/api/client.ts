@@ -35,6 +35,7 @@ import type {
   PipelineRunInsights,
   PipelineStatusResponse,
   SearchTermsSuggestionResponse,
+  SuitabilityCategory,
   UpdateJobNoteInput,
   ValidationResult,
 } from "@shared/types";
@@ -1095,7 +1096,7 @@ export async function getPipelineRunInsights(
 
 export async function runPipeline(config?: {
   topN?: number;
-  minSuitabilityScore?: number;
+  minSuitabilityCategory?: SuitabilityCategory;
   sources?: JobSource[];
   runBudget?: number;
   searchTerms?: string[];
@@ -1389,16 +1390,18 @@ export async function deleteJobsByStatus(status: string): Promise<{
   });
 }
 
-export async function deleteJobsBelowScore(threshold: number): Promise<{
+export async function deleteJobsByCategory(
+  category: SuitabilityCategory,
+): Promise<{
   message: string;
   count: number;
-  threshold: number;
+  category: SuitabilityCategory;
 }> {
   return fetchApi<{
     message: string;
     count: number;
-    threshold: number;
-  }>(`/jobs/score/${threshold}`, {
+    category: SuitabilityCategory;
+  }>(`/jobs/category/${encodeURIComponent(category)}`, {
     method: "DELETE",
   });
 }

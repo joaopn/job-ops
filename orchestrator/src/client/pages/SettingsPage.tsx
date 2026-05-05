@@ -17,7 +17,12 @@ import {
   type UpdateSettingsInput,
   updateSettingsSchema,
 } from "@shared/settings-schema.js";
-import type { AppSettings, JobStatus } from "@shared/types.js";
+import {
+  SUITABILITY_CATEGORY_LABELS,
+  type AppSettings,
+  type JobStatus,
+  type SuitabilityCategory,
+} from "@shared/types.js";
 import { useQuery } from "@tanstack/react-query";
 import { Search, Settings } from "lucide-react";
 import type React from "react";
@@ -59,7 +64,7 @@ const DEFAULT_FORM_VALUES: UpdateSettingsInput = {
   enableBasicAuth: false,
   penalizeMissingSalary: null,
   missingSalaryPenalty: null,
-  autoSkipScoreThreshold: null,
+  autoSkipCategory: null,
   autoTailoringEnabled: null,
   enableJobScoring: null,
   inboxStaleThresholdDays: null,
@@ -254,7 +259,7 @@ const NULL_SETTINGS_PAYLOAD: UpdateSettingsInput = {
   enableBasicAuth: undefined,
   penalizeMissingSalary: null,
   missingSalaryPenalty: null,
-  autoSkipScoreThreshold: null,
+  autoSkipCategory: null,
   autoTailoringEnabled: null,
   enableJobScoring: null,
   inboxStaleThresholdDays: null,
@@ -287,7 +292,7 @@ const mapSettingsToForm = (data: AppSettings): UpdateSettingsInput => ({
   enableBasicAuth: data.basicAuthActive,
   penalizeMissingSalary: data.penalizeMissingSalary.override,
   missingSalaryPenalty: data.missingSalaryPenalty.override,
-  autoSkipScoreThreshold: data.autoSkipScoreThreshold.override,
+  autoSkipCategory: data.autoSkipCategory.override,
   autoTailoringEnabled: data.autoTailoringEnabled.override,
   enableJobScoring: data.enableJobScoring.override,
   inboxStaleThresholdDays: data.inboxStaleThresholdDays.override,
@@ -382,9 +387,9 @@ const getDerivedSettings = (settings: AppSettings | null) => {
         effective: settings?.missingSalaryPenalty?.value ?? 10,
         default: settings?.missingSalaryPenalty?.default ?? 10,
       },
-      autoSkipScoreThreshold: {
-        effective: settings?.autoSkipScoreThreshold?.value ?? null,
-        default: settings?.autoSkipScoreThreshold?.default ?? null,
+      autoSkipCategory: {
+        effective: settings?.autoSkipCategory?.value ?? null,
+        default: settings?.autoSkipCategory?.default ?? null,
       },
     },
     pipeline: {
@@ -566,9 +571,9 @@ export const SettingsPage: React.FC = () => {
           data.missingSalaryPenalty,
           scoring.missingSalaryPenalty.default,
         ),
-        autoSkipScoreThreshold: nullIfSame(
-          data.autoSkipScoreThreshold,
-          scoring.autoSkipScoreThreshold.default,
+        autoSkipCategory: nullIfSame(
+          data.autoSkipCategory,
+          scoring.autoSkipCategory.default,
         ),
         autoTailoringEnabled: nullIfSame(
           data.autoTailoringEnabled,
@@ -654,25 +659,26 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
-  const handleClearByScore = async (threshold: number) => {
+  const handleClearByCategory = async (category: SuitabilityCategory) => {
     try {
       setIsSaving(true);
-      const result = await api.deleteJobsBelowScore(threshold);
+      const result = await api.deleteJobsByCategory(category);
+      const label = SUITABILITY_CATEGORY_LABELS[category];
 
       if (result.count > 0) {
         toast.success("Jobs cleared", {
-          description: `Deleted ${result.count} jobs with score below ${threshold}. Applied jobs were preserved.`,
+          description: `Deleted ${result.count} jobs at or below "${label}". Applied jobs were preserved.`,
         });
       } else {
         toast.info("No jobs found", {
-          description: `No jobs with score below ${threshold} found`,
+          description: `No jobs at or below "${label}".`,
         });
       }
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
-          : "Failed to clear jobs by score";
+          : "Failed to clear jobs by category";
       toast.error(message);
     } finally {
       setIsSaving(false);
@@ -848,7 +854,7 @@ export const SettingsPage: React.FC = () => {
           toggleStatusToClear={toggleStatusToClear}
           handleClearByStatuses={handleClearByStatuses}
           handleClearDatabase={handleClearDatabase}
-          handleClearByScore={handleClearByScore}
+          handleClearByCategory={handleClearByCategory}
           isLoading={isLoading}
           isSaving={isSaving}
           layoutMode="panel"

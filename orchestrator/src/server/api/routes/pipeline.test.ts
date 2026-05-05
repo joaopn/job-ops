@@ -66,7 +66,7 @@ describe.sequential("Pipeline API routes", () => {
       errorMessage: null,
       requestedConfig: {
         topN: 10,
-        minSuitabilityScore: 55,
+        minSuitabilityCategory: "good_fit",
         sources: ["linkedin", "indeed"],
         enableCrawling: true,
         enableScoring: true,
@@ -88,7 +88,7 @@ describe.sequential("Pipeline API routes", () => {
           startupjobsMaxJobsPerTerm: 50,
           jobspyResultsWanted: 20,
         },
-        autoSkipScoreThreshold: 65,
+        autoSkipCategory: "bad_fit",
         pdfRenderer: "rxresume",
         models: {
           scorer: "model-scorer",
@@ -236,7 +236,7 @@ describe.sequential("Pipeline API routes", () => {
     const badRun = await fetch(`${baseUrl}/api/pipeline/run`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ minSuitabilityScore: 120 }),
+      body: JSON.stringify({ minSuitabilityCategory: "not_a_category" }),
     });
     expect(badRun.status).toBe(400);
 
@@ -246,7 +246,7 @@ describe.sequential("Pipeline API routes", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         topN: 5,
-        minSuitabilityScore: 65,
+        minSuitabilityCategory: "good_fit",
         runBudget: 150,
         searchTerms: ["backend engineer"],
         country: "united kingdom",
@@ -262,7 +262,7 @@ describe.sequential("Pipeline API routes", () => {
     expect(runPipeline).toHaveBeenCalledWith(
       expect.objectContaining({
         topN: 5,
-        minSuitabilityScore: 65,
+        minSuitabilityCategory: "good_fit",
         sources: ["linkedin"],
         locationIntent: expect.objectContaining({
           selectedCountry: "united kingdom",

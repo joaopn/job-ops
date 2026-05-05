@@ -9,7 +9,11 @@ import {
   parseSearchCitiesSetting,
   serializeSearchCitiesSetting,
 } from "@shared/search-cities.js";
-import type { JobSource } from "@shared/types";
+import {
+  SUITABILITY_CATEGORIES,
+  type JobSource,
+  type SuitabilityCategory,
+} from "@shared/types";
 
 export type AutomaticPresetId = "fast" | "balanced" | "detailed";
 export type AutomaticPresetSelection = AutomaticPresetId | "custom";
@@ -22,7 +26,7 @@ export const WORKPLACE_TYPE_OPTIONS: WorkplaceType[] = [
 
 export interface AutomaticRunValues {
   topN: number;
-  minSuitabilityScore: number;
+  minSuitabilityCategory: SuitabilityCategory;
   searchTerms: string[];
   runBudget: number;
   country: string;
@@ -34,7 +38,7 @@ export interface AutomaticRunValues {
 
 export interface AutomaticPresetValues {
   topN: number;
-  minSuitabilityScore: number;
+  minSuitabilityCategory: SuitabilityCategory;
   runBudget: number;
 }
 
@@ -67,17 +71,17 @@ export const AUTOMATIC_PRESETS: Record<
 > = {
   fast: {
     topN: 5,
-    minSuitabilityScore: 75,
+    minSuitabilityCategory: "very_good_fit",
     runBudget: 300,
   },
   balanced: {
     topN: 10,
-    minSuitabilityScore: 50,
+    minSuitabilityCategory: "good_fit",
     runBudget: 500,
   },
   detailed: {
     topN: 20,
-    minSuitabilityScore: 35,
+    minSuitabilityCategory: "bad_fit",
     runBudget: 750,
   },
 };
@@ -118,7 +122,7 @@ export const MATCH_STRICTNESS_OPTIONS: Array<{
 
 export interface AutomaticRunMemory {
   topN: number;
-  minSuitabilityScore: number;
+  minSuitabilityCategory: SuitabilityCategory;
   presetId?: AutomaticPresetSelection;
   runBudget?: number;
 }
@@ -147,14 +151,15 @@ export interface ExtractorLimits {
 
 export function inferAutomaticPresetSelection(args: {
   topN: number;
-  minSuitabilityScore: number;
+  minSuitabilityCategory: SuitabilityCategory;
   runBudget?: number | null;
 }): AutomaticPresetSelection {
   const hasRunBudget = args.runBudget !== null && args.runBudget !== undefined;
 
   if (
     args.topN === AUTOMATIC_PRESETS.fast.topN &&
-    args.minSuitabilityScore === AUTOMATIC_PRESETS.fast.minSuitabilityScore &&
+    args.minSuitabilityCategory ===
+      AUTOMATIC_PRESETS.fast.minSuitabilityCategory &&
     (!hasRunBudget || args.runBudget === AUTOMATIC_PRESETS.fast.runBudget)
   ) {
     return "fast";
@@ -162,8 +167,8 @@ export function inferAutomaticPresetSelection(args: {
 
   if (
     args.topN === AUTOMATIC_PRESETS.balanced.topN &&
-    args.minSuitabilityScore ===
-      AUTOMATIC_PRESETS.balanced.minSuitabilityScore &&
+    args.minSuitabilityCategory ===
+      AUTOMATIC_PRESETS.balanced.minSuitabilityCategory &&
     (!hasRunBudget || args.runBudget === AUTOMATIC_PRESETS.balanced.runBudget)
   ) {
     return "balanced";
@@ -171,8 +176,8 @@ export function inferAutomaticPresetSelection(args: {
 
   if (
     args.topN === AUTOMATIC_PRESETS.detailed.topN &&
-    args.minSuitabilityScore ===
-      AUTOMATIC_PRESETS.detailed.minSuitabilityScore &&
+    args.minSuitabilityCategory ===
+      AUTOMATIC_PRESETS.detailed.minSuitabilityCategory &&
     (!hasRunBudget || args.runBudget === AUTOMATIC_PRESETS.detailed.runBudget)
   ) {
     return "detailed";
@@ -349,6 +354,13 @@ export function calculateAutomaticEstimate(args: {
   };
 }
 
+function isSuitabilityCategory(value: unknown): value is SuitabilityCategory {
+  return (
+    typeof value === "string" &&
+    (SUITABILITY_CATEGORIES as readonly string[]).includes(value)
+  );
+}
+
 export function loadAutomaticRunMemory(): AutomaticRunMemory | null {
   try {
     const raw = localStorage.getItem(RUN_MEMORY_STORAGE_KEY);
@@ -356,15 +368,12 @@ export function loadAutomaticRunMemory(): AutomaticRunMemory | null {
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     if (
       typeof parsed.topN !== "number" ||
-      typeof parsed.minSuitabilityScore !== "number"
+      !isSuitabilityCategory(parsed.minSuitabilityCategory)
     ) {
       return null;
     }
     const topN = Math.min(50, Math.max(1, Math.round(parsed.topN)));
-    const minSuitabilityScore = Math.min(
-      100,
-      Math.max(0, Math.round(parsed.minSuitabilityScore)),
-    );
+    const minSuitabilityCategory = parsed.minSuitabilityCategory;
     const runBudget =
       typeof parsed.runBudget === "number"
         ? Math.max(50, Math.round(parsed.runBudget))
@@ -377,7 +386,7 @@ export function loadAutomaticRunMemory(): AutomaticRunMemory | null {
       const preset = AUTOMATIC_PRESETS[explicitPresetId];
       return {
         topN: preset.topN,
-        minSuitabilityScore: preset.minSuitabilityScore,
+        minSuitabilityCategory: preset.minSuitabilityCategory,
         runBudget: preset.runBudget,
         presetId: explicitPresetId,
       };
@@ -386,7 +395,7 @@ export function loadAutomaticRunMemory(): AutomaticRunMemory | null {
     if (explicitPresetId === "custom") {
       return {
         topN,
-        minSuitabilityScore,
+        minSuitabilityCategory,
         ...(runBudget !== undefined ? { runBudget } : {}),
         presetId: "custom",
       };
@@ -394,7 +403,7 @@ export function loadAutomaticRunMemory(): AutomaticRunMemory | null {
 
     const inferredPresetId = inferAutomaticPresetSelection({
       topN,
-      minSuitabilityScore,
+      minSuitabilityCategory,
       runBudget,
     });
 
@@ -402,7 +411,7 @@ export function loadAutomaticRunMemory(): AutomaticRunMemory | null {
       const preset = AUTOMATIC_PRESETS[inferredPresetId];
       return {
         topN: preset.topN,
-        minSuitabilityScore: preset.minSuitabilityScore,
+        minSuitabilityCategory: preset.minSuitabilityCategory,
         runBudget: preset.runBudget,
         presetId: inferredPresetId,
       };
@@ -410,7 +419,7 @@ export function loadAutomaticRunMemory(): AutomaticRunMemory | null {
 
     return {
       topN,
-      minSuitabilityScore,
+      minSuitabilityCategory,
       ...(runBudget !== undefined ? { runBudget } : {}),
       presetId: "custom",
     };

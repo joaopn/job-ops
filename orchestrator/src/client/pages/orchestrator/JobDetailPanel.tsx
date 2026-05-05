@@ -2,7 +2,7 @@ import * as api from "@client/api";
 import {
   DiscoveredPanel,
   FitAssessment,
-  ScoreIndicator,
+  FitIndicator,
 } from "@client/components";
 import { JobDetailsEditDrawer } from "@client/components/JobDetailsEditDrawer";
 import { ReadyPanel } from "@client/components/ReadyPanel";
@@ -381,9 +381,7 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
             </p>
           ) : null}
         </div>
-        {typeof selectedJob.suitabilityScore === "number" ? (
-          <ScoreIndicator score={selectedJob.suitabilityScore} />
-        ) : null}
+        <FitIndicator category={selectedJob.suitabilityCategory ?? null} />
       </div>
 
       <div className="flex flex-wrap items-center gap-1.5">

@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
 import { FitAssessment } from "..";
-import { ScoreIndicator } from "../ScoreIndicator";
+import { FitIndicator } from "../ScoreIndicator";
 import { KbdHint } from "../KbdHint";
 import { OpenJobListingButton } from "../OpenJobListingButton";
 import { CollapsibleSection } from "./CollapsibleSection";
@@ -83,9 +83,7 @@ export const DecideMode: React.FC<DecideModeProps> = ({
                 <p className="text-xs text-muted-foreground">{job.location}</p>
               ) : null}
             </div>
-            {typeof job.suitabilityScore === "number" ? (
-              <ScoreIndicator score={job.suitabilityScore} />
-            ) : null}
+            <FitIndicator category={job.suitabilityCategory ?? null} />
           </div>
         </div>
 

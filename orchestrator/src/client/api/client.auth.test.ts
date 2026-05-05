@@ -187,7 +187,7 @@ describe("API client auth flow", () => {
     await expect(
       api.runPipeline({
         topN: 12,
-        minSuitabilityScore: 55,
+        minSuitabilityCategory: "good_fit",
         runBudget: 150,
         searchTerms: ["backend engineer"],
         country: "united kingdom",
@@ -205,7 +205,7 @@ describe("API client auth flow", () => {
         method: "POST",
         body: JSON.stringify({
           topN: 12,
-          minSuitabilityScore: 55,
+          minSuitabilityCategory: "good_fit",
           runBudget: 150,
           searchTerms: ["backend engineer"],
           country: "united kingdom",

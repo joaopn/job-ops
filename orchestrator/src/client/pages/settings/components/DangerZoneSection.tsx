@@ -3,7 +3,12 @@ import {
   ALL_JOB_STATUSES,
   STATUS_DESCRIPTIONS,
 } from "@client/pages/settings/constants";
-import type { JobStatus } from "@shared/types";
+import {
+  SUITABILITY_CATEGORIES,
+  SUITABILITY_CATEGORY_LABELS,
+  type JobStatus,
+  type SuitabilityCategory,
+} from "@shared/types";
 import { AlertTriangle, Trash2 } from "lucide-react";
 
 import type React from "react";
@@ -21,7 +26,6 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 
 type DangerZoneSectionProps = {
@@ -29,7 +33,7 @@ type DangerZoneSectionProps = {
   toggleStatusToClear: (status: JobStatus) => void;
   handleClearByStatuses: () => void;
   handleClearDatabase: () => void;
-  handleClearByScore?: (threshold: number) => void;
+  handleClearByCategory?: (category: SuitabilityCategory) => void;
   isLoading: boolean;
   isSaving: boolean;
   layoutMode?: "accordion" | "panel";
@@ -40,17 +44,14 @@ export const DangerZoneSection: React.FC<DangerZoneSectionProps> = ({
   toggleStatusToClear,
   handleClearByStatuses,
   handleClearDatabase,
-  handleClearByScore,
+  handleClearByCategory,
   isLoading,
   isSaving,
   layoutMode,
 }) => {
-  const [scoreThreshold, setScoreThreshold] = useState<string>("");
-  const parsedThreshold = parseInt(scoreThreshold, 10);
-  const isValidThreshold =
-    !Number.isNaN(parsedThreshold) &&
-    parsedThreshold >= 0 &&
-    parsedThreshold <= 100;
+  const [selectedCategory, setSelectedCategory] =
+    useState<SuitabilityCategory | "">("");
+  const isValidCategory = selectedCategory !== "";
   const historyStatusesSelected = statusesToClear.filter(
     (status) => status === "closed" || status === "skipped",
   );
@@ -165,69 +166,86 @@ export const DangerZoneSection: React.FC<DangerZoneSectionProps> = ({
         <Separator />
 
         {/* Clear Jobs Below Score */}
-        {handleClearByScore && (
+        {handleClearByCategory && (
           <div className="p-3 rounded-md space-y-4">
             <div className="space-y-0.5">
               <div className="text-sm font-semibold text-destructive">
-                Clear Jobs Below Score
+                Clear Jobs by Fit Category
               </div>
               <div className="text-xs text-muted-foreground">
-                Remove all jobs with a suitability score below the specified
-                threshold. Live jobs (Applied + In Progress) are preserved.
+                Remove all jobs whose suitability is at or below the selected
+                category. Live jobs (Applied + In Progress) are preserved.
               </div>
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <div className="flex-1">
                 <label
-                  htmlFor="score-threshold"
+                  htmlFor="clear-category"
                   className="text-sm font-medium mb-1.5 block"
                 >
-                  Score Threshold (0-100)
+                  Fit category
                 </label>
-                <Input
-                  id="score-threshold"
-                  type="number"
-                  inputMode="numeric"
-                  min={0}
-                  max={100}
-                  step={1}
-                  placeholder="Enter score threshold"
-                  value={scoreThreshold}
-                  onChange={(e) => setScoreThreshold(e.target.value)}
+                <select
+                  id="clear-category"
+                  value={selectedCategory}
+                  onChange={(e) =>
+                    setSelectedCategory(
+                      e.target.value as SuitabilityCategory | "",
+                    )
+                  }
                   disabled={isLoading || isSaving}
-                  className="w-full"
-                />
+                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="">Select a category…</option>
+                  {SUITABILITY_CATEGORIES.map((category) => (
+                    <option key={category} value={category}>
+                      {SUITABILITY_CATEGORY_LABELS[category]} and worse
+                    </option>
+                  ))}
+                </select>
               </div>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button
                     variant="destructive"
                     size="default"
-                    disabled={isLoading || isSaving || !isValidThreshold}
+                    disabled={isLoading || isSaving || !isValidCategory}
                   >
                     <Trash2 className="mr-2 h-4 w-4" />
-                    Clear Below {isValidThreshold ? parsedThreshold : "..."}
+                    Clear{" "}
+                    {isValidCategory
+                      ? SUITABILITY_CATEGORY_LABELS[selectedCategory]
+                      : "..."}{" "}
+                    and worse
                   </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
                     <AlertDialogTitle>
-                      Clear jobs below score {parsedThreshold}?
+                      Clear jobs at or below "
+                      {isValidCategory
+                        ? SUITABILITY_CATEGORY_LABELS[selectedCategory]
+                        : ""}
+                      "?
                     </AlertDialogTitle>
                     <AlertDialogDescription>
-                      This will permanently delete all jobs with a suitability
-                      score below {parsedThreshold}. Live jobs (Applied + In
-                      Progress) are preserved. This action cannot be undone.
+                      This will permanently delete all jobs whose suitability
+                      category is at or below "
+                      {isValidCategory
+                        ? SUITABILITY_CATEGORY_LABELS[selectedCategory]
+                        : ""}
+                      ". Live jobs (Applied + In Progress) are preserved. This
+                      action cannot be undone.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                     <AlertDialogAction
                       onClick={() => {
-                        if (isValidThreshold) {
-                          handleClearByScore(parsedThreshold);
-                          setScoreThreshold("");
+                        if (isValidCategory) {
+                          handleClearByCategory(selectedCategory);
+                          setSelectedCategory("");
                         }
                       }}
                       className="bg-destructive text-destructive-foreground hover:bg-destructive/90"

@@ -30,7 +30,10 @@ import {
   LOCATION_MATCH_STRICTNESS_VALUES,
   LOCATION_SEARCH_SCOPE_VALUES,
 } from "@shared/location-preferences.js";
-import type { PipelineStatusResponse } from "@shared/types";
+import {
+  SUITABILITY_CATEGORIES,
+  type PipelineStatusResponse,
+} from "@shared/types";
 import { type Request, type Response, Router } from "express";
 import { z } from "zod";
 
@@ -139,7 +142,7 @@ pipelineRouter.get(
  */
 const runPipelineSchema = z.object({
   topN: z.number().min(1).max(50).optional(),
-  minSuitabilityScore: z.number().min(0).max(100).optional(),
+  minSuitabilityCategory: z.enum(SUITABILITY_CATEGORIES).optional(),
   sources: z
     .array(
       z.enum(
@@ -233,7 +236,7 @@ pipelineRouter.post("/run", async (req: Request, res: Response) => {
     runWithRequestContext({}, () => {
       runPipeline({
         topN: config.topN,
-        minSuitabilityScore: config.minSuitabilityScore,
+        minSuitabilityCategory: config.minSuitabilityCategory,
         sources: config.sources,
         locationIntent,
         enableAutoTailoring: config.enableAutoTailoring,

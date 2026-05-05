@@ -37,7 +37,7 @@ import {
 
 const DEFAULT_CONFIG: PipelineConfig = {
   topN: 10,
-  minSuitabilityScore: 50,
+  minSuitabilityCategory: "good_fit",
   // Keep Glassdoor opt-in via source picker/settings; do not enable by default.
   sources: ["indeed", "linkedin"],
   outputDir: join(getDataDir(), "pdfs"),
@@ -151,7 +151,7 @@ export async function runPipeline(
   };
   const configSnapshot = {
     topN: mergedConfig.topN,
-    minSuitabilityScore: mergedConfig.minSuitabilityScore,
+    minSuitabilityCategory: mergedConfig.minSuitabilityCategory,
     sources: mergedConfig.sources,
     locationIntent,
   } as const;
@@ -185,7 +185,7 @@ export async function runPipeline(
     };
     pipelineLogger.info("Starting pipeline run", {
       topN: mergedConfig.topN,
-      minSuitabilityScore: mergedConfig.minSuitabilityScore,
+      minSuitabilityCategory: mergedConfig.minSuitabilityCategory,
       sources: mergedConfig.sources,
       locationIntent: mergedConfig.locationIntent,
     });

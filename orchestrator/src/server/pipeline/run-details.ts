@@ -38,7 +38,7 @@ export function buildRequestedConfigSnapshot(
 ): PipelineRunRequestedConfig {
   return {
     topN: config.topN,
-    minSuitabilityScore: config.minSuitabilityScore,
+    minSuitabilityCategory: config.minSuitabilityCategory,
     sources: [...config.sources],
     enableCrawling: config.enableCrawling !== false,
     enableScoring: config.enableScoring !== false,
@@ -86,7 +86,7 @@ function buildEffectiveConfigSnapshot(args: {
       startupjobsMaxJobsPerTerm: args.settings.startupjobsMaxJobsPerTerm.value,
       jobspyResultsWanted: args.settings.jobspyResultsWanted.value,
     },
-    autoSkipScoreThreshold: args.settings.autoSkipScoreThreshold.value,
+    autoSkipCategory: args.settings.autoSkipCategory.value,
     models: {
       scorer: args.settings.modelScorer.value,
       tailoring: args.settings.modelTailoring.value,

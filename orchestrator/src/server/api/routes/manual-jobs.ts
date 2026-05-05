@@ -150,12 +150,12 @@ manualJobsRouter.post("/import", async (req: Request, res: Response) => {
     (async () => {
       try {
         const brief = await getActivePersonalBrief();
-        const { score, reason } = await scoreJobSuitability(
+        const { category, reason } = await scoreJobSuitability(
           processedJob,
           brief,
         );
         await jobsRepo.updateJob(processedJob.id, {
-          suitabilityScore: score,
+          suitabilityCategory: category,
           suitabilityReason: reason,
         });
       } catch (error) {
@@ -200,9 +200,9 @@ async function scoreJobAsync(jobId: string): Promise<void> {
   const job = await jobsRepo.getJobById(jobId);
   if (!job) return;
   const brief = await getActivePersonalBrief();
-  const { score, reason } = await scoreJobSuitability(job, brief);
+  const { category, reason } = await scoreJobSuitability(job, brief);
   await jobsRepo.updateJob(jobId, {
-    suitabilityScore: score,
+    suitabilityCategory: category,
     suitabilityReason: reason,
   });
 }

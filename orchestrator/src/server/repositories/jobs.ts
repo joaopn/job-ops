@@ -14,6 +14,7 @@ import type {
   JobNote,
   JobStatus,
   JobsRevisionResponse,
+  SuitabilityCategory,
   UpdateJobInput,
   UpdateJobNoteInput,
 } from "@shared/types";
@@ -21,7 +22,7 @@ import type {
   LocationEvidence,
   LocationEvidenceEntry,
 } from "@shared/types/location";
-import { and, desc, eq, inArray, isNull, lt, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { db, schema } from "../db/index";
 
 const { jobNotes, jobs } = schema;
@@ -118,7 +119,7 @@ export async function getJobListItems(
     status: jobs.status,
     outcome: jobs.outcome,
     closedAt: jobs.closedAt,
-    suitabilityScore: jobs.suitabilityScore,
+    suitabilityCategory: jobs.suitabilityCategory,
     jobType: jobs.jobType,
     jobFunction: jobs.jobFunction,
     salaryMinAmount: jobs.salaryMinAmount,
@@ -623,7 +624,7 @@ export async function getJobsForProcessing(limit: number = 10): Promise<Job[]> {
 }
 
 /**
- * Get discovered jobs missing a suitability score.
+ * Get discovered jobs missing a suitability category.
  */
 export async function getUnscoredDiscoveredJobs(
   limit?: number,
@@ -631,7 +632,9 @@ export async function getUnscoredDiscoveredJobs(
   const query = db
     .select()
     .from(jobs)
-    .where(and(eq(jobs.status, "discovered"), isNull(jobs.suitabilityScore)))
+    .where(
+      and(eq(jobs.status, "discovered"), isNull(jobs.suitabilityCategory)),
+    )
     .orderBy(desc(jobs.discoveredAt));
 
   const rows =
@@ -648,14 +651,18 @@ export async function deleteJobsByStatus(status: JobStatus): Promise<number> {
 }
 
 /**
- * Delete jobs with suitability score below threshold (excluding applied and in_progress jobs).
+ * Delete jobs whose suitability_category equals one of the supplied values
+ * (excluding applied and in_progress jobs).
  */
-export async function deleteJobsBelowScore(threshold: number): Promise<number> {
+export async function deleteJobsByCategory(
+  categories: readonly SuitabilityCategory[],
+): Promise<number> {
+  if (categories.length === 0) return 0;
   const result = await db
     .delete(jobs)
     .where(
       and(
-        lt(jobs.suitabilityScore, threshold),
+        inArray(jobs.suitabilityCategory, categories as SuitabilityCategory[]),
         ne(jobs.status, "applied"),
         ne(jobs.status, "in_progress"),
       ),
@@ -688,7 +695,7 @@ function mapRowToJob(row: typeof jobs.$inferSelect): Job {
     status: row.status as JobStatus,
     outcome: row.outcome ?? null,
     closedAt: row.closedAt ?? null,
-    suitabilityScore: row.suitabilityScore,
+    suitabilityCategory: row.suitabilityCategory ?? null,
     suitabilityReason: row.suitabilityReason,
     tailoredFields: parseFieldOverrides(row.tailoredFields),
     tailoringMatched: parseStringList(row.tailoringMatched),

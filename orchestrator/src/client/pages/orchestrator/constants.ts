@@ -142,7 +142,7 @@ export const sortLabels: Record<JobSort["key"], string> = {
   date: "Date",
   discoveredAt: "Discovered",
   posted: "Posted",
-  score: "Score",
+  score: "Fit",
   salary: "Salary",
   title: "Title",
   employer: "Company",

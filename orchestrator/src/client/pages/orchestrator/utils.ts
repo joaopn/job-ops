@@ -1,4 +1,9 @@
-import type { AppSettings, JobListItem, JobSource } from "@shared/types";
+import {
+  SUITABILITY_CATEGORY_RANK,
+  type AppSettings,
+  type JobListItem,
+  type JobSource,
+} from "@shared/types";
 import type { DateFilterDimension, FilterTab, JobSort } from "./constants";
 import {
   DEFAULT_PIPELINE_SOURCES,
@@ -76,16 +81,19 @@ export const compareJobs = (a: JobListItem, b: JobListItem, sort: JobSort) => {
       value = compareString(a.employer, b.employer);
       break;
     case "score": {
-      const aScore = a.suitabilityScore;
-      const bScore = b.suitabilityScore;
+      const aCategory = a.suitabilityCategory;
+      const bCategory = b.suitabilityCategory;
 
-      if (aScore == null && bScore == null) {
+      if (aCategory == null && bCategory == null) {
         value = 0;
         break;
       }
-      if (aScore == null) return 1;
-      if (bScore == null) return -1;
-      value = compareNumber(aScore, bScore);
+      if (aCategory == null) return 1;
+      if (bCategory == null) return -1;
+      value = compareNumber(
+        SUITABILITY_CATEGORY_RANK[aCategory],
+        SUITABILITY_CATEGORY_RANK[bCategory],
+      );
       break;
     }
     case "salary": {

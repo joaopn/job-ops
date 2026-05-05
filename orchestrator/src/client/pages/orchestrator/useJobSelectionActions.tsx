@@ -1,10 +1,13 @@
 import * as api from "@client/api";
-import type {
-  JobAction,
-  JobActionRequest,
-  JobActionResponse,
-  JobListItem,
-  JobOutcome,
+import {
+  SUITABILITY_CATEGORY_LABELS,
+  SUITABILITY_CATEGORY_RANK,
+  type JobAction,
+  type JobActionRequest,
+  type JobActionResponse,
+  type JobListItem,
+  type JobOutcome,
+  type SuitabilityCategory,
 } from "@shared/types.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -147,13 +150,20 @@ export function useJobSelectionActions({
     [activeJobs],
   );
 
-  const selectAllAboveScore = useCallback(
-    (threshold: number) => {
+  const selectAllByCategory = useCallback(
+    (category: SuitabilityCategory) => {
+      const minRank = SUITABILITY_CATEGORY_RANK[category];
       const matchingIds = activeJobs
-        .filter((job) => (job.suitabilityScore ?? -1) >= threshold)
+        .filter(
+          (job) =>
+            job.suitabilityCategory != null &&
+            SUITABILITY_CATEGORY_RANK[job.suitabilityCategory] >= minRank,
+        )
         .map((job) => job.id);
       if (matchingIds.length === 0) {
-        toast.message(`No jobs scored ≥ ${threshold} in this view.`);
+        toast.message(
+          `No "${SUITABILITY_CATEGORY_LABELS[category]}" or better jobs in this view.`,
+        );
         return;
       }
       if (matchingIds.length > MAX_JOB_ACTION_JOB_IDS) {
@@ -357,7 +367,7 @@ export function useJobSelectionActions({
     jobActionInFlight,
     toggleSelectJob,
     toggleSelectAll,
-    selectAllAboveScore,
+    selectAllByCategory,
     clearSelection,
     runJobAction,
     runMarkClosedAction,

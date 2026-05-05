@@ -11,6 +11,7 @@ import {
   JOB_CHAT_MESSAGE_ROLES,
   JOB_CHAT_MESSAGE_STATUSES,
   JOB_CHAT_RUN_STATUSES,
+  SUITABILITY_CATEGORIES,
 } from "@shared/types";
 import { sql } from "drizzle-orm";
 import {
@@ -117,7 +118,9 @@ export const jobs = sqliteTable("jobs", {
   // alongside. Backlog rows re-promote to `discovered` on the same shift.
   repostedAt: text("reposted_at"),
   repostCount: integer("repost_count").notNull().default(0),
-  suitabilityScore: real("suitability_score"),
+  suitabilityCategory: text("suitability_category", {
+    enum: SUITABILITY_CATEGORIES,
+  }),
   suitabilityReason: text("suitability_reason"),
   tailoredFields: text("tailored_fields", { mode: "json" })
     .notNull()

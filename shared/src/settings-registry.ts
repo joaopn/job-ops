@@ -4,6 +4,10 @@ import {
   LOCATION_SEARCH_SCOPE_VALUES,
 } from "./location-preferences";
 import {
+  SUITABILITY_CATEGORIES,
+  type SuitabilityCategory,
+} from "./types/jobs";
+import {
   CHAT_STYLE_LANGUAGE_MODE_VALUES,
   CHAT_STYLE_MANUAL_LANGUAGE_VALUES,
   type ChatStyleLanguageMode,
@@ -431,18 +435,33 @@ export const settingsRegistry = {
     },
     serialize: serializeNullableNumber,
   },
-  autoSkipScoreThreshold: {
+  minSuitabilityCategory: {
     kind: "typed" as const,
-    schema: z.number().int().min(0).max(100),
-    default: (): number | null => null,
-    parse: (raw: string | undefined): number | null => {
+    schema: z.enum(SUITABILITY_CATEGORIES),
+    default: (): SuitabilityCategory => "good_fit",
+    parse: (raw: string | undefined): SuitabilityCategory | null => {
+      if (!raw) return null;
+      return (SUITABILITY_CATEGORIES as readonly string[]).includes(raw)
+        ? (raw as SuitabilityCategory)
+        : null;
+    },
+    serialize: (
+      value: SuitabilityCategory | null | undefined,
+    ): string | null => value ?? null,
+  },
+  autoSkipCategory: {
+    kind: "typed" as const,
+    schema: z.enum(SUITABILITY_CATEGORIES),
+    default: (): SuitabilityCategory | null => null,
+    parse: (raw: string | undefined): SuitabilityCategory | null => {
       if (!raw || raw === "null" || raw === "") return null;
-      const parsed = parseInt(raw, 10);
-      return Number.isNaN(parsed) ? null : Math.min(100, Math.max(0, parsed));
+      return (SUITABILITY_CATEGORIES as readonly string[]).includes(raw)
+        ? (raw as SuitabilityCategory)
+        : null;
     },
-    serialize: (value: number | null | undefined): string | null => {
-      return value === null || value === undefined ? null : String(value);
-    },
+    serialize: (
+      value: SuitabilityCategory | null | undefined,
+    ): string | null => value ?? null,
   },
   autoTailoringEnabled: {
     kind: "typed" as const,

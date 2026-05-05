@@ -1,4 +1,8 @@
-import type { JobListItem } from "@shared/types.js";
+import {
+  SUITABILITY_CATEGORY_LABELS,
+  type JobListItem,
+  type SuitabilityCategory,
+} from "@shared/types.js";
 import { Loader2 } from "lucide-react";
 import { type ReactNode, forwardRef, useImperativeHandle } from "react";
 import {
@@ -32,7 +36,7 @@ interface JobListPanelProps {
   onSelectJob: (jobId: string) => void;
   onToggleSelectJob: (jobId: string) => void;
   onToggleSelectAll: (checked: boolean) => void;
-  onSelectAllAboveScore?: (threshold: number) => void;
+  onSelectAllByCategory?: (category: SuitabilityCategory) => void;
   primaryEmptyStateAction?: EmptyStateAction;
   secondaryEmptyStateAction?: EmptyStateAction;
   emptyStateMessage?: string;
@@ -54,7 +58,7 @@ export const JobListPanel = forwardRef<VirtualListHandle, JobListPanelProps>(
       onSelectJob,
       onToggleSelectJob,
       onToggleSelectAll,
-      onSelectAllAboveScore,
+      onSelectAllByCategory,
       primaryEmptyStateAction,
       secondaryEmptyStateAction,
       emptyStateMessage,
@@ -151,19 +155,24 @@ export const JobListPanel = forwardRef<VirtualListHandle, JobListPanelProps>(
               Select all filtered
             </label>
             <div className="flex items-center gap-2">
-              {onSelectAllAboveScore && activeTab === "inbox" && (
+              {onSelectAllByCategory && activeTab === "inbox" && (
                 <div className="hidden gap-1 sm:flex">
-                  {[60, 70, 80].map((threshold) => (
+                  {(
+                    ["very_good_fit", "good_fit"] as const satisfies readonly [
+                      SuitabilityCategory,
+                      SuitabilityCategory,
+                    ]
+                  ).map((category) => (
                     <Button
-                      key={threshold}
+                      key={category}
                       type="button"
                       size="sm"
                       variant="ghost"
                       className="h-7 px-2 text-xs"
-                      onClick={() => onSelectAllAboveScore(threshold)}
-                      title={`Select jobs with score ≥ ${threshold}`}
+                      onClick={() => onSelectAllByCategory(category)}
+                      title={`Select ${SUITABILITY_CATEGORY_LABELS[category]} or better`}
                     >
-                      ≥ {threshold}
+                      ≥ {SUITABILITY_CATEGORY_LABELS[category]}
                     </Button>
                   ))}
                 </div>

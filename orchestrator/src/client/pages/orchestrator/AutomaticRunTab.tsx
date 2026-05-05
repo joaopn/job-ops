@@ -13,7 +13,12 @@ import {
   normalizeCountryKey,
   SUPPORTED_COUNTRY_KEYS,
 } from "@shared/location-support.js";
-import type { AppSettings, JobSource } from "@shared/types";
+import {
+  SUITABILITY_CATEGORY_LABELS,
+  type AppSettings,
+  type JobSource,
+  type SuitabilityCategory,
+} from "@shared/types";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Info, Loader2, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -69,7 +74,7 @@ interface AutomaticRunTabProps {
 
 const DEFAULT_VALUES: AutomaticRunValues = {
   topN: 10,
-  minSuitabilityScore: 50,
+  minSuitabilityCategory: "good_fit",
   searchTerms: ["web developer"],
   runBudget: 200,
   country: "",
@@ -81,7 +86,7 @@ const DEFAULT_VALUES: AutomaticRunValues = {
 
 interface AutomaticRunFormValues {
   topN: string;
-  minSuitabilityScore: string;
+  minSuitabilityCategory: SuitabilityCategory;
   runBudget: string;
   country: string;
   cityLocations: string[];
@@ -256,7 +261,7 @@ export const AutomaticRunTab: React.FC<AutomaticRunTabProps> = ({
   const { watch, reset, setValue } = useForm<AutomaticRunFormValues>({
     defaultValues: {
       topN: String(DEFAULT_VALUES.topN),
-      minSuitabilityScore: String(DEFAULT_VALUES.minSuitabilityScore),
+      minSuitabilityCategory: DEFAULT_VALUES.minSuitabilityCategory,
       runBudget: String(DEFAULT_VALUES.runBudget),
       country: DEFAULT_VALUES.country,
       cityLocations: [],
@@ -270,7 +275,7 @@ export const AutomaticRunTab: React.FC<AutomaticRunTabProps> = ({
   });
 
   const topNInput = watch("topN");
-  const minScoreInput = watch("minSuitabilityScore");
+  const minCategoryInput = watch("minSuitabilityCategory");
   const runBudgetInput = watch("runBudget");
   const countryInput = watch("country");
   const cityLocations = watch("cityLocations");
@@ -295,10 +300,10 @@ export const AutomaticRunTab: React.FC<AutomaticRunTabProps> = ({
         : null;
     const rememberedTopN =
       rememberedPresetValues?.topN ?? memory?.topN ?? DEFAULT_VALUES.topN;
-    const rememberedMinSuitabilityScore =
-      rememberedPresetValues?.minSuitabilityScore ??
-      memory?.minSuitabilityScore ??
-      DEFAULT_VALUES.minSuitabilityScore;
+    const rememberedMinSuitabilityCategory =
+      rememberedPresetValues?.minSuitabilityCategory ??
+      memory?.minSuitabilityCategory ??
+      DEFAULT_VALUES.minSuitabilityCategory;
     const rememberedRunBudget = normalizeRunBudget(
       rememberedPresetValues?.runBudget ??
         memory?.runBudget ??
@@ -337,7 +342,7 @@ export const AutomaticRunTab: React.FC<AutomaticRunTabProps> = ({
     setBrowserCountrySuggestion(suggestion);
     reset({
       topN: String(rememberedTopN),
-      minSuitabilityScore: String(rememberedMinSuitabilityScore),
+      minSuitabilityCategory: rememberedMinSuitabilityCategory,
       runBudget: String(rememberedRunBudget),
       country: countryValue,
       cityLocations: rememberedLocations,
@@ -373,12 +378,7 @@ export const AutomaticRunTab: React.FC<AutomaticRunTabProps> = ({
     const normalizedCountry = normalizeUiCountryKey(countryInput);
     return {
       topN: toNumber(topNInput, 1, 50, DEFAULT_VALUES.topN),
-      minSuitabilityScore: toNumber(
-        minScoreInput,
-        0,
-        100,
-        DEFAULT_VALUES.minSuitabilityScore,
-      ),
+      minSuitabilityCategory: minCategoryInput,
       runBudget: toNumber(
         runBudgetInput,
         MIN_RUN_BUDGET,
@@ -394,7 +394,7 @@ export const AutomaticRunTab: React.FC<AutomaticRunTabProps> = ({
     };
   }, [
     topNInput,
-    minScoreInput,
+    minCategoryInput,
     runBudgetInput,
     countryInput,
     cityLocations,
@@ -581,7 +581,7 @@ export const AutomaticRunTab: React.FC<AutomaticRunTabProps> = ({
     const preset = AUTOMATIC_PRESETS[presetId];
     setSelectedPreset(presetId);
     setValue("topN", String(preset.topN), { shouldDirty: true });
-    setValue("minSuitabilityScore", String(preset.minSuitabilityScore), {
+    setValue("minSuitabilityCategory", preset.minSuitabilityCategory, {
       shouldDirty: true,
     });
     setValue("runBudget", String(preset.runBudget), { shouldDirty: true });
@@ -592,7 +592,7 @@ export const AutomaticRunTab: React.FC<AutomaticRunTabProps> = ({
     try {
       saveAutomaticRunMemory({
         topN: values.topN,
-        minSuitabilityScore: values.minSuitabilityScore,
+        minSuitabilityCategory: values.minSuitabilityCategory,
         runBudget: values.runBudget,
         presetId: selectedPreset,
       });
@@ -922,18 +922,47 @@ export const AutomaticRunTab: React.FC<AutomaticRunTabProps> = ({
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="min-score">Min suitability score</Label>
-                      <Input
-                        id="min-score"
-                        type="number"
-                        min={0}
-                        max={100}
-                        value={minScoreInput}
-                        onChange={(event) => {
+                      <Label>Min suitability</Label>
+                      <RadioGroup
+                        value={minCategoryInput}
+                        onValueChange={(value) => {
                           setSelectedPreset("custom");
-                          setValue("minSuitabilityScore", event.target.value);
+                          setValue(
+                            "minSuitabilityCategory",
+                            value as SuitabilityCategory,
+                            { shouldDirty: true },
+                          );
                         }}
-                      />
+                        className="gap-2"
+                      >
+                        {(
+                          [
+                            "very_good_fit",
+                            "good_fit",
+                            "bad_fit",
+                          ] as const satisfies readonly SuitabilityCategory[]
+                        ).map((category) => {
+                          const id = `min-category-${category}`;
+                          const selected = minCategoryInput === category;
+                          return (
+                            <label
+                              key={category}
+                              htmlFor={id}
+                              className={getRadioOptionClassName(selected)}
+                            >
+                              <RadioGroupItem value={category} id={id} />
+                              <span className="text-sm font-medium">
+                                {SUITABILITY_CATEGORY_LABELS[category]}
+                                {category === "good_fit"
+                                  ? " (and better)"
+                                  : category === "bad_fit"
+                                    ? " (everything)"
+                                    : ""}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </RadioGroup>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="jobs-per-term">Max jobs discovered</Label>

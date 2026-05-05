@@ -52,6 +52,31 @@ export const APPLICATION_OUTCOMES = [
 
 export type JobOutcome = (typeof APPLICATION_OUTCOMES)[number];
 
+export const SUITABILITY_CATEGORIES = [
+  "very_good_fit",
+  "good_fit",
+  "bad_fit",
+] as const;
+
+export type SuitabilityCategory = (typeof SUITABILITY_CATEGORIES)[number];
+
+export const SUITABILITY_CATEGORY_LABELS: Record<SuitabilityCategory, string> =
+  {
+    very_good_fit: "Very good fit",
+    good_fit: "Good fit",
+    bad_fit: "Bad fit",
+  };
+
+/**
+ * Rank from "worst" (0) to "best" (2). Used to implement
+ * "min category" filtering: a job qualifies when its rank >= threshold rank.
+ */
+export const SUITABILITY_CATEGORY_RANK: Record<SuitabilityCategory, number> = {
+  bad_fit: 0,
+  good_fit: 1,
+  very_good_fit: 2,
+};
+
 export const APPLICATION_TASK_TYPES = [
   "prep",
   "todo",
@@ -173,7 +198,7 @@ export interface Job {
   status: JobStatus;
   outcome: JobOutcome | null;
   closedAt: number | null;
-  suitabilityScore: number | null; // 0-100 AI-generated score
+  suitabilityCategory: SuitabilityCategory | null; // AI-generated categorical fit
   suitabilityReason: string | null; // AI explanation
   tailoredFields: CvFieldOverrides; // Per-field override map; absent ids fall back to the field's original value
   tailoringMatched: string[] | null; // ATS keywords surfaced in tailoredFields
@@ -237,7 +262,7 @@ export type JobListItem = Pick<
   | "status"
   | "outcome"
   | "closedAt"
-  | "suitabilityScore"
+  | "suitabilityCategory"
   | "appliedDuplicateMatch"
   | "jobType"
   | "jobFunction"
@@ -338,7 +363,7 @@ export interface UpdateJobInput {
   closedAt?: number | null;
   jobDescription?: string | null;
   locationEvidence?: JobLocationEvidence | null;
-  suitabilityScore?: number;
+  suitabilityCategory?: SuitabilityCategory | null;
   suitabilityReason?: string;
   tailoredFields?: CvFieldOverrides;
   tailoringMatched?: string[] | null;

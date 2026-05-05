@@ -52,7 +52,7 @@ function buildJobSnapshot(job: Job): string {
       status: job.status,
       jobUrl: job.jobUrl,
       applicationLink: job.applicationLink,
-      suitabilityScore: job.suitabilityScore,
+      suitabilityCategory: job.suitabilityCategory,
       suitabilityReason: truncate(job.suitabilityReason, 600),
       jobDescription: truncate(job.jobDescription, MAX_JOB_DESCRIPTION),
     },

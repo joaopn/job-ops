@@ -2,6 +2,7 @@ import type {
   LocationMatchStrictness,
   LocationSearchScope,
 } from "../location-preferences";
+import type { SuitabilityCategory } from "./jobs";
 
 export const CHAT_STYLE_LANGUAGE_MODE_VALUES = [
   "manual",
@@ -81,7 +82,8 @@ export interface AppSettings {
   chatStyleMaxKeywordsPerSkill: Resolved<number | null>;
   penalizeMissingSalary: Resolved<boolean>;
   missingSalaryPenalty: Resolved<number>;
-  autoSkipScoreThreshold: Resolved<number | null>;
+  minSuitabilityCategory: Resolved<SuitabilityCategory>;
+  autoSkipCategory: Resolved<SuitabilityCategory | null>;
   autoTailoringEnabled: Resolved<boolean>;
   enableJobScoring: Resolved<boolean>;
   inboxStaleThresholdDays: Resolved<number>;

@@ -1,6 +1,7 @@
 import type {
   ChatStyleLanguageMode,
   ChatStyleManualLanguage,
+  SuitabilityCategory,
 } from "@shared/types.js";
 
 export type EffectiveDefault<T> = {
@@ -45,7 +46,7 @@ export type EnvSettingsValues = {
 export type ScoringValues = {
   penalizeMissingSalary: EffectiveDefault<boolean>;
   missingSalaryPenalty: EffectiveDefault<number>;
-  autoSkipScoreThreshold: EffectiveDefault<number | null>;
+  autoSkipCategory: EffectiveDefault<SuitabilityCategory | null>;
   blockedCompanyKeywords: EffectiveDefault<string[]>;
   scoringInstructions: EffectiveDefault<string>;
 };

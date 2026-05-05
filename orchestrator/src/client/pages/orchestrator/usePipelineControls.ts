@@ -4,7 +4,11 @@ import {
   createLocationIntent,
   planLocationSources,
 } from "@shared/location-intelligence.js";
-import type { AppSettings, JobSource } from "@shared/types.js";
+import type {
+  AppSettings,
+  JobSource,
+  SuitabilityCategory,
+} from "@shared/types.js";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { AutomaticRunValues } from "./automatic-run";
@@ -70,7 +74,7 @@ export function usePipelineControls(
   const startPipelineRun = useCallback(
     async (config: {
       topN: number;
-      minSuitabilityScore: number;
+      minSuitabilityCategory: SuitabilityCategory;
       sources: JobSource[];
       runBudget: number;
       searchTerms: string[];
@@ -85,7 +89,7 @@ export function usePipelineControls(
         setIsCancelling(false);
         await api.runPipeline({
           topN: config.topN,
-          minSuitabilityScore: config.minSuitabilityScore,
+          minSuitabilityCategory: config.minSuitabilityCategory,
           sources: config.sources,
           runBudget: config.runBudget,
           searchTerms: config.searchTerms,
@@ -176,7 +180,7 @@ export function usePipelineControls(
         ...values,
         sources: compatibleSources,
         topN: values.topN,
-        minSuitabilityScore: values.minSuitabilityScore,
+        minSuitabilityCategory: values.minSuitabilityCategory,
       });
       setIsRunModeModalOpen(false);
     },

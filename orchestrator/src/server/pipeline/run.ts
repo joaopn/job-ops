@@ -5,9 +5,20 @@
  * Usage: npm run pipeline:run
  */
 
+import {
+  SUITABILITY_CATEGORIES,
+  type SuitabilityCategory,
+} from "@shared/types";
 import "../config/env";
 import { closeDb } from "../db/index";
 import { runPipeline } from "./orchestrator";
+
+function parseEnvCategory(raw: string | undefined): SuitabilityCategory {
+  if (raw && (SUITABILITY_CATEGORIES as readonly string[]).includes(raw)) {
+    return raw as SuitabilityCategory;
+  }
+  return "good_fit";
+}
 
 async function main() {
   console.log("=".repeat(60));
@@ -17,7 +28,9 @@ async function main() {
 
   const result = await runPipeline({
     topN: parseInt(process.env.PIPELINE_TOP_N || "10", 10),
-    minSuitabilityScore: parseInt(process.env.PIPELINE_MIN_SCORE || "50", 10),
+    minSuitabilityCategory: parseEnvCategory(
+      process.env.PIPELINE_MIN_CATEGORY,
+    ),
   });
 
   console.log(`\n${"=".repeat(60)}`);

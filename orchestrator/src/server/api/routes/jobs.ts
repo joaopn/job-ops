@@ -21,6 +21,7 @@ import { scoreJobSuitability } from "@server/services/scorer";
 import { asyncPool } from "@server/utils/async-pool";
 import {
   APPLICATION_OUTCOMES,
+  SUITABILITY_CATEGORIES,
   type Job,
   type JobAction,
   type JobActionResponse,
@@ -70,7 +71,7 @@ const updateJobSchema = z.object({
   outcome: z.enum(APPLICATION_OUTCOMES).nullable().optional(),
   closedAt: z.number().int().nullable().optional(),
   jobDescription: z.string().trim().max(40000).nullable().optional(),
-  suitabilityScore: z.number().min(0).max(100).optional(),
+  suitabilityCategory: z.enum(SUITABILITY_CATEGORIES).nullable().optional(),
   suitabilityReason: z.string().optional(),
   pdfPath: z.string().optional(),
   coverLetterDraft: z.string().max(40000).optional(),
@@ -462,10 +463,10 @@ async function executeJobActionForJob(
       ? await options.getBriefForRescore()
       : await getActivePersonalBrief();
 
-    const { score, reason } = await scoreJobSuitability(job, brief);
+    const { category, reason } = await scoreJobSuitability(job, brief);
 
     const updated = await jobsRepo.updateJob(job.id, {
-      suitabilityScore: score,
+      suitabilityCategory: category,
       suitabilityReason: reason,
     });
     if (!updated) {
@@ -1426,26 +1427,39 @@ jobsRouter.delete("/status/:status", async (req: Request, res: Response) => {
 });
 
 /**
- * DELETE /api/jobs/score/:threshold - Clear jobs with score below threshold (excluding post-apply statuses)
+ * DELETE /api/jobs/category/:category - Clear jobs whose suitability_category
+ * is at-or-below the supplied category (excluding post-apply statuses).
  */
-jobsRouter.delete("/score/:threshold", async (req: Request, res: Response) => {
-  try {
-    const threshold = parseInt(req.params.threshold, 10);
-    if (Number.isNaN(threshold) || threshold < 0 || threshold > 100) {
-      return fail(
-        res,
-        badRequest("Threshold must be a number between 0 and 100"),
+jobsRouter.delete(
+  "/category/:category",
+  async (req: Request, res: Response) => {
+    try {
+      const raw = req.params.category;
+      if (
+        !(SUITABILITY_CATEGORIES as readonly string[]).includes(raw)
+      ) {
+        return fail(
+          res,
+          badRequest(
+            `Category must be one of: ${SUITABILITY_CATEGORIES.join(", ")}`,
+          ),
+        );
+      }
+      const category = raw as (typeof SUITABILITY_CATEGORIES)[number];
+      const targetRank =
+        SUITABILITY_CATEGORIES.indexOf(category);
+      const categoriesToDelete = SUITABILITY_CATEGORIES.filter(
+        (_value, idx) => idx >= targetRank,
       );
+      const count = await jobsRepo.deleteJobsByCategory(categoriesToDelete);
+
+      ok(res, {
+        message: `Cleared ${count} jobs at or below "${category}"`,
+        count,
+        category,
+      });
+    } catch (error) {
+      fail(res, toAppError(error));
     }
-
-    const count = await jobsRepo.deleteJobsBelowScore(threshold);
-
-    ok(res, {
-      message: `Cleared ${count} jobs with score below ${threshold}`,
-      count,
-      threshold,
-    });
-  } catch (error) {
-    fail(res, toAppError(error));
-  }
-});
+  },
+);

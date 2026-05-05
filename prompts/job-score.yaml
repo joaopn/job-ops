@@ -1,6 +1,7 @@
 name: job-score
 description: |
-  Scores how well a candidate fits a job on a 0-100 scale.
+  Classifies how well a candidate fits a job into one of three categories:
+  very_good_fit, good_fit, or bad_fit.
   Used by services/scorer.ts when ranking discovered jobs.
 variables:
   - name: briefText
@@ -18,7 +19,15 @@ model:
   preferStructuredOutput: true
 system: ""
 user: |
-  Rate how well this candidate fits the job on a 0-100 scale.
+  Classify how well this candidate fits the job. Pick exactly one of:
+    - "very_good_fit": clear, strong match. The candidate's brief shows
+      direct, recent experience covering most of the job's core
+      requirements; level and domain align.
+    - "good_fit": reasonable match with some stretch. The brief shows
+      relevant experience but is missing one or two important pieces, or
+      the level/domain partially overlap.
+    - "bad_fit": substantial mismatch. The brief lacks the core
+      requirements, the level is wrong, or the domain is unrelated.
 
   Candidate brief:
   {{briefText}}
@@ -36,4 +45,6 @@ user: |
 
   Additional scoring guidance: {{scoringInstructionsText}}
 
-  Respond as JSON with { "score": <0-100 integer>, "reason": "<one to two sentence explanation>" }.
+  Respond as JSON with
+    { "category": "<very_good_fit | good_fit | bad_fit>",
+      "reason": "<one to two sentence explanation>" }.

@@ -1,4 +1,4 @@
-import type { JobListItem } from "@shared/types.js";
+import type { JobListItem, SuitabilityCategory } from "@shared/types.js";
 import { cn } from "@/lib/utils";
 import { defaultStatusToken, statusTokens } from "./constants";
 
@@ -13,11 +13,18 @@ interface JobRowContentProps {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-function getSuitabilityScoreTone(score: number): string {
-  if (score >= 70) return "text-emerald-400/90";
-  if (score >= 50) return "text-foreground/60";
-  return "text-muted-foreground/60";
-}
+const CATEGORY_PILL_CLASS: Record<SuitabilityCategory, string> = {
+  very_good_fit:
+    "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30",
+  good_fit: "bg-sky-500/10 text-sky-300 border border-sky-500/30",
+  bad_fit: "bg-muted/40 text-muted-foreground border border-border/60",
+};
+
+const CATEGORY_PILL_LABEL: Record<SuitabilityCategory, string> = {
+  very_good_fit: "Very good",
+  good_fit: "Good",
+  bad_fit: "Bad",
+};
 
 function parseDate(value: string | null | undefined): number | null {
   if (!value) return null;
@@ -56,9 +63,8 @@ export const JobRowContent = ({
   className,
   staleThresholdDays,
 }: JobRowContentProps) => {
-  const hasScore = job.suitabilityScore != null;
+  const category = job.suitabilityCategory ?? null;
   const statusToken = statusTokens[job.status] ?? defaultStatusToken;
-  const suitabilityTone = getSuitabilityScoreTone(job.suitabilityScore ?? 0);
   const age = formatAge(job, Date.now());
   const isStale =
     job.status === "discovered" &&
@@ -124,10 +130,15 @@ export const JobRowContent = ({
         )}
       </div>
 
-      {hasScore && (
+      {category && (
         <div className="shrink-0 text-right">
-          <span className={cn("text-xs tabular-nums", suitabilityTone)}>
-            {job.suitabilityScore}
+          <span
+            className={cn(
+              "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+              CATEGORY_PILL_CLASS[category],
+            )}
+          >
+            {CATEGORY_PILL_LABEL[category]}
           </span>
         </div>
       )}

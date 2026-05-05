@@ -1,7 +1,12 @@
-import type { CreateJobInput, Job, PipelineConfig } from "@shared/types";
+import type {
+  CreateJobInput,
+  Job,
+  PipelineConfig,
+  SuitabilityCategory,
+} from "@shared/types";
 
 export type ScoredJob = Job & {
-  suitabilityScore: number;
+  suitabilityCategory: SuitabilityCategory;
   suitabilityReason: string;
 };
 

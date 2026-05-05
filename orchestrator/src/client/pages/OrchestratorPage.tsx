@@ -226,7 +226,7 @@ export const OrchestratorPage: React.FC = () => {
     jobActionInFlight,
     toggleSelectJob,
     toggleSelectAll,
-    selectAllAboveScore,
+    selectAllByCategory,
     clearSelection,
     runJobAction,
     runMarkClosedAction,
@@ -508,7 +508,7 @@ export const OrchestratorPage: React.FC = () => {
               onSelectJob={handleSelectJob}
               onToggleSelectJob={toggleSelectJob}
               onToggleSelectAll={toggleSelectAll}
-              onSelectAllAboveScore={selectAllAboveScore}
+              onSelectAllByCategory={selectAllByCategory}
               primaryEmptyStateAction={primaryEmptyStateAction}
               secondaryEmptyStateAction={secondaryEmptyStateAction}
               emptyStateMessage={emptyStateMessage}

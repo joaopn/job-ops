@@ -17,7 +17,7 @@ vi.mock("@server/extractors/registry", () => ({
 
 const baseConfig: PipelineConfig = {
   topN: 10,
-  minSuitabilityScore: 50,
+  minSuitabilityCategory: "good_fit",
   sources: ["indeed", "linkedin", "hiringcafe"],
   outputDir: "./tmp",
   enableCrawling: true,
