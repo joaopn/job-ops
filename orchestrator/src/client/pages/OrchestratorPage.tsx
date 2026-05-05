@@ -1,4 +1,5 @@
 import { useKeyboardAvailability } from "@client/hooks/useKeyboardAvailability";
+import { useLlmCallQueue } from "@client/hooks/useLlmCallQueue";
 import { useSettings } from "@client/hooks/useSettings";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -12,6 +13,7 @@ import { type FilterTab, tabs } from "./orchestrator/constants";
 import { FloatingJobActionsBar } from "./orchestrator/FloatingJobActionsBar";
 import { BatchUrlImportSheet } from "./orchestrator/BatchUrlImportSheet";
 import { ClosedFilterChips } from "./orchestrator/ClosedFilterChips";
+import { LlmCallQueueSheet } from "./orchestrator/LlmCallQueueSheet";
 import { JobCommandBar } from "./orchestrator/JobCommandBar";
 import { JobDetailPanel } from "./orchestrator/JobDetailPanel";
 import { JobListPanel } from "./orchestrator/JobListPanel";
@@ -119,6 +121,8 @@ export const OrchestratorPage: React.FC = () => {
   const [isHelpDialogOpen, setIsHelpDialogOpen] = useState(false);
   const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
   const [isBatchUrlImportOpen, setIsBatchUrlImportOpen] = useState(false);
+  const [isLlmQueueOpen, setIsLlmQueueOpen] = useState(false);
+  const llmQueue = useLlmCallQueue(true);
   const hasKeyboard = useKeyboardAvailability();
 
   const [isDesktop, setIsDesktop] = useState(() =>
@@ -261,6 +265,7 @@ export const OrchestratorPage: React.FC = () => {
     isHelpDialogOpen ||
     isDetailDrawerOpen ||
     isBatchUrlImportOpen ||
+    isLlmQueueOpen ||
     navOpen;
 
   const isAnyModalOpenExcludingCommandBar =
@@ -269,6 +274,7 @@ export const OrchestratorPage: React.FC = () => {
     isHelpDialogOpen ||
     isDetailDrawerOpen ||
     isBatchUrlImportOpen ||
+    isLlmQueueOpen ||
     navOpen;
 
   const isAnyModalOpenExcludingHelp =
@@ -277,6 +283,7 @@ export const OrchestratorPage: React.FC = () => {
     isFiltersOpen ||
     isDetailDrawerOpen ||
     isBatchUrlImportOpen ||
+    isLlmQueueOpen ||
     navOpen;
 
   useKeyboardShortcuts({
@@ -439,6 +446,8 @@ export const OrchestratorPage: React.FC = () => {
         pipelineSources={pipelineSources}
         onOpenAutomaticRun={() => openRunMode()}
         onOpenBatchUrlImport={() => setIsBatchUrlImportOpen(true)}
+        onOpenLlmQueue={() => setIsLlmQueueOpen(true)}
+        llmActiveCount={llmQueue.active.length}
         onCancelPipeline={handleCancelPipeline}
       />
 
@@ -570,6 +579,14 @@ export const OrchestratorPage: React.FC = () => {
         open={isBatchUrlImportOpen}
         onOpenChange={setIsBatchUrlImportOpen}
         onCompleted={loadJobs}
+      />
+
+      <LlmCallQueueSheet
+        open={isLlmQueueOpen}
+        onOpenChange={setIsLlmQueueOpen}
+        active={llmQueue.active}
+        recent={llmQueue.recent}
+        connected={llmQueue.connected}
       />
 
       {!isDesktop && (

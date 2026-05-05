@@ -119,6 +119,8 @@ export async function scoreJobSuitability(
     jsonSchema: SCORING_SCHEMA,
     maxRetries: 2,
     jobId: job.id,
+    label: "score job",
+    subject: `${job.title} @ ${job.employer}`,
   });
 
   if (!result.success) {

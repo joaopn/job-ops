@@ -80,6 +80,7 @@ export async function extractCv(args: ExtractCvArgs): Promise<ExtractCvResult> {
     messages,
     jsonSchema: EXTRACT_SCHEMA,
     maxRetries: 1,
+    label: "extract CV fields",
   });
 
   if (!result.success) {

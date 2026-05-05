@@ -1,5 +1,6 @@
 import { promises as fs } from "node:fs";
 import { join } from "node:path";
+import { logger } from "@infra/logger";
 import { getDataDir } from "@server/config/dataDir";
 import * as cvRepo from "@server/repositories/cv-documents";
 import { renderCv, RenderCvError } from "@server/services/cv/render";
@@ -47,6 +48,29 @@ export async function generatePdf(args: GeneratePdfArgs): Promise<PdfResult> {
       return { success: false, error: `Template render failed: ${error.message}` };
     }
     throw error;
+  }
+
+  const overrideCount = Object.keys(args.overrides ?? {}).length;
+  const identicalToBaseline = renderedTex === document.flattenedTex;
+  logger.info("CV render result", {
+    jobId: args.jobId,
+    cvDocumentId: args.cvDocumentId,
+    overrideCount,
+    cvFieldCount: document.fields.length,
+    flattenedTexLength: document.flattenedTex.length,
+    renderedTexLength: renderedTex.length,
+    identicalToBaseline,
+  });
+  if (overrideCount > 0 && identicalToBaseline) {
+    logger.warn(
+      "CV render produced byte-identical output despite overrides — fieldId mismatch or unfindable values",
+      {
+        jobId: args.jobId,
+        cvDocumentId: args.cvDocumentId,
+        overrideIds: Object.keys(args.overrides ?? {}).slice(0, 10),
+        cvFieldIdSample: document.fields.slice(0, 5).map((f) => f.id),
+      },
+    );
   }
 
   const pdfDir = join(getDataDir(), "pdfs");

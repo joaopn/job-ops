@@ -1,6 +1,7 @@
 import { logger } from "@infra/logger";
 import { toStringOrNull } from "@shared/utils/type-conversion";
 import { CodexClient } from "./codex/client";
+import { llmCallObserver } from "./observer";
 import {
   buildModeCacheKey,
   getOrderedModes,
@@ -78,6 +79,26 @@ export class LlmService {
   }
 
   async callJson<T>(options: LlmRequestOptions<T>): Promise<LlmResponse<T>> {
+    const handle = llmCallObserver.register({
+      label: options.label?.trim() || "llm call",
+      subject: options.subject?.trim() || null,
+      model: options.model,
+      jobId: options.jobId ?? null,
+    });
+    try {
+      const result = await this.callJsonInner<T>(options);
+      if (result.success) handle.succeed();
+      else handle.fail(result.error);
+      return result;
+    } catch (error) {
+      handle.fail(error instanceof Error ? error.message : String(error));
+      throw error;
+    }
+  }
+
+  private async callJsonInner<T>(
+    options: LlmRequestOptions<T>,
+  ): Promise<LlmResponse<T>> {
     if (this.provider === "codex") {
       return this.callCodexJson(options);
     }

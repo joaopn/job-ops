@@ -242,6 +242,7 @@ export async function inferManualJobDetails(
     model,
     messages,
     jsonSchema: MANUAL_JOB_SCHEMA,
+    label: "infer job from URL",
   });
 
   if (!result.success) {

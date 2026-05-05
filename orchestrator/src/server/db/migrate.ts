@@ -221,6 +221,11 @@ const migrations: string[] = [
   `ALTER TABLE jobs ADD COLUMN tailoring_skipped TEXT`,
   `ALTER TABLE jobs ADD COLUMN cv_document_id TEXT REFERENCES cv_documents(id) ON DELETE SET NULL`,
   `ALTER TABLE jobs ADD COLUMN cover_letter_draft TEXT NOT NULL DEFAULT ''`,
+  // Idempotent ALTER so the jobs-rebuild SELECT below can reference
+  // `tailored_fields` directly instead of hardcoding `'{}' AS
+  // tailored_fields`. Without this, every boot wipes per-job tailoring back
+  // to '{}' (the rebuild runs on every startup).
+  `ALTER TABLE jobs ADD COLUMN tailored_fields TEXT NOT NULL DEFAULT '{}'`,
   `ALTER TABLE job_chat_messages ADD COLUMN proposed_edit TEXT`,
   `ALTER TABLE job_chat_messages ADD COLUMN edit_status TEXT`,
   `ALTER TABLE cv_documents ADD COLUMN personal_brief TEXT NOT NULL DEFAULT ''`,
@@ -230,6 +235,14 @@ const migrations: string[] = [
   // drop `tailored_content` on jobs (replaced by `tailored_fields`). Legacy
   // CVs need to be re-extracted; legacy tailorings are invalidated. The
   // fork is private and not yet load-bearing.
+  //
+  // The defensive ALTER below is required so the rebuild is idempotent.
+  // migrate.ts runs every boot; without it, the SELECT below has to
+  // hardcode `'[]' AS fields` (because legacy rows lack the column) which
+  // wipes every CV's fields on the SECOND boot after upload. The ALTER
+  // skips silently on the duplicate-column branch when fields already
+  // exists, so it's a no-op on every boot after the first.
+  `ALTER TABLE cv_documents ADD COLUMN fields TEXT NOT NULL DEFAULT '[]'`,
   `PRAGMA foreign_keys = OFF`,
   `DROP TABLE IF EXISTS cv_documents_new`,
   `CREATE TABLE cv_documents_new (
@@ -247,7 +260,7 @@ const migrations: string[] = [
     created_at, updated_at
   )
   SELECT
-    id, name, original_archive, flattened_tex, '[]' AS fields, personal_brief,
+    id, name, original_archive, flattened_tex, fields, personal_brief,
     created_at, updated_at
   FROM cv_documents`,
   `DROP TABLE cv_documents`,
@@ -366,7 +379,7 @@ const migrations: string[] = [
       ELSE outcome
     END AS outcome,
     closed_at, suitability_score, suitability_reason,
-    '{}' AS tailored_fields,
+    tailored_fields,
     tailoring_matched, tailoring_skipped, cv_document_id,
     pdf_path, cover_letter_draft,
     COALESCE(reposted_at, NULL) AS reposted_at,

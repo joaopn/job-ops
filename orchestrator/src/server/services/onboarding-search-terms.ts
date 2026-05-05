@@ -180,6 +180,7 @@ export async function suggestOnboardingSearchTerms(): Promise<SearchTermsSuggest
       model,
       messages,
       jsonSchema: SEARCH_TERMS_SCHEMA,
+      label: "suggest search terms",
     });
 
     if (!result.success) {

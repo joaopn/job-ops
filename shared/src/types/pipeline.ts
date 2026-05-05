@@ -202,6 +202,26 @@ export interface JobActionResponse {
   results: JobActionResult[];
 }
 
+export type LlmCallStatus = "running" | "succeeded" | "failed";
+
+export interface LlmCallRecord {
+  id: string;
+  label: string;
+  /** Optional secondary line — typically "Job Title @ Employer". */
+  subject: string | null;
+  model: string;
+  status: LlmCallStatus;
+  startedAt: string;
+  completedAt: string | null;
+  durationMs: number | null;
+  jobId: string | null;
+  errorMessage: string | null;
+}
+
+export type LlmCallStreamEvent =
+  | { type: "snapshot"; calls: LlmCallRecord[]; requestId: string }
+  | { type: "update"; call: LlmCallRecord; requestId: string };
+
 export type BatchUrlImportItemResult =
   | {
       ok: true;

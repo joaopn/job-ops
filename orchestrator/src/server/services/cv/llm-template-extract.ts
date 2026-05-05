@@ -182,6 +182,7 @@ export async function llmTemplateExtract(
     messages,
     jsonSchema: TEMPLATE_EXTRACT_SCHEMA,
     maxRetries: 1,
+    label: "extract CV template",
   });
 
   if (!result.success) {

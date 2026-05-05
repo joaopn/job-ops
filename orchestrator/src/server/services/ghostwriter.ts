@@ -450,6 +450,8 @@ async function runAssistantReply(
       retryDelayMs: 300,
       jobId: options.jobId,
       signal: controller.signal,
+      label: "chat with assistant",
+      subject: `${context.job.title} @ ${context.job.employer}`,
     });
 
     if (!llmResult.success) {

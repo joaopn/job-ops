@@ -34,6 +34,10 @@ export interface LlmRequestOptions<_T> {
   jobId?: string;
   /** Optional abort signal for cancellation */
   signal?: AbortSignal;
+  /** Short human label shown in the live LLM queue (e.g. "score job", "tailor CV") */
+  label?: string;
+  /** Optional secondary line shown under the label (e.g. "Title @ Employer") */
+  subject?: string;
 }
 
 export interface LlmResult<T> {

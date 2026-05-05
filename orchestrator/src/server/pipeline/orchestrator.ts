@@ -383,6 +383,9 @@ export async function summarizeJob(
         jobDescription: job.jobDescription ?? "",
         currentFields: cv.fields,
         currentOverrides: {},
+        jobId: job.id,
+        jobTitle: job.title,
+        jobEmployer: job.employer,
       });
 
       if (!adjust.success) {
@@ -405,6 +408,15 @@ export async function summarizeJob(
           overrides[patch.fieldId] = patch.newValue;
         }
       }
+
+      jobLogger.info("cv-adjust applied", {
+        cvDocumentId: cv.id,
+        adjustPatchCount: adjust.patches.length,
+        overrideCount: Object.keys(overrides).length,
+        cvFieldCount: cv.fields.length,
+        matched: adjust.matched.length,
+        skipped: adjust.skipped.length,
+      });
 
       await jobsRepo.updateJob(job.id, {
         cvDocumentId: cv.id,

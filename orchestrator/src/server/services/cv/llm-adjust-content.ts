@@ -1,3 +1,4 @@
+import { logger } from "@infra/logger";
 import { LlmService } from "@server/services/llm/service";
 import type { JsonSchemaDefinition } from "@server/services/llm/types";
 import { resolveLlmModel } from "@server/services/modelSelection";
@@ -59,6 +60,10 @@ export interface AdjustContentArgs {
   jobDescription: string;
   currentFields: CvField[];
   currentOverrides: CvFieldOverrides;
+  /** Optional — used as the LLM-queue subject line and for diagnostic logging. */
+  jobId?: string;
+  jobTitle?: string;
+  jobEmployer?: string;
 }
 
 export type AdjustContentResult =
@@ -116,6 +121,11 @@ export async function llmAdjustContent(
   if (prompt.system) messages.push({ role: "system", content: prompt.system });
   messages.push({ role: "user", content: prompt.user });
 
+  const subject =
+    args.jobTitle && args.jobEmployer
+      ? `${args.jobTitle} @ ${args.jobEmployer}`
+      : args.jobTitle || args.jobEmployer || undefined;
+
   const result = await llm.callJson<{
     patchesJson: unknown;
     matched: unknown;
@@ -125,6 +135,9 @@ export async function llmAdjustContent(
     messages,
     jsonSchema: ADJUST_SCHEMA,
     maxRetries: 1,
+    label: "tailor CV",
+    subject,
+    jobId: args.jobId,
   });
 
   if (!result.success) {
@@ -158,18 +171,55 @@ export async function llmAdjustContent(
 
   const fieldIds = new Set(args.currentFields.map((field) => field.id));
   const patches: AdjustFieldPatch[] = [];
+  const droppedUnknownFieldIds: string[] = [];
+  let droppedMalformed = 0;
+  let droppedForbidden = 0;
+  let droppedNoChange = 0;
   for (const entry of parsed) {
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      droppedMalformed += 1;
+      continue;
+    }
     const record = entry as Record<string, unknown>;
     const fieldId = record.fieldId;
     const newValue = record.newValue;
-    if (typeof fieldId !== "string" || !fieldIds.has(fieldId)) continue;
-    if (typeof newValue !== "string") continue;
+    if (typeof fieldId !== "string") {
+      droppedMalformed += 1;
+      continue;
+    }
+    if (!fieldIds.has(fieldId)) {
+      droppedUnknownFieldIds.push(fieldId);
+      continue;
+    }
+    if (typeof newValue !== "string") {
+      droppedMalformed += 1;
+      continue;
+    }
     if (FORBIDDEN_PATTERNS.some((guard) => guard.pattern.test(newValue))) {
+      droppedForbidden += 1;
+      continue;
+    }
+    const original = args.currentFields.find((f) => f.id === fieldId)?.value;
+    if (original !== undefined && newValue === original) {
+      droppedNoChange += 1;
       continue;
     }
     patches.push({ fieldId, newValue });
   }
+
+  logger.info("cv-adjust patches resolved", {
+    jobId: args.jobId ?? null,
+    rawCount: parsed.length,
+    appliedCount: patches.length,
+    droppedUnknownFieldIds: droppedUnknownFieldIds.slice(0, 10),
+    droppedUnknownCount: droppedUnknownFieldIds.length,
+    droppedMalformed,
+    droppedForbidden,
+    droppedNoChange,
+    knownFieldIdSample: Array.from(fieldIds).slice(0, 5),
+    matchedCount: Array.isArray(matched) ? matched.length : 0,
+    skippedCount: Array.isArray(skipped) ? skipped.length : 0,
+  });
 
   return {
     success: true,
