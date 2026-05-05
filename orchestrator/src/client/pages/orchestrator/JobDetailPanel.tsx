@@ -321,8 +321,11 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
     ? ["discovered", "ready"].includes(selectedJob.status)
     : false;
   const canSkip = selectedJob
-    ? ["discovered", "ready"].includes(selectedJob.status)
+    ? ["discovered", "ready", "selected", "backlog"].includes(
+        selectedJob.status,
+      )
     : false;
+  const canRowSkip = selectedJob?.status === "backlog";
   const showReadyPdf = activeTab === "ready";
   const showGeneratePdf = activeTab === "inbox" || activeTab === "selected";
   const isProcessingSelected = selectedJob
@@ -487,6 +490,17 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
           >
             <CheckCircle2 className="h-3.5 w-3.5" />
             Move to Selected
+          </Button>
+        )}
+
+        {canRowSkip && (
+          <Button
+            size="sm"
+            className="h-8 gap-1.5 text-xs bg-rose-600/20 text-rose-300 hover:bg-rose-600/30 border border-rose-500/30"
+            onClick={() => void handleSkip()}
+          >
+            <XCircle className="h-3.5 w-3.5" />
+            Skip
           </Button>
         )}
 
