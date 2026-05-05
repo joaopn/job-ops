@@ -1,5 +1,4 @@
 import * as api from "@client/api";
-import type { ManualImportResult } from "@client/components/ManualImportFlow";
 import { useSettings } from "@client/hooks/useSettings";
 import {
   createLocationIntent,
@@ -13,31 +12,21 @@ import {
   deriveExtractorLimits,
   serializeCityLocationsSetting,
 } from "./automatic-run";
-import type { RunMode } from "./run-mode";
 
 type UsePipelineControlsArgs = {
   isPipelineRunning: boolean;
   setIsPipelineRunning: (value: boolean) => void;
   pipelineTerminalEvent: { status: string; errorMessage: string | null } | null;
   pipelineSources: JobSource[];
-  loadJobs: () => Promise<void>;
-  navigateWithContext: (
-    newTab: string,
-    newJobId?: string | null,
-    isReplace?: boolean,
-  ) => void;
 };
 
 export type UsePipelineControlsResult = {
   isRunModeModalOpen: boolean;
   setIsRunModeModalOpen: (open: boolean) => void;
-  runMode: RunMode;
-  setRunMode: (mode: RunMode) => void;
   isCancelling: boolean;
-  openRunMode: (mode: RunMode) => void;
+  openRunMode: () => void;
   handleCancelPipeline: () => Promise<void>;
   handleSaveAndRunAutomatic: (values: AutomaticRunValues) => Promise<void>;
-  handleManualImported: (result: ManualImportResult) => Promise<void>;
   refreshSettings: () => Promise<AppSettings | null>;
 };
 
@@ -49,12 +38,9 @@ export function usePipelineControls(
     setIsPipelineRunning,
     pipelineTerminalEvent,
     pipelineSources,
-    loadJobs,
-    navigateWithContext,
   } = args;
 
   const [isRunModeModalOpen, setIsRunModeModalOpen] = useState(false);
-  const [runMode, setRunMode] = useState<RunMode>("automatic");
   const [isCancelling, setIsCancelling] = useState(false);
 
   const { refreshSettings } = useSettings();
@@ -77,8 +63,7 @@ export function usePipelineControls(
     toast.success("Pipeline completed");
   }, [pipelineTerminalEvent, setIsPipelineRunning]);
 
-  const openRunMode = useCallback((mode: RunMode) => {
-    setRunMode(mode);
+  const openRunMode = useCallback(() => {
     setIsRunModeModalOpen(true);
   }, []);
 
@@ -198,24 +183,13 @@ export function usePipelineControls(
     [pipelineSources, refreshSettings, startPipelineRun],
   );
 
-  const handleManualImported = useCallback(
-    async (imported: ManualImportResult) => {
-      await loadJobs();
-      navigateWithContext("ready", imported.jobId);
-    },
-    [loadJobs, navigateWithContext],
-  );
-
   return {
     isRunModeModalOpen,
     setIsRunModeModalOpen,
-    runMode,
-    setRunMode,
     isCancelling,
     openRunMode,
     handleCancelPipeline,
     handleSaveAndRunAutomatic,
-    handleManualImported,
     refreshSettings,
   };
 }

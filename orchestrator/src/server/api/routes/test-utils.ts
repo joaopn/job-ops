@@ -59,6 +59,7 @@ vi.mock("@server/pipeline/index", () => {
 
 vi.mock("@server/services/manualJob", () => ({
   inferManualJobDetails: vi.fn(),
+  fetchAndExtractJobContent: vi.fn(),
 }));
 
 vi.mock("@server/services/scorer", () => ({

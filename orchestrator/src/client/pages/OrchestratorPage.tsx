@@ -10,6 +10,7 @@ import { KeyboardShortcutBar } from "../components/KeyboardShortcutBar";
 import { KeyboardShortcutDialog } from "../components/KeyboardShortcutDialog";
 import { type FilterTab, tabs } from "./orchestrator/constants";
 import { FloatingJobActionsBar } from "./orchestrator/FloatingJobActionsBar";
+import { BatchUrlImportSheet } from "./orchestrator/BatchUrlImportSheet";
 import { ClosedFilterChips } from "./orchestrator/ClosedFilterChips";
 import { JobCommandBar } from "./orchestrator/JobCommandBar";
 import { JobDetailPanel } from "./orchestrator/JobDetailPanel";
@@ -117,6 +118,7 @@ export const OrchestratorPage: React.FC = () => {
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [isHelpDialogOpen, setIsHelpDialogOpen] = useState(false);
   const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
+  const [isBatchUrlImportOpen, setIsBatchUrlImportOpen] = useState(false);
   const hasKeyboard = useKeyboardAvailability();
 
   const [isDesktop, setIsDesktop] = useState(() =>
@@ -154,20 +156,15 @@ export const OrchestratorPage: React.FC = () => {
   const {
     isRunModeModalOpen,
     setIsRunModeModalOpen,
-    runMode,
-    setRunMode,
     isCancelling,
     openRunMode,
     handleCancelPipeline,
     handleSaveAndRunAutomatic,
-    handleManualImported,
   } = usePipelineControls({
     isPipelineRunning,
     setIsPipelineRunning,
     pipelineTerminalEvent,
     pipelineSources,
-    loadJobs,
-    navigateWithContext,
   });
 
   const activeJobs = useFilteredJobs(
@@ -263,6 +260,7 @@ export const OrchestratorPage: React.FC = () => {
     isFiltersOpen ||
     isHelpDialogOpen ||
     isDetailDrawerOpen ||
+    isBatchUrlImportOpen ||
     navOpen;
 
   const isAnyModalOpenExcludingCommandBar =
@@ -270,6 +268,7 @@ export const OrchestratorPage: React.FC = () => {
     isFiltersOpen ||
     isHelpDialogOpen ||
     isDetailDrawerOpen ||
+    isBatchUrlImportOpen ||
     navOpen;
 
   const isAnyModalOpenExcludingHelp =
@@ -277,6 +276,7 @@ export const OrchestratorPage: React.FC = () => {
     isCommandBarOpen ||
     isFiltersOpen ||
     isDetailDrawerOpen ||
+    isBatchUrlImportOpen ||
     navOpen;
 
   useKeyboardShortcuts({
@@ -403,7 +403,7 @@ export const OrchestratorPage: React.FC = () => {
     if (activeTab === "inbox" || activeTab === "all") {
       return {
         label: "Run pipeline",
-        onClick: () => openRunMode("automatic"),
+        onClick: () => openRunMode(),
       };
     }
 
@@ -414,7 +414,7 @@ export const OrchestratorPage: React.FC = () => {
     if (activeTab === "ready") {
       return {
         label: "Run pipeline",
-        onClick: () => openRunMode("automatic"),
+        onClick: () => openRunMode(),
       };
     }
 
@@ -437,7 +437,8 @@ export const OrchestratorPage: React.FC = () => {
         isPipelineRunning={isPipelineRunning}
         isCancelling={isCancelling}
         pipelineSources={pipelineSources}
-        onOpenAutomaticRun={() => openRunMode("automatic")}
+        onOpenAutomaticRun={() => openRunMode()}
+        onOpenBatchUrlImport={() => setIsBatchUrlImportOpen(true)}
         onCancelPipeline={handleCancelPipeline}
       />
 
@@ -555,7 +556,6 @@ export const OrchestratorPage: React.FC = () => {
 
       <RunModeModal
         open={isRunModeModalOpen}
-        mode={runMode}
         settings={settings ?? null}
         enabledSources={enabledSources}
         pipelineSources={pipelineSources}
@@ -563,9 +563,13 @@ export const OrchestratorPage: React.FC = () => {
         onSetPipelineSources={setPipelineSources}
         isPipelineRunning={isPipelineRunning}
         onOpenChange={setIsRunModeModalOpen}
-        onModeChange={setRunMode}
         onSaveAndRunAutomatic={handleSaveAndRunAutomatic}
-        onManualImported={handleManualImported}
+      />
+
+      <BatchUrlImportSheet
+        open={isBatchUrlImportOpen}
+        onOpenChange={setIsBatchUrlImportOpen}
+        onCompleted={loadJobs}
       />
 
       {!isDesktop && (

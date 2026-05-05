@@ -202,6 +202,53 @@ export interface JobActionResponse {
   results: JobActionResult[];
 }
 
+export type BatchUrlImportItemResult =
+  | {
+      ok: true;
+      status: "created" | "duplicate";
+      url: string;
+      jobId: string;
+      title: string;
+      employer: string;
+    }
+  | {
+      ok: false;
+      status: "failed";
+      url: string;
+      code: string;
+      message: string;
+    };
+
+export type BatchUrlImportStreamEvent =
+  | {
+      type: "started";
+      requested: number;
+      requestId: string;
+    }
+  | {
+      type: "progress";
+      result: BatchUrlImportItemResult;
+      completed: number;
+      succeeded: number;
+      duplicates: number;
+      failed: number;
+      requestId: string;
+    }
+  | {
+      type: "completed";
+      results: BatchUrlImportItemResult[];
+      succeeded: number;
+      duplicates: number;
+      failed: number;
+      requestId: string;
+    }
+  | {
+      type: "error";
+      code: string;
+      message: string;
+      requestId: string;
+    };
+
 export type JobActionStreamEvent =
   | {
       type: "started";

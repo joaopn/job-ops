@@ -1,20 +1,23 @@
 import { randomUUID } from "node:crypto";
-import {
-  AppError,
-  badRequest,
-  notFound,
-  requestTimeout,
-  toAppError,
-} from "@infra/errors";
+import { AppError, badRequest, notFound, toAppError } from "@infra/errors";
 import { fail, ok } from "@infra/http";
 import { logger } from "@infra/logger";
+import { setupSse, startSseHeartbeat, writeSseData } from "@infra/sse";
 import { processJob } from "@server/pipeline/index";
 import * as jobsRepo from "@server/repositories/jobs";
-import { inferManualJobDetails } from "@server/services/manualJob";
+import * as settingsRepo from "@server/repositories/settings";
 import { getActivePersonalBrief } from "@server/services/brief";
+import {
+  fetchAndExtractJobContent,
+  inferManualJobDetails,
+} from "@server/services/manualJob";
 import { scoreJobSuitability } from "@server/services/scorer";
+import { asyncPool } from "@server/utils/async-pool";
+import type {
+  BatchUrlImportItemResult,
+  BatchUrlImportStreamEvent,
+} from "@shared/types";
 import { type Request, type Response, Router } from "express";
-import { JSDOM } from "jsdom";
 import { z } from "zod";
 
 export const manualJobsRouter = Router();
@@ -56,125 +59,15 @@ const cleanOptional = (value?: string | null) => {
  * POST /api/manual-jobs/fetch - Fetch and extract job content from a URL
  */
 manualJobsRouter.post("/fetch", async (req: Request, res: Response) => {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
-
   try {
     const input = manualJobFetchSchema.parse(req.body ?? {});
-
-    const response = await fetch(input.url, {
-      signal: controller.signal,
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        Accept:
-          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      },
-    });
-
-    if (!response.ok) {
-      return fail(
-        res,
-        new AppError({
-          status: 502,
-          code: "UPSTREAM_ERROR",
-          message: `Failed to fetch URL: ${response.status} ${response.statusText}`,
-        }),
-      );
-    }
-
-    const html = await response.text();
-    const dom = new JSDOM(html);
-    const document = dom.window.document;
-
-    // Extract page title (often contains job title)
-    const pageTitle =
-      document.querySelector("title")?.textContent?.trim() || "";
-
-    // Extract meta description
-    const metaDescription =
-      document
-        .querySelector('meta[name="description"]')
-        ?.getAttribute("content")
-        ?.trim() || "";
-
-    // Extract Open Graph data
-    const ogTitle =
-      document
-        .querySelector('meta[property="og:title"]')
-        ?.getAttribute("content")
-        ?.trim() || "";
-    const ogDescription =
-      document
-        .querySelector('meta[property="og:description"]')
-        ?.getAttribute("content")
-        ?.trim() || "";
-    const ogSiteName =
-      document
-        .querySelector('meta[property="og:site-name"]')
-        ?.getAttribute("content")
-        ?.trim() || "";
-
-    // Remove non-content elements
-    const elementsToRemove = document.querySelectorAll(
-      "script, style, nav, header, footer, aside, iframe, noscript, " +
-        '[role="navigation"], [role="banner"], [role="contentinfo"], ' +
-        ".nav, .navbar, .header, .footer, .sidebar, .menu, .cookie, .popup, .modal, .ad, .advertisement",
-    );
-    elementsToRemove.forEach((el) => {
-      el.remove();
-    });
-
-    // Try to find the main job content area
-    const mainContent =
-      document.querySelector(
-        'main, [role="main"], article, ' +
-          ".job-description, .job-details, .job-content, .vacancy-description, " +
-          "#job-description, #job-details, #job-content, " +
-          '[class*="job-desc"], [class*="jobDesc"], [class*="vacancy"], [class*="posting"]',
-      ) || document.body;
-
-    // Get text content
-    let textContent = mainContent?.textContent || "";
-
-    // Clean up whitespace
-    textContent = textContent
-      .replace(/[\t ]+/g, " ")
-      .replace(/\n\s*\n/g, "\n\n")
-      .replace(/\n{3,}/g, "\n\n")
-      .trim();
-
-    // Build enriched content with extracted metadata
-    let enrichedContent = "";
-    if (pageTitle) enrichedContent += `Page Title: ${pageTitle}\n`;
-    if (ogTitle && ogTitle !== pageTitle)
-      enrichedContent += `Job Title: ${ogTitle}\n`;
-    if (ogSiteName) enrichedContent += `Company/Site: ${ogSiteName}\n`;
-    if (ogDescription) enrichedContent += `Summary: ${ogDescription}\n`;
-    if (metaDescription && metaDescription !== ogDescription)
-      enrichedContent += `Description: ${metaDescription}\n`;
-    if (enrichedContent) enrichedContent += "\n---\n\n";
-    enrichedContent += textContent;
-
-    // Limit to reasonable size
-    if (enrichedContent.length > 50000) {
-      enrichedContent = enrichedContent.substring(0, 50000);
-    }
-
-    ok(res, {
-      content: enrichedContent,
-      url: input.url,
-    });
+    const result = await fetchAndExtractJobContent(input.url);
+    ok(res, result);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return fail(res, badRequest(error.message, error.flatten()));
     }
-    if (error instanceof Error && error.name === "AbortError") {
-      return fail(res, requestTimeout());
-    }
     fail(res, toAppError(error));
-  } finally {
-    clearTimeout(timeout);
   }
 });
 
@@ -286,3 +179,287 @@ manualJobsRouter.post("/import", async (req: Request, res: Response) => {
     fail(res, toAppError(error));
   }
 });
+
+const BATCH_URL_IMPORT_CONCURRENCY = 3;
+const BATCH_URL_IMPORT_MAX_URLS = 50;
+
+const batchUrlImportSchema = z.object({
+  urls: z
+    .array(z.string().trim().url().max(2000))
+    .min(1)
+    .max(BATCH_URL_IMPORT_MAX_URLS),
+});
+
+async function isJobScoringEnabled(): Promise<boolean> {
+  const raw = await settingsRepo.getSetting("enableJobScoring");
+  if (raw === null) return true;
+  return raw === "1" || raw === "true";
+}
+
+async function scoreJobAsync(jobId: string): Promise<void> {
+  const job = await jobsRepo.getJobById(jobId);
+  if (!job) return;
+  const brief = await getActivePersonalBrief();
+  const { score, reason } = await scoreJobSuitability(job, brief);
+  await jobsRepo.updateJob(jobId, {
+    suitabilityScore: score,
+    suitabilityReason: reason,
+  });
+}
+
+async function importSingleUrl(
+  url: string,
+  options: { signal?: AbortSignal; scoringEnabled: boolean },
+): Promise<BatchUrlImportItemResult> {
+  let fetched: { content: string; url: string };
+  try {
+    fetched = await fetchAndExtractJobContent(url, { signal: options.signal });
+  } catch (error) {
+    const err = toAppError(error);
+    return {
+      ok: false,
+      status: "failed",
+      url,
+      code: err.code,
+      message: err.message,
+    };
+  }
+
+  let inference: Awaited<ReturnType<typeof inferManualJobDetails>>;
+  try {
+    inference = await inferManualJobDetails(fetched.content);
+  } catch (error) {
+    const err = toAppError(error);
+    return {
+      ok: false,
+      status: "failed",
+      url,
+      code: err.code,
+      message: err.message,
+    };
+  }
+
+  const draft = inference.job;
+  const title = cleanOptional(draft.title);
+  const employer = cleanOptional(draft.employer);
+  const jobDescription = cleanOptional(draft.jobDescription);
+
+  if (!title || !employer || !jobDescription) {
+    return {
+      ok: false,
+      status: "failed",
+      url,
+      code: "PARSE_FAILED",
+      message:
+        inference.warning ||
+        "Could not extract title, employer, or description from the page.",
+    };
+  }
+
+  const canonicalUrl =
+    cleanOptional(draft.jobUrl) || cleanOptional(draft.applicationLink) || url;
+
+  try {
+    const existing = await jobsRepo.getJobByUrl(canonicalUrl);
+    if (existing) {
+      return {
+        ok: true,
+        status: "duplicate",
+        url,
+        jobId: existing.id,
+        title: existing.title,
+        employer: existing.employer,
+      };
+    }
+
+    const created = await jobsRepo.createJob({
+      source: "manual",
+      title,
+      employer,
+      jobUrl: canonicalUrl,
+      applicationLink: cleanOptional(draft.applicationLink) ?? undefined,
+      location: cleanOptional(draft.location) ?? undefined,
+      salary: cleanOptional(draft.salary) ?? undefined,
+      deadline: cleanOptional(draft.deadline) ?? undefined,
+      jobDescription,
+      jobType: cleanOptional(draft.jobType) ?? undefined,
+      jobLevel: cleanOptional(draft.jobLevel) ?? undefined,
+      jobFunction: cleanOptional(draft.jobFunction) ?? undefined,
+      disciplines: cleanOptional(draft.disciplines) ?? undefined,
+      degreeRequired: cleanOptional(draft.degreeRequired) ?? undefined,
+      starting: cleanOptional(draft.starting) ?? undefined,
+    });
+
+    if (options.scoringEnabled) {
+      void scoreJobAsync(created.id).catch((error) => {
+        logger.warn("Batch URL import scoring failed", {
+          jobId: created.id,
+          error,
+        });
+      });
+    }
+
+    return {
+      ok: true,
+      status: "created",
+      url,
+      jobId: created.id,
+      title: created.title,
+      employer: created.employer,
+    };
+  } catch (error) {
+    const err = toAppError(error);
+    return {
+      ok: false,
+      status: "failed",
+      url,
+      code: err.code,
+      message: err.message,
+    };
+  }
+}
+
+/**
+ * POST /api/manual-jobs/import-batch/stream - Fetch + import a batch of job URLs
+ * with live SSE progress.
+ */
+manualJobsRouter.post(
+  "/import-batch/stream",
+  async (req: Request, res: Response) => {
+    const parsed = batchUrlImportSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return fail(
+        res,
+        badRequest(
+          "Invalid batch URL import request",
+          parsed.error.flatten(),
+        ),
+      );
+    }
+
+    const dedupedUrls = Array.from(new Set(parsed.data.urls));
+    const requestId = String(res.getHeader("x-request-id") || "unknown");
+    const requested = dedupedUrls.length;
+    const results: BatchUrlImportItemResult[] = [];
+    let succeeded = 0;
+    let duplicates = 0;
+    let failed = 0;
+
+    setupSse(res, {
+      cacheControl: "no-cache, no-transform",
+      disableBuffering: true,
+      flushHeaders: true,
+    });
+    const stopHeartbeat = startSseHeartbeat(res);
+
+    let clientDisconnected = false;
+    res.on("close", () => {
+      clientDisconnected = true;
+      stopHeartbeat();
+    });
+
+    const isResponseWritable = () =>
+      !clientDisconnected && !res.writableEnded && !res.destroyed;
+
+    const sendEvent = (event: BatchUrlImportStreamEvent) => {
+      if (!isResponseWritable()) return false;
+      writeSseData(res, event);
+      return true;
+    };
+
+    try {
+      const scoringEnabled = await isJobScoringEnabled();
+
+      if (!sendEvent({ type: "started", requested, requestId })) {
+        logger.info("Client disconnected before batch URL import started", {
+          route: "POST /api/manual-jobs/import-batch/stream",
+          requested,
+          requestId,
+        });
+        return;
+      }
+
+      await asyncPool({
+        items: dedupedUrls,
+        concurrency: BATCH_URL_IMPORT_CONCURRENCY,
+        shouldStop: () => !isResponseWritable(),
+        task: async (url) => {
+          if (!isResponseWritable()) return;
+
+          const result = await importSingleUrl(url, { scoringEnabled });
+          results.push(result);
+          if (result.ok && result.status === "created") succeeded += 1;
+          else if (result.ok && result.status === "duplicate") duplicates += 1;
+          else failed += 1;
+
+          if (
+            !sendEvent({
+              type: "progress",
+              result,
+              completed: results.length,
+              succeeded,
+              duplicates,
+              failed,
+              requestId,
+            })
+          ) {
+            logger.info(
+              "Client disconnected during batch URL import progress",
+              {
+                route: "POST /api/manual-jobs/import-batch/stream",
+                requested,
+                succeeded,
+                duplicates,
+                failed,
+                requestId,
+              },
+            );
+          }
+        },
+      });
+
+      sendEvent({
+        type: "completed",
+        results,
+        succeeded,
+        duplicates,
+        failed,
+        requestId,
+      });
+
+      logger.info("Batch URL import stream completed", {
+        route: "POST /api/manual-jobs/import-batch/stream",
+        requested,
+        succeeded,
+        duplicates,
+        failed,
+        concurrency: BATCH_URL_IMPORT_CONCURRENCY,
+        requestId,
+      });
+    } catch (error) {
+      const err = toAppError(error);
+      logger.error("Batch URL import stream failed", {
+        route: "POST /api/manual-jobs/import-batch/stream",
+        requested,
+        succeeded,
+        duplicates,
+        failed,
+        status: err.status,
+        code: err.code,
+        requestId,
+      });
+
+      sendEvent({
+        type: "error",
+        code: err.code,
+        message: err.message,
+        requestId,
+      });
+    } finally {
+      stopHeartbeat();
+      if (!res.writableEnded && !res.destroyed) {
+        res.end();
+      }
+    }
+  },
+);

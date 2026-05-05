@@ -1,6 +1,6 @@
 import { PageHeader, StatusIndicator } from "@client/components/layout";
 import type { JobSource } from "@shared/types.js";
-import { Loader2, Play, Square } from "lucide-react";
+import { Link as LinkIcon, Loader2, Play, Square } from "lucide-react";
 import type React from "react";
 import { Button } from "@/components/ui/button";
 
@@ -11,6 +11,7 @@ interface OrchestratorHeaderProps {
   isCancelling: boolean;
   pipelineSources: JobSource[];
   onOpenAutomaticRun: () => void;
+  onOpenBatchUrlImport: () => void;
   onCancelPipeline: () => void;
 }
 
@@ -21,6 +22,7 @@ export const OrchestratorHeader: React.FC<OrchestratorHeaderProps> = ({
   isCancelling,
   pipelineSources,
   onOpenAutomaticRun,
+  onOpenBatchUrlImport,
   onCancelPipeline,
 }) => {
   const actions = isPipelineRunning ? (
@@ -41,10 +43,21 @@ export const OrchestratorHeader: React.FC<OrchestratorHeaderProps> = ({
       </span>
     </Button>
   ) : (
-    <Button size="sm" onClick={onOpenAutomaticRun} className="gap-2">
-      <Play className="h-4 w-4" />
-      <span className="hidden sm:inline">Run pipeline</span>
-    </Button>
+    <div className="flex items-center gap-2">
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={onOpenBatchUrlImport}
+        className="gap-2"
+      >
+        <LinkIcon className="h-4 w-4" />
+        <span className="hidden sm:inline">Fetch URLs</span>
+      </Button>
+      <Button size="sm" onClick={onOpenAutomaticRun} className="gap-2">
+        <Play className="h-4 w-4" />
+        <span className="hidden sm:inline">Run pipeline</span>
+      </Button>
+    </div>
   );
 
   return (

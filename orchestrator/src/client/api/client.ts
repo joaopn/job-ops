@@ -7,6 +7,7 @@ import type { UpdateSettingsInput } from "@shared/settings-schema";
 import type {
   ApiResponse,
   AppSettings,
+  BatchUrlImportStreamEvent,
   BranchInfo,
   CreateJobNoteInput,
   CvDocument,
@@ -1150,6 +1151,20 @@ export async function importManualJob(input: {
     method: "POST",
     body: JSON.stringify(input),
   });
+}
+
+export async function streamBatchUrlImport(
+  input: { urls: string[] },
+  handlers: {
+    onEvent: (event: BatchUrlImportStreamEvent) => void;
+    signal?: AbortSignal;
+  },
+): Promise<void> {
+  return streamSseEvents<BatchUrlImportStreamEvent>(
+    "/manual-jobs/import-batch/stream",
+    input,
+    handlers,
+  );
 }
 
 // Settings & Profile API
