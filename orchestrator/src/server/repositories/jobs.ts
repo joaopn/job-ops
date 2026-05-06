@@ -538,6 +538,7 @@ export async function updateJob(
     tailoredFields,
     tailoringMatched,
     tailoringSkipped,
+    coverLetterFieldOverrides,
     ...updateFields
   } = input;
   const readyAtUpdate =
@@ -563,6 +564,9 @@ export async function updateJob(
       ...(tailoredFields !== undefined ? { tailoredFields } : {}),
       ...(tailoringMatched !== undefined ? { tailoringMatched } : {}),
       ...(tailoringSkipped !== undefined ? { tailoringSkipped } : {}),
+      ...(coverLetterFieldOverrides !== undefined
+        ? { coverLetterFieldOverrides }
+        : {}),
       updatedAt: now,
       ...(input.status === "processing" ? { processedAt: now } : {}),
       ...readyAtUpdate,
@@ -703,6 +707,9 @@ function mapRowToJob(row: typeof jobs.$inferSelect): Job {
     cvDocumentId: row.cvDocumentId ?? null,
     pdfPath: row.pdfPath,
     coverLetterDraft: row.coverLetterDraft ?? "",
+    coverLetterDocumentId: row.coverLetterDocumentId ?? null,
+    coverLetterFieldOverrides: parseFieldOverrides(row.coverLetterFieldOverrides),
+    coverLetterPdfPath: row.coverLetterPdfPath ?? null,
     jobType: row.jobType ?? null,
     salarySource: row.salarySource ?? null,
     salaryInterval: row.salaryInterval ?? null,

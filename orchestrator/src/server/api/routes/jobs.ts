@@ -75,6 +75,9 @@ const updateJobSchema = z.object({
   suitabilityReason: z.string().optional(),
   pdfPath: z.string().optional(),
   coverLetterDraft: z.string().max(40000).optional(),
+  coverLetterDocumentId: z.string().min(1).nullable().optional(),
+  coverLetterFieldOverrides: z.record(z.string(), z.string()).optional(),
+  coverLetterPdfPath: z.string().nullable().optional(),
 });
 
 function isJobUrlConflictError(error: unknown): boolean {

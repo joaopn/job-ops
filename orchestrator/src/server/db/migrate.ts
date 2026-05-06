@@ -43,6 +43,25 @@ const migrations: string[] = [
     updated_at INTEGER NOT NULL
   )`,
 
+  // Cover-letter substrate. Mirrors cv_documents' shape (post-5e); the upload
+  // pipeline reuses the same flatten → compile → extract-loop machinery.
+  // No personal_brief column — that lives on the CV side and is fed into
+  // the cover-letter generate prompt at request time.
+  `CREATE TABLE IF NOT EXISTS cover_letter_documents (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    original_archive BLOB NOT NULL,
+    flattened_tex TEXT NOT NULL,
+    fields TEXT NOT NULL DEFAULT '[]',
+    templated_tex TEXT NOT NULL DEFAULT '',
+    default_field_values TEXT NOT NULL DEFAULT '{}',
+    last_compile_stderr TEXT,
+    compile_attempts INTEGER NOT NULL DEFAULT 0,
+    extraction_prompt TEXT NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`,
+
   `CREATE TABLE IF NOT EXISTS jobs (
     id TEXT PRIMARY KEY,
     source TEXT NOT NULL DEFAULT 'linkedin',
@@ -278,6 +297,13 @@ const migrations: string[] = [
   `ALTER TABLE jobs ADD COLUMN reposted_at TEXT`,
   `ALTER TABLE jobs ADD COLUMN repost_count INTEGER NOT NULL DEFAULT 0`,
 
+  // Cover-letter columns. Same defensive-ALTER pattern as 5g — must run
+  // BEFORE the rebuild block so the INSERT SELECT can reference them.
+  // Idempotent via the duplicate-column-name skip below.
+  `ALTER TABLE jobs ADD COLUMN cover_letter_document_id TEXT REFERENCES cover_letter_documents(id) ON DELETE SET NULL`,
+  `ALTER TABLE jobs ADD COLUMN cover_letter_field_overrides TEXT NOT NULL DEFAULT '{}'`,
+  `ALTER TABLE jobs ADD COLUMN cover_letter_pdf_path TEXT`,
+
   // Canonical jobs-table rebuild. Originally added in 5d to drop unused
   // columns (tailored_summary/headline/skills, tracer_links_enabled,
   // sponsor_match_*); 5g extended it with the new status + outcome enums and
@@ -340,6 +366,9 @@ const migrations: string[] = [
     cv_document_id TEXT REFERENCES cv_documents(id) ON DELETE SET NULL,
     pdf_path TEXT,
     cover_letter_draft TEXT NOT NULL DEFAULT '',
+    cover_letter_document_id TEXT REFERENCES cover_letter_documents(id) ON DELETE SET NULL,
+    cover_letter_field_overrides TEXT NOT NULL DEFAULT '{}',
+    cover_letter_pdf_path TEXT,
     reposted_at TEXT,
     repost_count INTEGER NOT NULL DEFAULT 0,
     discovered_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -361,7 +390,9 @@ const migrations: string[] = [
     location_evidence, degree_required, starting, job_description, status,
     outcome, closed_at, suitability_category, suitability_reason, tailored_fields,
     tailoring_matched, tailoring_skipped, cv_document_id,
-    pdf_path, cover_letter_draft, reposted_at, repost_count,
+    pdf_path, cover_letter_draft,
+    cover_letter_document_id, cover_letter_field_overrides, cover_letter_pdf_path,
+    reposted_at, repost_count,
     discovered_at, processed_at, ready_at,
     applied_at, created_at, updated_at
   )
@@ -386,6 +417,9 @@ const migrations: string[] = [
     tailored_fields,
     tailoring_matched, tailoring_skipped, cv_document_id,
     pdf_path, cover_letter_draft,
+    cover_letter_document_id,
+    COALESCE(cover_letter_field_overrides, '{}') AS cover_letter_field_overrides,
+    cover_letter_pdf_path,
     COALESCE(reposted_at, NULL) AS reposted_at,
     COALESCE(repost_count, 0) AS repost_count,
     discovered_at, processed_at,

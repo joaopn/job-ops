@@ -20,6 +20,7 @@ export const CV_FIELD_ROLES = [
   "phone",
   "education",
   "section-heading",
+  "body",
   "other",
 ] as const;
 

@@ -1,6 +1,7 @@
 import type {
   ApplicationTask,
   AppSettings,
+  CoverLetterDocument,
   Job,
   PipelineRun,
   StageEvent,
@@ -37,6 +38,9 @@ export const createJob = (overrides: Partial<Job> = {}): Job => ({
   cvDocumentId: null,
   pdfPath: null,
   coverLetterDraft: "",
+  coverLetterDocumentId: null,
+  coverLetterFieldOverrides: {},
+  coverLetterPdfPath: null,
   appliedDuplicateMatch: null,
   jobType: null,
   salarySource: null,
@@ -68,6 +72,23 @@ export const createJob = (overrides: Partial<Job> = {}): Job => ({
   processedAt: null,
   readyAt: "2025-01-01T00:00:00Z",
   appliedAt: null,
+  createdAt: "2025-01-01T00:00:00Z",
+  updatedAt: "2025-01-01T00:00:00Z",
+  ...overrides,
+});
+
+export const createCoverLetterDocument = (
+  overrides: Partial<CoverLetterDocument> = {},
+): CoverLetterDocument => ({
+  id: "cover-letter-1",
+  name: "Default Cover Letter",
+  flattenedTex: "",
+  fields: [],
+  templatedTex: "",
+  defaultFieldValues: {},
+  lastCompileStderr: null,
+  compileAttempts: 0,
+  extractionPrompt: "",
   createdAt: "2025-01-01T00:00:00Z",
   updatedAt: "2025-01-01T00:00:00Z",
   ...overrides,

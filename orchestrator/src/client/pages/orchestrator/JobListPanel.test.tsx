@@ -32,9 +32,14 @@ afterEach(async () => {
   // @tanstack/virtual-core's `maybeNotify` schedules a setTimeout that calls
   // back into React's reducer dispatch. If jsdom tears down before that timer
   // fires we get `ReferenceError: window is not defined` from
-  // `getCurrentEventPriority`. Awaiting one tick lets the timer fire while
-  // jsdom is still alive.
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  // `getCurrentEventPriority`. A single tick isn't always enough — when the
+  // notify fires it dispatches a React reducer action, which schedules a
+  // follow-up microtask/timer; a few tick+microtask cycles drain the chain
+  // while jsdom is still alive.
+  for (let i = 0; i < 3; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await Promise.resolve();
+  }
 });
 
 describe("JobListPanel", () => {

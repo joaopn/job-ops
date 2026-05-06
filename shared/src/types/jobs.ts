@@ -205,7 +205,10 @@ export interface Job {
   tailoringSkipped: string[] | null; // JD keywords dropped for lack of evidence
   cvDocumentId: string | null; // FK to cv_documents.id; pins which CV was tailored
   pdfPath: string | null; // Path to generated PDF
-  coverLetterDraft: string; // Markdown cover-letter draft persisted independently of chat history
+  coverLetterDraft: string; // Legacy plain-text draft, kept until the field-overrides path fully replaces it
+  coverLetterDocumentId: string | null; // FK to cover_letter_documents.id; null = "use the active doc"
+  coverLetterFieldOverrides: CvFieldOverrides; // Per-job cover-letter overrides; body field's value is the textarea state
+  coverLetterPdfPath: string | null; // Path to rendered cover-letter PDF
   appliedDuplicateMatch?: AppliedDuplicateMatch | null; // Included on detail responses and may be omitted on list responses
 
   // JobSpy fields (nullable for non-JobSpy sources)
@@ -371,6 +374,9 @@ export interface UpdateJobInput {
   cvDocumentId?: string | null;
   pdfPath?: string;
   coverLetterDraft?: string;
+  coverLetterDocumentId?: string | null;
+  coverLetterFieldOverrides?: CvFieldOverrides;
+  coverLetterPdfPath?: string | null;
   readyAt?: string;
   appliedAt?: string;
 }

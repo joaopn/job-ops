@@ -47,6 +47,23 @@ export const cvDocuments = sqliteTable("cv_documents", {
   updatedAt: integer("updated_at", { mode: "number" }).notNull(),
 });
 
+export const coverLetterDocuments = sqliteTable("cover_letter_documents", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  originalArchive: blob("original_archive", { mode: "buffer" }).notNull(),
+  flattenedTex: text("flattened_tex").notNull(),
+  fields: text("fields", { mode: "json" }).notNull().default(sql`('[]')`),
+  templatedTex: text("templated_tex").notNull().default(""),
+  defaultFieldValues: text("default_field_values", { mode: "json" })
+    .notNull()
+    .default(sql`('{}')`),
+  lastCompileStderr: text("last_compile_stderr"),
+  compileAttempts: integer("compile_attempts").notNull().default(0),
+  extractionPrompt: text("extraction_prompt").notNull().default(""),
+  createdAt: integer("created_at", { mode: "number" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "number" }).notNull(),
+});
+
 export const jobs = sqliteTable("jobs", {
   id: text("id").primaryKey(),
 
@@ -132,6 +149,16 @@ export const jobs = sqliteTable("jobs", {
   }),
   pdfPath: text("pdf_path"),
   coverLetterDraft: text("cover_letter_draft").notNull().default(""),
+  coverLetterDocumentId: text("cover_letter_document_id").references(
+    () => coverLetterDocuments.id,
+    { onDelete: "set null" },
+  ),
+  coverLetterFieldOverrides: text("cover_letter_field_overrides", {
+    mode: "json",
+  })
+    .notNull()
+    .default(sql`('{}')`),
+  coverLetterPdfPath: text("cover_letter_pdf_path"),
 
   // Timestamps
   discoveredAt: text("discovered_at").notNull().default(sql`(datetime('now'))`),

@@ -169,7 +169,7 @@ describe("llmAdjustContent", () => {
     });
   });
 
-  it("returns failure when patchesJson is not a JSON array", async () => {
+  it("returns failure when the parsed list of changes is not an array", async () => {
     callJsonMock.mockResolvedValue({
       success: true,
       data: {
@@ -188,7 +188,7 @@ describe("llmAdjustContent", () => {
 
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error).toMatch(/not a JSON array/);
+      expect(result.error).toMatch(/unexpected shape/);
     }
   });
 
