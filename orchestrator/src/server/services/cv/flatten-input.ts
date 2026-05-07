@@ -9,16 +9,23 @@ const INPUT_PATTERN = /\\(?:input|include)\{([^}]+)\}/g;
 const ASSET_PATTERN =
   /\\includegraphics(?:\[[^\]]*\])?\{([^}]+)\}|\\(?:setmainfont|setsansfont|setmonofont|newfontfamily)(?:\[[^\]]*\])?\{([^}]+)\}/g;
 
-const ENTRYPOINT_PRIORITY = [
+export const DEFAULT_ENTRYPOINT_PRIORITY = [
   "main.tex",
   "cv.tex",
   "resume.tex",
   "document.tex",
-];
+] as const;
 
 export interface FlattenInputArgs {
   archive: Uint8Array;
   filename: string;
+  /**
+   * Ordered list of preferred entrypoint basenames (case-insensitive). The
+   * first match against the archive's `\documentclass`-bearing files wins.
+   * Falls back to shortest path when no preferred match is found.
+   * Defaults to `DEFAULT_ENTRYPOINT_PRIORITY` (CV-style entrypoints).
+   */
+  entrypointPriority?: readonly string[];
 }
 
 export interface FlattenInputResult {
@@ -41,8 +48,9 @@ export class FlattenInputError extends Error {
 
 export function flattenInput(args: FlattenInputArgs): FlattenInputResult {
   const buf = Buffer.from(args.archive);
+  const priority = args.entrypointPriority ?? DEFAULT_ENTRYPOINT_PRIORITY;
   if (looksLikeZip(buf)) {
-    return flattenZip(buf);
+    return flattenZip(buf, priority);
   }
   return flattenSingleTex(buf, args.filename);
 }
@@ -80,7 +88,10 @@ function flattenSingleTex(buf: Buffer, filename: string): FlattenInputResult {
   };
 }
 
-function flattenZip(buf: Buffer): FlattenInputResult {
+function flattenZip(
+  buf: Buffer,
+  entrypointPriority: readonly string[],
+): FlattenInputResult {
   const zip = new AdmZip(buf);
   const files = new Map<string, string>();
 
@@ -105,7 +116,7 @@ function flattenZip(buf: Buffer): FlattenInputResult {
     );
   }
 
-  const entrypoint = pickEntrypoint(files);
+  const entrypoint = pickEntrypoint(files, entrypointPriority);
   const visited = new Set<string>();
   const assets: string[] = [];
   let includeCount = 0;
@@ -174,7 +185,10 @@ function flattenZip(buf: Buffer): FlattenInputResult {
   return { flattenedTex, entrypoint, assetReferences: assets };
 }
 
-function pickEntrypoint(files: Map<string, string>): string {
+function pickEntrypoint(
+  files: Map<string, string>,
+  entrypointPriority: readonly string[],
+): string {
   const documentClassMatches: string[] = [];
   for (const [name, source] of files) {
     if (/\\documentclass\b/.test(source)) documentClassMatches.push(name);
@@ -182,9 +196,9 @@ function pickEntrypoint(files: Map<string, string>): string {
   const candidates =
     documentClassMatches.length > 0 ? documentClassMatches : [...files.keys()];
 
-  for (const preferred of ENTRYPOINT_PRIORITY) {
+  for (const preferred of entrypointPriority) {
     const hit = candidates.find(
-      (name) => posix.basename(name).toLowerCase() === preferred,
+      (name) => posix.basename(name).toLowerCase() === preferred.toLowerCase(),
     );
     if (hit) return hit;
   }

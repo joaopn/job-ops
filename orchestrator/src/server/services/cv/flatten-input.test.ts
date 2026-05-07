@@ -166,6 +166,49 @@ describe("flattenInput", () => {
     expect(result.flattenedTex).toContain("%\\input{intro}");
   });
 
+  it("picks cv.tex by default when both cv.tex and coverletter.tex exist", () => {
+    const archive = texZip({
+      "cv.tex": "\\documentclass{article}\nCV body\n",
+      "coverletter.tex": "\\documentclass{article}\nLetter body\n",
+      "shared.cls": "%% class file\n",
+    });
+    const result = flattenInput({ archive, filename: "bundle.zip" });
+    expect(result.entrypoint).toBe("cv.tex");
+    expect(result.flattenedTex).toContain("CV body");
+  });
+
+  it("picks coverletter.tex when given a cover-letter priority list", () => {
+    const archive = texZip({
+      "cv.tex": "\\documentclass{article}\nCV body\n",
+      "coverletter.tex": "\\documentclass{article}\nLetter body\n",
+      "shared.cls": "%% class file\n",
+    });
+    const result = flattenInput({
+      archive,
+      filename: "bundle.zip",
+      entrypointPriority: [
+        "coverletter.tex",
+        "cover-letter.tex",
+        "letter.tex",
+        "cover.tex",
+      ],
+    });
+    expect(result.entrypoint).toBe("coverletter.tex");
+    expect(result.flattenedTex).toContain("Letter body");
+  });
+
+  it("matches priority entries case-insensitively", () => {
+    const archive = texZip({
+      "CoverLetter.tex": "\\documentclass{article}\nLetter\n",
+    });
+    const result = flattenInput({
+      archive,
+      filename: "bundle.zip",
+      entrypointPriority: ["coverletter.tex"],
+    });
+    expect(result.entrypoint).toBe("CoverLetter.tex");
+  });
+
   it("skips commented-out \\includegraphics references", () => {
     const archive = texZip({
       "main.tex":
