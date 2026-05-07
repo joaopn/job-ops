@@ -99,6 +99,18 @@ export const FloatingJobActionsBar: React.FC<FloatingJobActionsBarProps> = ({
                 Move to Backlog
               </Button>
             )}
+            {canRescoreSelected && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className={buttonClass}
+                disabled={jobActionInFlight}
+                onClick={onRescoreSelected}
+              >
+                Recalculate match
+              </Button>
+            )}
             {canSkipSelected && (
               <Button
                 type="button"
@@ -127,6 +139,18 @@ export const FloatingJobActionsBar: React.FC<FloatingJobActionsBarProps> = ({
                 onClick={onMoveToReady}
               >
                 Tailor {selectedCount} {jobOrJobs(selectedCount)}
+              </Button>
+            )}
+            {canRescoreSelected && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className={buttonClass}
+                disabled={jobActionInFlight}
+                onClick={onRescoreSelected}
+              >
+                Recalculate match
               </Button>
             )}
             {canUnselectSelected && (
@@ -169,6 +193,18 @@ export const FloatingJobActionsBar: React.FC<FloatingJobActionsBarProps> = ({
                 onClick={onMoveToSelected}
               >
                 Move back to Selected
+              </Button>
+            )}
+            {canRescoreSelected && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className={buttonClass}
+                disabled={jobActionInFlight}
+                onClick={onRescoreSelected}
+              >
+                Recalculate match
               </Button>
             )}
             {canSkipSelected && (
@@ -222,6 +258,18 @@ export const FloatingJobActionsBar: React.FC<FloatingJobActionsBarProps> = ({
                 onClick={onMoveToSelected}
               >
                 Move to Selected
+              </Button>
+            )}
+            {canRescoreSelected && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className={buttonClass}
+                disabled={jobActionInFlight}
+                onClick={onRescoreSelected}
+              >
+                Recalculate match
               </Button>
             )}
             {canSkipSelected && (
