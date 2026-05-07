@@ -12,7 +12,12 @@ import type {
   CoverLetterDocumentSummary,
   CvUploadPipelineAttempt,
 } from "@shared/types";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useMutationState,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   AlertCircle,
   CheckCircle2,
@@ -53,6 +58,10 @@ import { Textarea } from "@/components/ui/textarea";
 
 const ACCEPTED_EXTENSIONS = [".tex", ".zip"];
 
+const UPLOAD_MUTATION_KEY = ["cover-letter-document", "upload-template"] as const;
+const RE_EXTRACT_MUTATION_KEY = (clId: string) =>
+  ["cover-letter-document", "re-extract-template", clId] as const;
+
 type UploadFailureDetails = {
   stage: "flatten" | "compile-original" | "extract-loop";
   flattenCode?: string;
@@ -66,10 +75,7 @@ export function CoverLetterPage() {
   const summariesQuery = useQuery<CoverLetterDocumentSummary[]>({
     queryKey: queryKeys.coverLetterDocuments.list(),
     queryFn: api.listCoverLetters,
-<<<<<<< HEAD
-=======
     refetchOnMount: "always",
->>>>>>> refs/sandbox-fetch/agent/cv-cl-llm-status
   });
 
   const activeId = summariesQuery.data?.[0]?.id ?? null;
@@ -82,10 +88,7 @@ export function CoverLetterPage() {
       return api.getCoverLetter(activeId);
     },
     enabled: Boolean(activeId),
-<<<<<<< HEAD
-=======
     refetchOnMount: "always",
->>>>>>> refs/sandbox-fetch/agent/cv-cl-llm-status
   });
 
   return (
@@ -94,10 +97,7 @@ export function CoverLetterPage() {
         icon={Mail}
         title="My Cover Letter"
         subtitle="Upload your LaTeX cover letter; the server flattens, extracts, and renders it. Use it as the per-job draft template."
-<<<<<<< HEAD
-=======
         actions={<LlmStatusButton />}
->>>>>>> refs/sandbox-fetch/agent/cv-cl-llm-status
       />
       <main className="container mx-auto px-4 py-6 pb-12">
         {summariesQuery.isLoading ? (
@@ -178,6 +178,7 @@ function UploadCard({ onUploaded }: { onUploaded: () => Promise<void> }) {
   }, [defaultPromptQuery.data]);
 
   const uploadMutation = useMutation({
+    mutationKey: UPLOAD_MUTATION_KEY,
     mutationFn: async (file: File) => {
       const baseName =
         file.name.replace(/\.[^.]+$/, "") || "Cover letter";
@@ -229,6 +230,11 @@ function UploadCard({ onUploaded }: { onUploaded: () => Promise<void> }) {
     [uploadMutation],
   );
 
+  const pendingFromCache = useMutationState({
+    filters: { mutationKey: UPLOAD_MUTATION_KEY, status: "pending" },
+  });
+  const inFlight = pending || pendingFromCache.length > 0;
+
   return (
     <Card>
       <CardHeader>
@@ -265,16 +271,16 @@ function UploadCard({ onUploaded }: { onUploaded: () => Promise<void> }) {
               ? "border-primary bg-primary/5"
               : "border-muted-foreground/30 hover:border-primary"
           }`}
-          disabled={pending}
+          disabled={inFlight}
         >
-          {pending ? (
+          {inFlight ? (
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           ) : (
             <Upload className="h-8 w-8 text-muted-foreground" />
           )}
           <div className="text-center">
             <div className="font-medium">
-              {pending
+              {inFlight
                 ? "Uploading, compiling, and extracting…"
                 : "Click to upload or drag a file here"}
             </div>
@@ -310,7 +316,7 @@ function UploadCard({ onUploaded }: { onUploaded: () => Promise<void> }) {
               size="sm"
               onClick={handleResetPrompt}
               disabled={
-                pending ||
+                inFlight ||
                 !defaultPromptQuery.data ||
                 extractionPrompt === defaultPromptQuery.data
               }
@@ -329,7 +335,7 @@ function UploadCard({ onUploaded }: { onUploaded: () => Promise<void> }) {
             }
             className="min-h-[260px] font-mono text-xs"
             spellCheck={false}
-            disabled={pending || defaultPromptQuery.isLoading}
+            disabled={inFlight || defaultPromptQuery.isLoading}
           />
         </div>
 
@@ -426,6 +432,7 @@ function CoverLetterEditor({ doc }: { doc: CoverLetterDocument }) {
   });
 
   const reExtractMutation = useMutation({
+    mutationKey: RE_EXTRACT_MUTATION_KEY(doc.id),
     mutationFn: () =>
       api.reExtractCoverLetterTemplate(doc.id, {
         extractionPrompt,
@@ -448,6 +455,15 @@ function CoverLetterEditor({ doc }: { doc: CoverLetterDocument }) {
       toast.error(message);
     },
   });
+
+  const pendingReExtractsFromCache = useMutationState({
+    filters: {
+      mutationKey: RE_EXTRACT_MUTATION_KEY(doc.id),
+      status: "pending",
+    },
+  });
+  const isReExtracting =
+    reExtractMutation.isPending || pendingReExtractsFromCache.length > 0;
 
   const savePromptMutation = useMutation({
     mutationFn: async () =>
@@ -533,9 +549,9 @@ function CoverLetterEditor({ doc }: { doc: CoverLetterDocument }) {
               variant="outline"
               size="sm"
               onClick={() => reExtractMutation.mutate()}
-              disabled={reExtractMutation.isPending}
+              disabled={isReExtracting}
             >
-              {reExtractMutation.isPending ? (
+              {isReExtracting ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
                 <RefreshCw className="mr-2 h-4 w-4" />
@@ -654,7 +670,7 @@ function CoverLetterEditor({ doc }: { doc: CoverLetterDocument }) {
             disabled={
               savePromptMutation.isPending ||
               resetPromptMutation.isPending ||
-              reExtractMutation.isPending ||
+              isReExtracting ||
               defaultPromptQuery.isLoading
             }
           />
@@ -668,7 +684,7 @@ function CoverLetterEditor({ doc }: { doc: CoverLetterDocument }) {
                 !doc.extractionPrompt ||
                 resetPromptMutation.isPending ||
                 savePromptMutation.isPending ||
-                reExtractMutation.isPending
+                isReExtracting
               }
             >
               {resetPromptMutation.isPending ? (
@@ -684,7 +700,7 @@ function CoverLetterEditor({ doc }: { doc: CoverLetterDocument }) {
               disabled={
                 !promptDirty ||
                 savePromptMutation.isPending ||
-                reExtractMutation.isPending
+                isReExtracting
               }
             >
               {savePromptMutation.isPending ? (
@@ -698,9 +714,9 @@ function CoverLetterEditor({ doc }: { doc: CoverLetterDocument }) {
               type="button"
               size="sm"
               onClick={() => reExtractMutation.mutate()}
-              disabled={reExtractMutation.isPending}
+              disabled={isReExtracting}
             >
-              {reExtractMutation.isPending ? (
+              {isReExtracting ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
                 <RefreshCw className="mr-2 h-4 w-4" />

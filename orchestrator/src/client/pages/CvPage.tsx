@@ -9,7 +9,12 @@ import type {
   CvDocumentSummary,
   CvUploadPipelineAttempt,
 } from "@shared/types";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useMutationState,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   AlertCircle,
   CheckCircle2,
@@ -49,6 +54,20 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
 const ACCEPTED_EXTENSIONS = [".tex", ".zip"];
+
+/**
+ * Stable mutation keys so the gated upload + re-extract mutations are
+ * discoverable globally via `useMutationState`. The CvPage and its
+ * children read these to keep the "extracting…" spinner visible across
+ * navigation: when the user drops a zip, navigates away mid-upload, and
+ * comes back, the local `useMutation` observer is gone (component
+ * remounted) but the mutation is still running in the queryClient
+ * cache. Filtering by these keys lets the page detect that and re-show
+ * the pending UI instead of flashing back to an empty drop zone.
+ */
+const UPLOAD_MUTATION_KEY = ["cv-document", "upload-template"] as const;
+const RE_EXTRACT_MUTATION_KEY = (cvId: string) =>
+  ["cv-document", "re-extract-template", cvId] as const;
 
 type UploadFailureDetails = {
   stage: "flatten" | "compile-original" | "extract-loop";
@@ -168,6 +187,7 @@ function UploadCard({ onUploaded }: { onUploaded: () => Promise<void> }) {
   }, [defaultPromptQuery.data]);
 
   const uploadMutation = useMutation({
+    mutationKey: UPLOAD_MUTATION_KEY,
     mutationFn: async (file: File) => {
       const baseName = file.name.replace(/\.[^.]+$/, "") || "CV";
       return api.uploadCvDocumentTemplate({
@@ -195,6 +215,15 @@ function UploadCard({ onUploaded }: { onUploaded: () => Promise<void> }) {
       toast.error(message);
     },
   });
+
+  // Cross-mount pending detection: if a previous mount started an upload
+  // and the user navigated away, the mutation is still running in the
+  // queryClient cache. Read the global mutation state by key so the
+  // spinner UI persists across navigation back to /cv.
+  const pendingFromCache = useMutationState({
+    filters: { mutationKey: UPLOAD_MUTATION_KEY, status: "pending" },
+  });
+  const inFlight = pending || pendingFromCache.length > 0;
 
   const handleFile = useCallback(
     async (file: File) => {
@@ -252,16 +281,16 @@ function UploadCard({ onUploaded }: { onUploaded: () => Promise<void> }) {
               ? "border-primary bg-primary/5"
               : "border-muted-foreground/30 hover:border-primary"
           }`}
-          disabled={pending}
+          disabled={inFlight}
         >
-          {pending ? (
+          {inFlight ? (
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           ) : (
             <Upload className="h-8 w-8 text-muted-foreground" />
           )}
           <div className="text-center">
             <div className="font-medium">
-              {pending
+              {inFlight
                 ? "Uploading, compiling, and extracting…"
                 : "Click to upload or drag a file here"}
             </div>
@@ -297,7 +326,7 @@ function UploadCard({ onUploaded }: { onUploaded: () => Promise<void> }) {
               size="sm"
               onClick={handleResetPrompt}
               disabled={
-                pending ||
+                inFlight ||
                 !defaultPromptQuery.data ||
                 extractionPrompt === defaultPromptQuery.data
               }
@@ -316,7 +345,7 @@ function UploadCard({ onUploaded }: { onUploaded: () => Promise<void> }) {
             }
             className="min-h-[260px] font-mono text-xs"
             spellCheck={false}
-            disabled={pending || defaultPromptQuery.isLoading}
+            disabled={inFlight || defaultPromptQuery.isLoading}
           />
         </div>
 
@@ -425,6 +454,7 @@ function CvEditor({ cv }: { cv: CvDocument }) {
   });
 
   const reExtractMutation = useMutation({
+    mutationKey: RE_EXTRACT_MUTATION_KEY(cv.id),
     mutationFn: () =>
       api.reExtractCvDocumentTemplate(cv.id, {
         // Always send the current textarea value — the server persists
@@ -450,6 +480,18 @@ function CvEditor({ cv }: { cv: CvDocument }) {
       toast.error(message);
     },
   });
+
+  // Cross-mount pending detection — same pattern as UploadCard. If the
+  // user re-extracts and navigates away, the re-extract is still
+  // running in the queryClient cache when they come back.
+  const pendingReExtractsFromCache = useMutationState({
+    filters: {
+      mutationKey: RE_EXTRACT_MUTATION_KEY(cv.id),
+      status: "pending",
+    },
+  });
+  const isReExtracting =
+    reExtractMutation.isPending || pendingReExtractsFromCache.length > 0;
 
   const savePromptMutation = useMutation({
     mutationFn: async () =>
@@ -539,9 +581,9 @@ function CvEditor({ cv }: { cv: CvDocument }) {
               variant="outline"
               size="sm"
               onClick={() => reExtractMutation.mutate()}
-              disabled={reExtractMutation.isPending}
+              disabled={isReExtracting}
             >
-              {reExtractMutation.isPending ? (
+              {isReExtracting ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
                 <RefreshCw className="mr-2 h-4 w-4" />
@@ -660,7 +702,7 @@ function CvEditor({ cv }: { cv: CvDocument }) {
             disabled={
               savePromptMutation.isPending ||
               resetPromptMutation.isPending ||
-              reExtractMutation.isPending ||
+              isReExtracting ||
               defaultPromptQuery.isLoading
             }
           />
@@ -674,7 +716,7 @@ function CvEditor({ cv }: { cv: CvDocument }) {
                 !cv.extractionPrompt ||
                 resetPromptMutation.isPending ||
                 savePromptMutation.isPending ||
-                reExtractMutation.isPending
+                isReExtracting
               }
             >
               {resetPromptMutation.isPending ? (
@@ -690,7 +732,7 @@ function CvEditor({ cv }: { cv: CvDocument }) {
               disabled={
                 !promptDirty ||
                 savePromptMutation.isPending ||
-                reExtractMutation.isPending
+                isReExtracting
               }
             >
               {savePromptMutation.isPending ? (
@@ -704,9 +746,9 @@ function CvEditor({ cv }: { cv: CvDocument }) {
               type="button"
               size="sm"
               onClick={() => reExtractMutation.mutate()}
-              disabled={reExtractMutation.isPending}
+              disabled={isReExtracting}
             >
-              {reExtractMutation.isPending ? (
+              {isReExtracting ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
                 <RefreshCw className="mr-2 h-4 w-4" />
