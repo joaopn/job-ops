@@ -139,6 +139,13 @@ function spawnTectonic(
   timeoutMs: number,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
+    // `-Z continue-on-errors` matches Overleaf's `pdflatex --interaction=nonstopmode`
+    // semantics: tectonic keeps going on potentially-recoverable errors
+    // (e.g. macro-argument paragraph breaks, missing braces) and emits a
+    // PDF even if the source has minor LaTeX issues. The pdftotext
+    // content-equivalence diff downstream is the real safety net — if
+    // the bug visibly distorts the output, the templated render diverges
+    // and the upload is rejected anyway.
     const child = spawn(
       TECTONIC_BIN,
       [
@@ -147,6 +154,8 @@ function spawnTectonic(
         path.dirname(entrypointPath),
         "--chatter",
         "minimal",
+        "-Z",
+        "continue-on-errors",
         entrypointPath,
       ],
       { cwd: outdir, stdio: ["ignore", "pipe", "pipe"] },
