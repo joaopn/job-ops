@@ -2,6 +2,7 @@ import * as api from "@client/api";
 import { ApiClientError } from "@client/api";
 import { CompileLogViewer, AttemptLogViewer } from "@client/components/cv/CompileLogViewer";
 import { PageHeader } from "@client/components/layout";
+import { LlmStatusButton } from "@client/components/LlmStatusButton";
 import { queryKeys } from "@client/lib/queryKeys";
 import type {
   CvDocument,
@@ -62,6 +63,7 @@ export function CvPage() {
   const summariesQuery = useQuery<CvDocumentSummary[]>({
     queryKey: queryKeys.cvDocuments.list(),
     queryFn: api.listCvDocuments,
+    refetchOnMount: "always",
   });
 
   const activeId = summariesQuery.data?.[0]?.id ?? null;
@@ -74,6 +76,7 @@ export function CvPage() {
       return api.getCvDocument(activeId);
     },
     enabled: Boolean(activeId),
+    refetchOnMount: "always",
   });
 
   return (
@@ -82,6 +85,7 @@ export function CvPage() {
         icon={FileText}
         title="My CV"
         subtitle="Upload your LaTeX CV; the server flattens, extracts, and renders it for per-job tailoring."
+        actions={<LlmStatusButton />}
       />
       <main className="container mx-auto px-4 py-6 pb-12">
         {summariesQuery.isLoading ? (

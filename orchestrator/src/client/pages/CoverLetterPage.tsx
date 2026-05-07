@@ -5,6 +5,7 @@ import {
   CompileLogViewer,
 } from "@client/components/cv/CompileLogViewer";
 import { PageHeader } from "@client/components/layout";
+import { LlmStatusButton } from "@client/components/LlmStatusButton";
 import { queryKeys } from "@client/lib/queryKeys";
 import type {
   CoverLetterDocument,
@@ -65,6 +66,10 @@ export function CoverLetterPage() {
   const summariesQuery = useQuery<CoverLetterDocumentSummary[]>({
     queryKey: queryKeys.coverLetterDocuments.list(),
     queryFn: api.listCoverLetters,
+<<<<<<< HEAD
+=======
+    refetchOnMount: "always",
+>>>>>>> refs/sandbox-fetch/agent/cv-cl-llm-status
   });
 
   const activeId = summariesQuery.data?.[0]?.id ?? null;
@@ -77,6 +82,10 @@ export function CoverLetterPage() {
       return api.getCoverLetter(activeId);
     },
     enabled: Boolean(activeId),
+<<<<<<< HEAD
+=======
+    refetchOnMount: "always",
+>>>>>>> refs/sandbox-fetch/agent/cv-cl-llm-status
   });
 
   return (
@@ -85,6 +94,10 @@ export function CoverLetterPage() {
         icon={Mail}
         title="My Cover Letter"
         subtitle="Upload your LaTeX cover letter; the server flattens, extracts, and renders it. Use it as the per-job draft template."
+<<<<<<< HEAD
+=======
+        actions={<LlmStatusButton />}
+>>>>>>> refs/sandbox-fetch/agent/cv-cl-llm-status
       />
       <main className="container mx-auto px-4 py-6 pb-12">
         {summariesQuery.isLoading ? (
