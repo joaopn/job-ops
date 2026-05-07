@@ -87,7 +87,8 @@ type LegacyApiResponse<T> =
 type StreamSseInput =
   | JobActionRequest
   | { content: string; stream: true }
-  | { stream: true };
+  | { stream: true }
+  | { urls: string[] };
 
 export type CodexAuthStatusResponse = {
   authenticated: boolean;

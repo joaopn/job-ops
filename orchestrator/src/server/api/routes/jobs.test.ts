@@ -84,12 +84,23 @@ describe.sequential("POST /api/jobs/actions — 5g action variants", () => {
     expect(body.data.results[0].job.status).toBe("selected");
   });
 
-  it("move_to_selected rejects from non-promotable statuses", async () => {
+  it("move_to_selected demotes a ready row back to selected for re-tailoring", async () => {
     await seedJob({ id: "job-3", status: "ready" });
 
     const { body } = await postAction({
       action: "move_to_selected",
       jobIds: ["job-3"],
+    });
+
+    expect(body.data.results[0].job.status).toBe("selected");
+  });
+
+  it("move_to_selected rejects from non-promotable statuses", async () => {
+    await seedJob({ id: "job-3b", status: "applied" });
+
+    const { body } = await postAction({
+      action: "move_to_selected",
+      jobIds: ["job-3b"],
     });
 
     expect(body.data.failed).toBe(1);

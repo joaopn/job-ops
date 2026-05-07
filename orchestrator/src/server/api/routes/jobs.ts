@@ -154,6 +154,7 @@ const SKIPPABLE_STATUSES: ReadonlySet<JobStatus> = new Set([
 const SELECTABLE_FROM_STATUSES: ReadonlySet<JobStatus> = new Set([
   "discovered",
   "backlog",
+  "ready",
 ]);
 
 const BACKLOG_FROM_STATUSES: ReadonlySet<JobStatus> = new Set([

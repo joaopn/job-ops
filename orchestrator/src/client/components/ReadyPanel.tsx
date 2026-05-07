@@ -39,6 +39,7 @@ import {
   formatJobForWebhook,
   safeFilenamePart,
 } from "@/lib/utils";
+import { getRenderableJobDescription } from "@/client/lib/jobDescription";
 import * as api from "../api";
 import {
   useMarkAsAppliedMutation,
@@ -46,8 +47,11 @@ import {
 } from "../hooks/queries/useJobMutations";
 import { useActiveCv } from "../hooks/useActiveCv";
 import { useRescoreJob } from "../hooks/useRescoreJob";
+import { useSettings } from "../hooks/useSettings";
 import { FitAssessment } from ".";
+import { CollapsibleSection } from "./discovered-panel/CollapsibleSection";
 import { UnifiedPanel } from "./ghostwriter/UnifiedPanel";
+import { JobDescriptionMarkdown } from "./JobDescriptionMarkdown";
 import { JobDetailsEditDrawer } from "./JobDetailsEditDrawer";
 import { KbdHint } from "./KbdHint";
 import { OpenJobListingButton } from "./OpenJobListingButton";
@@ -71,7 +75,10 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
   const [isMarkingApplied, setIsMarkingApplied] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [isEditDetailsOpen, setIsEditDetailsOpen] = useState(false);
+  const [isMovingBackToSelected, setIsMovingBackToSelected] = useState(false);
+  const [showDescription, setShowDescription] = useState(false);
   const { isRescoring, rescoreJob } = useRescoreJob(onJobUpdated);
+  const { renderMarkdownInJobDescriptions } = useSettings();
   const [recentlyApplied, setRecentlyApplied] = useState<{
     jobId: string;
     jobTitle: string;
@@ -92,6 +99,7 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
     if (previousJobIdRef.current === currentJobId) return;
     previousJobIdRef.current = currentJobId;
     setIsEditDetailsOpen(false);
+    setShowDescription(false);
     onTailoringDirtyChange?.(false);
   }, [job?.id, onTailoringDirtyChange]);
 
@@ -105,6 +113,11 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
   const googleDorks = useMemo(
     () => (job ? buildReadyPanelGoogleDorks(job) : []),
     [job],
+  );
+
+  const description = useMemo(
+    () => getRenderableJobDescription(job?.jobDescription),
+    [job?.jobDescription],
   );
 
   const handleUndoApplied = useCallback(
@@ -204,6 +217,28 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
       toast.error(message);
     }
   }, [job, onJobMoved, onJobUpdated, skipJobMutation]);
+
+  const handleMoveBackToSelected = useCallback(async () => {
+    if (!job) return;
+
+    try {
+      setIsMovingBackToSelected(true);
+      await api.updateJob(job.id, { status: "selected" });
+      toast.success("Moved back to Selected", {
+        description: "Re-tailor from the Selected tab to apply CV/brief updates.",
+      });
+      onJobMoved(job.id);
+      await onJobUpdated();
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to move job back to Selected";
+      toast.error(message);
+    } finally {
+      setIsMovingBackToSelected(false);
+    }
+  }, [job, onJobMoved, onJobUpdated]);
 
   const handleCopyInfo = useCallback(async () => {
     if (!job) return;
@@ -311,6 +346,22 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
           <TabsContent value="details" className="mt-3 space-y-3">
             <FitAssessment job={job} />
 
+            <CollapsibleSection
+              isOpen={showDescription}
+              onToggle={() => setShowDescription((prev) => !prev)}
+              label={`${showDescription ? "Hide" : "View"} Full Job Description`}
+            >
+              <div className="rounded-xl border border-border/40 bg-muted/5 p-4 mt-2 max-h-[400px] overflow-y-auto shadow-inner">
+                {renderMarkdownInJobDescriptions ? (
+                  <JobDescriptionMarkdown description={description} />
+                ) : (
+                  <p className="text-xs text-muted-foreground/90 whitespace-pre-wrap leading-relaxed">
+                    {description}
+                  </p>
+                )}
+              </div>
+            </CollapsibleSection>
+
             {googleDorks.length > 0 ? (
               <ReadySummaryAccordion
                 icon={ExternalLink}
@@ -400,6 +451,18 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
             <DropdownMenuItem onSelect={handleCopyInfo}>
               <Copy className="mr-2 h-4 w-4" />
               Copy job info
+            </DropdownMenuItem>
+
+            <DropdownMenuSeparator />
+
+            <DropdownMenuItem
+              onSelect={handleMoveBackToSelected}
+              disabled={isMovingBackToSelected}
+            >
+              <Undo2 className="mr-2 h-4 w-4" />
+              {isMovingBackToSelected
+                ? "Moving back..."
+                : "Move back to Selected"}
             </DropdownMenuItem>
 
             <DropdownMenuSeparator />

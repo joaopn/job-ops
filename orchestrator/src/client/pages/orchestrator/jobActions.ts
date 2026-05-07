@@ -7,7 +7,7 @@ const SKIPPABLE_STATUSES = new Set([
   "backlog",
 ]);
 const MOVE_TO_READY_STATUSES = new Set(["discovered", "selected"]);
-const MOVE_TO_SELECTED_STATUSES = new Set(["discovered", "backlog"]);
+const MOVE_TO_SELECTED_STATUSES = new Set(["discovered", "backlog", "ready"]);
 const MOVE_TO_BACKLOG_STATUSES = new Set(["discovered", "selected"]);
 const CLOSABLE_STATUSES = new Set(["applied", "in_progress"]);
 const REOPENABLE_STATUSES = new Set(["skipped", "closed"]);

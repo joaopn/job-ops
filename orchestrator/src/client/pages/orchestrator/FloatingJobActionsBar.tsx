@@ -159,6 +159,18 @@ export const FloatingJobActionsBar: React.FC<FloatingJobActionsBarProps> = ({
       case "ready":
         return (
           <>
+            {canMoveToSelectedSelected && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className={buttonClass}
+                disabled={jobActionInFlight}
+                onClick={onMoveToSelected}
+              >
+                Move back to Selected
+              </Button>
+            )}
             {canSkipSelected && (
               <Button
                 type="button"

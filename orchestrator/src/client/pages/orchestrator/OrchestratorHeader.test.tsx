@@ -31,6 +31,9 @@ const renderHeader = (
     isCancelling: false,
     pipelineSources: ["linkedin"],
     onOpenAutomaticRun: vi.fn(),
+    onOpenBatchUrlImport: vi.fn(),
+    onOpenLlmQueue: vi.fn(),
+    llmActiveCount: 0,
     onCancelPipeline: vi.fn(),
     ...overrides,
   };
