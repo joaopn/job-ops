@@ -12,10 +12,7 @@ import {
   FlattenInputError,
   flattenInput,
 } from "@server/services/cv/flatten-input";
-import {
-  CvExtractError,
-  extractCv,
-} from "@server/services/cv/llm-extract-cv";
+import { CvExtractError, extractCv } from "@server/services/cv/llm-extract-cv";
 import { RenderCvError, renderCv } from "@server/services/cv/render";
 import {
   RenderTemplateError,
@@ -27,25 +24,41 @@ import {
 } from "@server/services/cv/run-tectonic";
 import { getExtractionPromptDefault } from "@server/services/cv/llm-template-extract";
 import { runUploadPipeline } from "@server/services/cv/upload-pipeline";
+import { getEffectiveSettings } from "@server/services/settings";
 import busboy from "busboy";
 import type { Request, Response } from "express";
 import { Router } from "express";
 import { z } from "zod";
 
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
-const MAX_PERSONAL_BRIEF_BYTES = 50_000;
-const MAX_EXTRACTION_PROMPT_BYTES = 50_000;
-
 export const cvRouter = Router();
 
 const updateCvSchema = z.object({
   name: z.string().trim().min(1).max(100).optional(),
-  personalBrief: z.string().max(MAX_PERSONAL_BRIEF_BYTES).optional(),
-  extractionPrompt: z
-    .string()
-    .max(MAX_EXTRACTION_PROMPT_BYTES)
-    .optional(),
+  personalBrief: z.string().optional(),
+  extractionPrompt: z.string().optional(),
 });
+
+function exceedsCharCap(
+  field: string,
+  observed: number,
+  max: number,
+): AppError {
+  return unprocessableEntity(
+    `${field} exceeds the configured limit (${observed} > ${max} chars).`,
+    { field, observed, max },
+  );
+}
+
+function exceedsByteCap(
+  field: string,
+  observed: number,
+  max: number,
+): AppError {
+  return unprocessableEntity(
+    `${field} exceeds the configured limit (${observed} > ${max} bytes).`,
+    { field, observed, max },
+  );
+}
 
 interface ParsedUpload {
   filename: string;
@@ -55,7 +68,8 @@ interface ParsedUpload {
 
 cvRouter.post("/", async (req: Request, res: Response) => {
   try {
-    const upload = await parseUpload(req);
+    const settings = await getEffectiveSettings();
+    const upload = await parseUpload(req, settings.maxCvUploadBytes.value);
     if (!upload) {
       return fail(res, badRequest("No file uploaded."));
     }
@@ -63,6 +77,7 @@ cvRouter.post("/", async (req: Request, res: Response) => {
     const flattened = flattenInput({
       archive: upload.bytes,
       filename: upload.filename,
+      maxExpandedBytes: settings.maxExpandedLatexBytes.value,
     });
     const extracted = await extractCv({
       flattenedTex: flattened.flattenedTex,
@@ -103,7 +118,8 @@ cvRouter.post("/", async (req: Request, res: Response) => {
  */
 cvRouter.post("/upload-template", async (req: Request, res: Response) => {
   try {
-    const upload = await parseUpload(req);
+    const settings = await getEffectiveSettings();
+    const upload = await parseUpload(req, settings.maxCvUploadBytes.value);
     if (!upload) {
       return fail(res, badRequest("No file uploaded."));
     }
@@ -112,11 +128,14 @@ cvRouter.post("/upload-template", async (req: Request, res: Response) => {
     const maxRetries = maxRetriesRaw ? Number(maxRetriesRaw) : undefined;
 
     const extractionPromptRaw = upload.fields.extractionPrompt ?? "";
-    if (extractionPromptRaw.length > MAX_EXTRACTION_PROMPT_BYTES) {
+    const maxExtractionPromptChars = settings.maxExtractionPromptChars.value;
+    if (extractionPromptRaw.length > maxExtractionPromptChars) {
       return fail(
         res,
-        badRequest(
-          `extractionPrompt exceeds the ${MAX_EXTRACTION_PROMPT_BYTES}-byte limit.`,
+        exceedsCharCap(
+          "extractionPrompt",
+          extractionPromptRaw.length,
+          maxExtractionPromptChars,
         ),
       );
     }
@@ -126,6 +145,7 @@ cvRouter.post("/upload-template", async (req: Request, res: Response) => {
       filename: upload.filename,
       maxRetries,
       extractionPrompt: extractionPromptRaw || undefined,
+      maxExpandedBytes: settings.maxExpandedLatexBytes.value,
     });
 
     if (!result.ok) {
@@ -150,7 +170,10 @@ cvRouter.post("/upload-template", async (req: Request, res: Response) => {
             stage: result.stage,
             ...(result.flattenCode ? { flattenCode: result.flattenCode } : {}),
             ...(result.originalCompileStderr
-              ? { originalCompileStderr: result.originalCompileStderr.slice(-2000) }
+              ? {
+                  originalCompileStderr:
+                    result.originalCompileStderr.slice(-2000),
+                }
               : {}),
             ...(result.attempts ? { attempts: result.attempts } : {}),
           },
@@ -236,6 +259,32 @@ cvRouter.get("/:id", async (req: Request, res: Response) => {
 cvRouter.patch("/:id", async (req: Request, res: Response) => {
   try {
     const input = updateCvSchema.parse(req.body ?? {});
+    const settings = await getEffectiveSettings();
+
+    if (input.personalBrief !== undefined) {
+      const max = settings.maxBriefChars.value;
+      if (input.personalBrief.length > max) {
+        return fail(
+          res,
+          exceedsCharCap("personalBrief", input.personalBrief.length, max),
+        );
+      }
+    }
+
+    if (input.extractionPrompt !== undefined) {
+      const max = settings.maxExtractionPromptChars.value;
+      if (input.extractionPrompt.length > max) {
+        return fail(
+          res,
+          exceedsCharCap(
+            "extractionPrompt",
+            input.extractionPrompt.length,
+            max,
+          ),
+        );
+      }
+    }
+
     const updated = await cvRepo.updateCvDocument(req.params.id, input);
     if (!updated) return fail(res, notFound("CV document not found."));
     ok(res, updated);
@@ -246,6 +295,7 @@ cvRouter.patch("/:id", async (req: Request, res: Response) => {
 
 cvRouter.post("/:id/re-extract", async (req: Request, res: Response) => {
   try {
+    const settings = await getEffectiveSettings();
     const archive = await cvRepo.getCvDocumentArchive(req.params.id);
     if (!archive) return fail(res, notFound("CV document not found."));
     const existing = await cvRepo.getCvDocumentById(req.params.id);
@@ -254,6 +304,7 @@ cvRouter.post("/:id/re-extract", async (req: Request, res: Response) => {
     const flattened = flattenInput({
       archive: new Uint8Array(archive),
       filename: existing.name,
+      maxExpandedBytes: settings.maxExpandedLatexBytes.value,
     });
     const extracted = await extractCv({
       flattenedTex: flattened.flattenedTex,
@@ -349,6 +400,7 @@ cvRouter.post(
   "/:id/re-extract-template",
   async (req: Request, res: Response) => {
     try {
+      const settings = await getEffectiveSettings();
       const archive = await cvRepo.getCvDocumentArchive(req.params.id);
       if (!archive) return fail(res, notFound("CV document not found."));
       const existing = await cvRepo.getCvDocumentById(req.params.id);
@@ -368,12 +420,11 @@ cvRouter.post(
       let effectivePrompt = existing.extractionPrompt;
       if (typeof body.extractionPrompt === "string") {
         const incoming = body.extractionPrompt;
-        if (incoming.length > MAX_EXTRACTION_PROMPT_BYTES) {
+        const max = settings.maxExtractionPromptChars.value;
+        if (incoming.length > max) {
           return fail(
             res,
-            badRequest(
-              `extractionPrompt exceeds the ${MAX_EXTRACTION_PROMPT_BYTES}-byte limit.`,
-            ),
+            exceedsCharCap("extractionPrompt", incoming.length, max),
           );
         }
         effectivePrompt = incoming;
@@ -387,6 +438,7 @@ cvRouter.post(
         filename: existing.name,
         maxRetries,
         extractionPrompt: effectivePrompt || undefined,
+        maxExpandedBytes: settings.maxExpandedLatexBytes.value,
       });
 
       if (!result.ok) {
@@ -457,13 +509,16 @@ cvRouter.delete("/:id", async (req: Request, res: Response) => {
   }
 });
 
-function parseUpload(req: Request): Promise<ParsedUpload | null> {
+function parseUpload(
+  req: Request,
+  maxBytes: number,
+): Promise<ParsedUpload | null> {
   return new Promise((resolve, reject) => {
     let bb: ReturnType<typeof busboy>;
     try {
       bb = busboy({
         headers: req.headers,
-        limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 },
+        limits: { fileSize: maxBytes, files: 1 },
       });
     } catch (error) {
       reject(error);
@@ -473,10 +528,14 @@ function parseUpload(req: Request): Promise<ParsedUpload | null> {
     let upload: ParsedUpload | null = null;
     const fields: Record<string, string> = {};
     let truncated = false;
+    let observedBytes = 0;
 
     bb.on("file", (_field, stream, info) => {
       const chunks: Buffer[] = [];
-      stream.on("data", (chunk: Buffer) => chunks.push(chunk));
+      stream.on("data", (chunk: Buffer) => {
+        observedBytes += chunk.length;
+        chunks.push(chunk);
+      });
       stream.on("limit", () => {
         truncated = true;
         stream.resume();
@@ -496,11 +555,7 @@ function parseUpload(req: Request): Promise<ParsedUpload | null> {
 
     bb.on("close", () => {
       if (truncated) {
-        reject(
-          badRequest(
-            `Upload exceeded the ${MAX_UPLOAD_BYTES} byte limit.`,
-          ),
-        );
+        reject(exceedsByteCap("upload", observedBytes, maxBytes));
         return;
       }
       if (upload) upload.fields = fields;

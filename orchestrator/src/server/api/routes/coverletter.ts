@@ -19,20 +19,40 @@ import {
 } from "@server/services/cv/run-tectonic";
 import { getCoverLetterExtractionPromptDefault } from "@server/services/cover-letter/llm-template-extract";
 import { runCoverLetterUploadPipeline } from "@server/services/cover-letter/upload-pipeline";
+import { getEffectiveSettings } from "@server/services/settings";
 import busboy from "busboy";
 import type { Request, Response } from "express";
 import { Router } from "express";
 import { z } from "zod";
 
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
-const MAX_EXTRACTION_PROMPT_BYTES = 50_000;
-
 export const coverLetterRouter = Router();
 
 const updateCoverLetterSchema = z.object({
   name: z.string().trim().min(1).max(100).optional(),
-  extractionPrompt: z.string().max(MAX_EXTRACTION_PROMPT_BYTES).optional(),
+  extractionPrompt: z.string().optional(),
 });
+
+function exceedsCharCap(
+  field: string,
+  observed: number,
+  max: number,
+): AppError {
+  return unprocessableEntity(
+    `${field} exceeds the configured limit (${observed} > ${max} chars).`,
+    { field, observed, max },
+  );
+}
+
+function exceedsByteCap(
+  field: string,
+  observed: number,
+  max: number,
+): AppError {
+  return unprocessableEntity(
+    `${field} exceeds the configured limit (${observed} > ${max} bytes).`,
+    { field, observed, max },
+  );
+}
 
 interface ParsedUpload {
   filename: string;
@@ -52,7 +72,11 @@ coverLetterRouter.post(
   "/upload-template",
   async (req: Request, res: Response) => {
     try {
-      const upload = await parseUpload(req);
+      const settings = await getEffectiveSettings();
+      const upload = await parseUpload(
+        req,
+        settings.maxCoverLetterUploadBytes.value,
+      );
       if (!upload) {
         return fail(res, badRequest("No file uploaded."));
       }
@@ -61,11 +85,14 @@ coverLetterRouter.post(
       const maxRetries = maxRetriesRaw ? Number(maxRetriesRaw) : undefined;
 
       const extractionPromptRaw = upload.fields.extractionPrompt ?? "";
-      if (extractionPromptRaw.length > MAX_EXTRACTION_PROMPT_BYTES) {
+      const maxExtractionPromptChars = settings.maxExtractionPromptChars.value;
+      if (extractionPromptRaw.length > maxExtractionPromptChars) {
         return fail(
           res,
-          badRequest(
-            `extractionPrompt exceeds the ${MAX_EXTRACTION_PROMPT_BYTES}-byte limit.`,
+          exceedsCharCap(
+            "extractionPrompt",
+            extractionPromptRaw.length,
+            maxExtractionPromptChars,
           ),
         );
       }
@@ -75,6 +102,7 @@ coverLetterRouter.post(
         filename: upload.filename,
         maxRetries,
         extractionPrompt: extractionPromptRaw || undefined,
+        maxExpandedBytes: settings.maxExpandedLatexBytes.value,
       });
 
       if (!result.ok) {
@@ -97,7 +125,9 @@ coverLetterRouter.post(
             message: result.message,
             details: {
               stage: result.stage,
-              ...(result.flattenCode ? { flattenCode: result.flattenCode } : {}),
+              ...(result.flattenCode
+                ? { flattenCode: result.flattenCode }
+                : {}),
               ...(result.originalCompileStderr
                 ? {
                     originalCompileStderr:
@@ -187,6 +217,22 @@ coverLetterRouter.get("/:id", async (req: Request, res: Response) => {
 coverLetterRouter.patch("/:id", async (req: Request, res: Response) => {
   try {
     const input = updateCoverLetterSchema.parse(req.body ?? {});
+
+    if (input.extractionPrompt !== undefined) {
+      const settings = await getEffectiveSettings();
+      const max = settings.maxExtractionPromptChars.value;
+      if (input.extractionPrompt.length > max) {
+        return fail(
+          res,
+          exceedsCharCap(
+            "extractionPrompt",
+            input.extractionPrompt.length,
+            max,
+          ),
+        );
+      }
+    }
+
     const updated = await repo.updateCoverLetterDocument(req.params.id, input);
     if (!updated) {
       return fail(res, notFound("Cover-letter document not found."));
@@ -264,6 +310,7 @@ coverLetterRouter.post(
   "/:id/re-extract-template",
   async (req: Request, res: Response) => {
     try {
+      const settings = await getEffectiveSettings();
       const archive = await repo.getCoverLetterDocumentArchive(req.params.id);
       if (!archive) {
         return fail(res, notFound("Cover-letter document not found."));
@@ -284,12 +331,11 @@ coverLetterRouter.post(
       let effectivePrompt = existing.extractionPrompt;
       if (typeof body.extractionPrompt === "string") {
         const incoming = body.extractionPrompt;
-        if (incoming.length > MAX_EXTRACTION_PROMPT_BYTES) {
+        const max = settings.maxExtractionPromptChars.value;
+        if (incoming.length > max) {
           return fail(
             res,
-            badRequest(
-              `extractionPrompt exceeds the ${MAX_EXTRACTION_PROMPT_BYTES}-byte limit.`,
-            ),
+            exceedsCharCap("extractionPrompt", incoming.length, max),
           );
         }
         effectivePrompt = incoming;
@@ -303,6 +349,7 @@ coverLetterRouter.post(
         filename: existing.name,
         maxRetries,
         extractionPrompt: effectivePrompt || undefined,
+        maxExpandedBytes: settings.maxExpandedLatexBytes.value,
       });
 
       if (!result.ok) {
@@ -376,13 +423,16 @@ coverLetterRouter.delete("/:id", async (req: Request, res: Response) => {
   }
 });
 
-function parseUpload(req: Request): Promise<ParsedUpload | null> {
+function parseUpload(
+  req: Request,
+  maxBytes: number,
+): Promise<ParsedUpload | null> {
   return new Promise((resolve, reject) => {
     let bb: ReturnType<typeof busboy>;
     try {
       bb = busboy({
         headers: req.headers,
-        limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 },
+        limits: { fileSize: maxBytes, files: 1 },
       });
     } catch (error) {
       reject(error);
@@ -392,10 +442,14 @@ function parseUpload(req: Request): Promise<ParsedUpload | null> {
     let upload: ParsedUpload | null = null;
     const fields: Record<string, string> = {};
     let truncated = false;
+    let observedBytes = 0;
 
     bb.on("file", (_field, stream, info) => {
       const chunks: Buffer[] = [];
-      stream.on("data", (chunk: Buffer) => chunks.push(chunk));
+      stream.on("data", (chunk: Buffer) => {
+        observedBytes += chunk.length;
+        chunks.push(chunk);
+      });
       stream.on("limit", () => {
         truncated = true;
         stream.resume();
@@ -415,11 +469,7 @@ function parseUpload(req: Request): Promise<ParsedUpload | null> {
 
     bb.on("close", () => {
       if (truncated) {
-        reject(
-          badRequest(
-            `Upload exceeded the ${MAX_UPLOAD_BYTES} byte limit.`,
-          ),
-        );
+        reject(exceedsByteCap("upload", observedBytes, maxBytes));
         return;
       }
       if (upload) upload.fields = fields;

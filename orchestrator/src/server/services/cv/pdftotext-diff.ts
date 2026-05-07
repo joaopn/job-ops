@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 
 const PDFTOTEXT_BIN = process.env.PDFTOTEXT_BIN ?? "pdftotext";
 const DEFAULT_TIMEOUT_MS = 15_000;
-const MAX_DIFF_CHARS = 2000;
+const MAX_DIFF_PREVIEW_CHARS = 2000;
 
 export class PdftotextDiffError extends Error {
   readonly code: string;
@@ -26,7 +26,10 @@ export interface PdftotextDiffResult {
   ok: boolean;
   /**
    * Unified-format diff between the normalised text of `original` and
-   * `candidate`, capped at ~`MAX_DIFF_CHARS`. Empty string when `ok`.
+   * `candidate`, capped at ~`MAX_DIFF_PREVIEW_CHARS`. Empty string when
+   * `ok`. The truncated string is for the rejection-message body shown to
+   * humans; the accept/reject decision uses the FULL diff (`linesEqual`
+   * check above), so trimming the preview cannot influence correctness.
    */
   diff: string;
   /** Number of differing lines (after normalisation). 0 when `ok`. */
@@ -75,8 +78,8 @@ export function comparePdftotextOutput(
 
   const diff = unifiedDiff(originalLines, candidateLines);
   const truncated =
-    diff.length > MAX_DIFF_CHARS
-      ? `${diff.slice(0, MAX_DIFF_CHARS)}\n…(truncated)`
+    diff.length > MAX_DIFF_PREVIEW_CHARS
+      ? `${diff.slice(0, MAX_DIFF_PREVIEW_CHARS)}\n…(truncated)`
       : diff;
 
   return {

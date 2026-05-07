@@ -13,6 +13,45 @@ type PipelineSettingsSectionProps = {
   layoutMode?: "accordion" | "panel";
 };
 
+const ONE_MB = 1024 * 1024;
+const MAX_BYTE_CAP = 500 * ONE_MB;
+
+type ByteFieldKey =
+  | "maxCvUploadBytes"
+  | "maxCoverLetterUploadBytes"
+  | "maxExpandedLatexBytes";
+
+type ByteField = {
+  key: ByteFieldKey;
+  label: string;
+  description: string;
+};
+
+const BYTE_FIELDS: ByteField[] = [
+  {
+    key: "maxCvUploadBytes",
+    label: "CV upload size (MB)",
+    description:
+      "Caps the multipart upload accepted by /api/cv and /api/cv/upload-template. A larger archive returns 422.",
+  },
+  {
+    key: "maxCoverLetterUploadBytes",
+    label: "Cover-letter upload size (MB)",
+    description:
+      "Caps the multipart upload accepted by /api/coverletter/upload-template.",
+  },
+  {
+    key: "maxExpandedLatexBytes",
+    label: "Expanded LaTeX size (MB)",
+    description:
+      "Caps the size of the flattened tex (after `\\input{}` resolution). Triggered before tectonic compile.",
+  },
+];
+
+const bytesToMb = (bytes: number): number =>
+  Math.round((bytes / ONE_MB) * 100) / 100;
+const mbToBytes = (mb: number): number => Math.round(mb * ONE_MB);
+
 export const PipelineSettingsSection: React.FC<
   PipelineSettingsSectionProps
 > = ({ values, isLoading, isSaving, layoutMode }) => {
@@ -21,7 +60,18 @@ export const PipelineSettingsSection: React.FC<
     enableJobScoring,
     inboxStaleThresholdDays,
     inboxAgeoutThresholdDays,
+    maxCvUploadBytes,
+    maxCoverLetterUploadBytes,
+    maxExpandedLatexBytes,
   } = values;
+  const byteValues: Record<
+    ByteFieldKey,
+    { effective: number; default: number }
+  > = {
+    maxCvUploadBytes,
+    maxCoverLetterUploadBytes,
+    maxExpandedLatexBytes,
+  };
   const {
     control,
     formState: { errors },
@@ -219,6 +269,70 @@ export const PipelineSettingsSection: React.FC<
             </span>
           </div>
         </div>
+
+        {BYTE_FIELDS.map((field) => {
+          const value = byteValues[field.key];
+          const error = errors[field.key as keyof typeof errors];
+          return (
+            <div className="space-y-2" key={field.key}>
+              <label htmlFor={field.key} className="text-sm font-medium">
+                {field.label}
+              </label>
+              <Controller
+                name={field.key}
+                control={control}
+                rules={{
+                  validate: (v) => {
+                    if (v === null || v === undefined) return true;
+                    if (typeof v !== "number" || !Number.isFinite(v))
+                      return "Invalid value";
+                    if (v < ONE_MB || v > MAX_BYTE_CAP)
+                      return `Must be between 1 MB and ${MAX_BYTE_CAP / ONE_MB} MB`;
+                    return true;
+                  },
+                }}
+                render={({ field: controllerField }) => (
+                  <Input
+                    id={field.key}
+                    type="number"
+                    min={1}
+                    max={MAX_BYTE_CAP / ONE_MB}
+                    step={1}
+                    placeholder={String(bytesToMb(value.default))}
+                    disabled={isLoading || isSaving}
+                    value={
+                      typeof controllerField.value === "number"
+                        ? bytesToMb(controllerField.value)
+                        : ""
+                    }
+                    onChange={(e) => {
+                      const raw = e.target.valueAsNumber;
+                      controllerField.onChange(
+                        Number.isFinite(raw) ? mbToBytes(raw) : null,
+                      );
+                    }}
+                  />
+                )}
+              />
+              {error && (
+                <div className="text-xs text-destructive">
+                  {(error as { message?: string }).message}
+                </div>
+              )}
+              <div className="text-xs text-muted-foreground">
+                {field.description}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Current:{" "}
+                <span className="font-mono">
+                  {bytesToMb(value.effective)} MB
+                </span>
+                {" — "}Default:{" "}
+                <span className="font-mono">{bytesToMb(value.default)} MB</span>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </SettingsSectionFrame>
   );

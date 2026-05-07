@@ -138,6 +138,83 @@ describe.sequential("CV API routes", () => {
     expect(missing.status).toBe(404);
   });
 
+  it("rejects PATCH with 422 when personalBrief exceeds maxBriefChars", async () => {
+    const form = new FormData();
+    form.append("file", new Blob([SAMPLE_TEX]), "ada.tex");
+    const created = (await (
+      await fetch(`${baseUrl}/api/cv`, { method: "POST", body: form })
+    ).json()) as { data: { id: string } };
+    const id = created.data.id;
+
+    // Default maxBriefChars is 200_000; send 200_001 to exceed it.
+    const oversized = "x".repeat(200_001);
+    const res = await fetch(`${baseUrl}/api/cv/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ personalBrief: oversized }),
+    });
+    expect(res.status).toBe(422);
+    const payload = (await res.json()) as {
+      error: {
+        code: string;
+        message: string;
+        details: { field: string; observed: number; max: number };
+      };
+    };
+    expect(payload.error.code).toBe("UNPROCESSABLE_ENTITY");
+    expect(payload.error.details.field).toBe("personalBrief");
+    expect(payload.error.details.observed).toBe(200_001);
+    expect(payload.error.details.max).toBe(200_000);
+  });
+
+  it("rejects PATCH with 422 when extractionPrompt exceeds maxExtractionPromptChars", async () => {
+    const form = new FormData();
+    form.append("file", new Blob([SAMPLE_TEX]), "ada.tex");
+    const created = (await (
+      await fetch(`${baseUrl}/api/cv`, { method: "POST", body: form })
+    ).json()) as { data: { id: string } };
+    const id = created.data.id;
+
+    const oversized = "x".repeat(100_001);
+    const res = await fetch(`${baseUrl}/api/cv/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ extractionPrompt: oversized }),
+    });
+    expect(res.status).toBe(422);
+    const payload = (await res.json()) as {
+      error: {
+        code: string;
+        details: { field: string; observed: number; max: number };
+      };
+    };
+    expect(payload.error.code).toBe("UNPROCESSABLE_ENTITY");
+    expect(payload.error.details.field).toBe("extractionPrompt");
+    expect(payload.error.details.max).toBe(100_000);
+  });
+
+  it("accepts PATCH with personalBrief at the maxBriefChars boundary", async () => {
+    const form = new FormData();
+    form.append("file", new Blob([SAMPLE_TEX]), "ada.tex");
+    const created = (await (
+      await fetch(`${baseUrl}/api/cv`, { method: "POST", body: form })
+    ).json()) as { data: { id: string } };
+    const id = created.data.id;
+
+    // Length of EXACTLY 200_000 should pass.
+    const atCap = "x".repeat(200_000);
+    const res = await fetch(`${baseUrl}/api/cv/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ personalBrief: atCap }),
+    });
+    expect(res.status).toBe(200);
+    const payload = (await res.json()) as {
+      data: { personalBrief: string };
+    };
+    expect(payload.data.personalBrief.length).toBe(200_000);
+  });
+
   it("re-runs extraction on POST /api/cv/:id/re-extract and updates the brief", async () => {
     const form = new FormData();
     form.append("file", new Blob([SAMPLE_TEX]), "ada.tex");
@@ -155,10 +232,9 @@ describe.sequential("CV API routes", () => {
       personalBrief: "Updated brief.",
     });
 
-    const res = await fetch(
-      `${baseUrl}/api/cv/${created.data.id}/re-extract`,
-      { method: "POST" },
-    );
+    const res = await fetch(`${baseUrl}/api/cv/${created.data.id}/re-extract`, {
+      method: "POST",
+    });
     expect(res.status).toBe(200);
     const payload = (await res.json()) as {
       data: {

@@ -2,6 +2,7 @@ import * as api from "@client/api";
 import { PageHeader } from "@client/components/layout";
 import { useUpdateSettingsMutation } from "@client/hooks/queries/useSettingsMutation";
 import { ChatSettingsSection } from "@client/pages/settings/components/ChatSettingsSection";
+import { ContextLimitsSection } from "@client/pages/settings/components/ContextLimitsSection";
 import { DangerZoneSection } from "@client/pages/settings/components/DangerZoneSection";
 import { DisplaySettingsSection } from "@client/pages/settings/components/DisplaySettingsSection";
 import { EnvironmentSettingsSection } from "@client/pages/settings/components/EnvironmentSettingsSection";
@@ -69,6 +70,15 @@ const DEFAULT_FORM_VALUES: UpdateSettingsInput = {
   enableJobScoring: null,
   inboxStaleThresholdDays: null,
   inboxAgeoutThresholdDays: null,
+  maxBriefChars: null,
+  maxJobDescriptionChars: null,
+  maxTailoredContentChars: null,
+  maxCoverLetterChars: null,
+  maxFetchedJobHtmlChars: null,
+  maxExtractionPromptChars: null,
+  maxCvUploadBytes: null,
+  maxCoverLetterUploadBytes: null,
+  maxExpandedLatexBytes: null,
 };
 
 type LlmProviderValue = LlmProviderId | null;
@@ -76,6 +86,7 @@ type LlmProviderValue = LlmProviderId | null;
 type SettingsSectionId =
   | "model"
   | "chat"
+  | "context-limits"
   | "environment"
   | "display"
   | "pipeline"
@@ -119,6 +130,20 @@ const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         label: "Writing Style",
         description: "Tone, language, presets, and writing constraints.",
         searchTerms: ["ghostwriter", "language", "tone", "formality"],
+      },
+      {
+        id: "context-limits",
+        label: "Context limits",
+        description:
+          "Per-field character caps that gate how much text flows into LLM prompts at the write boundary.",
+        searchTerms: [
+          "brief",
+          "length",
+          "limit",
+          "truncate",
+          "characters",
+          "context",
+        ],
       },
     ],
   },
@@ -205,17 +230,24 @@ const SECTION_FIELD_MAP: Record<
     "chatStyleLanguageMode",
     "chatStyleManualLanguage",
   ],
-  environment: [
-    "enableBasicAuth",
-    "basicAuthUser",
-    "basicAuthPassword",
+  "context-limits": [
+    "maxBriefChars",
+    "maxJobDescriptionChars",
+    "maxTailoredContentChars",
+    "maxCoverLetterChars",
+    "maxFetchedJobHtmlChars",
+    "maxExtractionPromptChars",
   ],
+  environment: ["enableBasicAuth", "basicAuthUser", "basicAuthPassword"],
   display: ["showSponsorInfo", "renderMarkdownInJobDescriptions"],
   pipeline: [
     "autoTailoringEnabled",
     "enableJobScoring",
     "inboxStaleThresholdDays",
     "inboxAgeoutThresholdDays",
+    "maxCvUploadBytes",
+    "maxCoverLetterUploadBytes",
+    "maxExpandedLatexBytes",
   ],
   prompts: [],
   "danger-zone": [],
@@ -264,6 +296,15 @@ const NULL_SETTINGS_PAYLOAD: UpdateSettingsInput = {
   enableJobScoring: null,
   inboxStaleThresholdDays: null,
   inboxAgeoutThresholdDays: null,
+  maxBriefChars: null,
+  maxJobDescriptionChars: null,
+  maxTailoredContentChars: null,
+  maxCoverLetterChars: null,
+  maxFetchedJobHtmlChars: null,
+  maxExtractionPromptChars: null,
+  maxCvUploadBytes: null,
+  maxCoverLetterUploadBytes: null,
+  maxExpandedLatexBytes: null,
 };
 
 const mapSettingsToForm = (data: AppSettings): UpdateSettingsInput => ({
@@ -297,6 +338,15 @@ const mapSettingsToForm = (data: AppSettings): UpdateSettingsInput => ({
   enableJobScoring: data.enableJobScoring.override,
   inboxStaleThresholdDays: data.inboxStaleThresholdDays.override,
   inboxAgeoutThresholdDays: data.inboxAgeoutThresholdDays.override,
+  maxBriefChars: data.maxBriefChars.override,
+  maxJobDescriptionChars: data.maxJobDescriptionChars.override,
+  maxTailoredContentChars: data.maxTailoredContentChars.override,
+  maxCoverLetterChars: data.maxCoverLetterChars.override,
+  maxFetchedJobHtmlChars: data.maxFetchedJobHtmlChars.override,
+  maxExtractionPromptChars: data.maxExtractionPromptChars.override,
+  maxCvUploadBytes: data.maxCvUploadBytes.override,
+  maxCoverLetterUploadBytes: data.maxCoverLetterUploadBytes.override,
+  maxExpandedLatexBytes: data.maxExpandedLatexBytes.override,
 });
 
 const normalizeString = (value: string | null | undefined) => {
@@ -409,6 +459,46 @@ const getDerivedSettings = (settings: AppSettings | null) => {
         effective: settings?.inboxAgeoutThresholdDays?.value ?? 14,
         default: settings?.inboxAgeoutThresholdDays?.default ?? 14,
       },
+      maxCvUploadBytes: {
+        effective: settings?.maxCvUploadBytes?.value ?? 50 * 1024 * 1024,
+        default: settings?.maxCvUploadBytes?.default ?? 50 * 1024 * 1024,
+      },
+      maxCoverLetterUploadBytes: {
+        effective:
+          settings?.maxCoverLetterUploadBytes?.value ?? 50 * 1024 * 1024,
+        default:
+          settings?.maxCoverLetterUploadBytes?.default ?? 50 * 1024 * 1024,
+      },
+      maxExpandedLatexBytes: {
+        effective: settings?.maxExpandedLatexBytes?.value ?? 50 * 1024 * 1024,
+        default: settings?.maxExpandedLatexBytes?.default ?? 50 * 1024 * 1024,
+      },
+    },
+    contextLimits: {
+      maxBriefChars: {
+        effective: settings?.maxBriefChars?.value ?? 200_000,
+        default: settings?.maxBriefChars?.default ?? 200_000,
+      },
+      maxJobDescriptionChars: {
+        effective: settings?.maxJobDescriptionChars?.value ?? 100_000,
+        default: settings?.maxJobDescriptionChars?.default ?? 100_000,
+      },
+      maxTailoredContentChars: {
+        effective: settings?.maxTailoredContentChars?.value ?? 100_000,
+        default: settings?.maxTailoredContentChars?.default ?? 100_000,
+      },
+      maxCoverLetterChars: {
+        effective: settings?.maxCoverLetterChars?.value ?? 50_000,
+        default: settings?.maxCoverLetterChars?.default ?? 50_000,
+      },
+      maxFetchedJobHtmlChars: {
+        effective: settings?.maxFetchedJobHtmlChars?.value ?? 500_000,
+        default: settings?.maxFetchedJobHtmlChars?.default ?? 500_000,
+      },
+      maxExtractionPromptChars: {
+        effective: settings?.maxExtractionPromptChars?.value ?? 100_000,
+        default: settings?.maxExtractionPromptChars?.default ?? 100_000,
+      },
     },
   };
 };
@@ -475,7 +565,15 @@ export const SettingsPage: React.FC = () => {
   useQueryErrorToast(settingsQuery.error, "Failed to load settings");
 
   const derived = getDerivedSettings(settings);
-  const { model, display, chat, envSettings, scoring, pipeline } = derived;
+  const {
+    model,
+    display,
+    chat,
+    envSettings,
+    scoring,
+    pipeline,
+    contextLimits,
+  } = derived;
 
   const canSave = isDirty && isValid;
 
@@ -590,6 +688,42 @@ export const SettingsPage: React.FC = () => {
         inboxAgeoutThresholdDays: nullIfSame(
           data.inboxAgeoutThresholdDays,
           pipeline.inboxAgeoutThresholdDays.default,
+        ),
+        maxBriefChars: nullIfSame(
+          data.maxBriefChars,
+          contextLimits.maxBriefChars.default,
+        ),
+        maxJobDescriptionChars: nullIfSame(
+          data.maxJobDescriptionChars,
+          contextLimits.maxJobDescriptionChars.default,
+        ),
+        maxTailoredContentChars: nullIfSame(
+          data.maxTailoredContentChars,
+          contextLimits.maxTailoredContentChars.default,
+        ),
+        maxCoverLetterChars: nullIfSame(
+          data.maxCoverLetterChars,
+          contextLimits.maxCoverLetterChars.default,
+        ),
+        maxFetchedJobHtmlChars: nullIfSame(
+          data.maxFetchedJobHtmlChars,
+          contextLimits.maxFetchedJobHtmlChars.default,
+        ),
+        maxExtractionPromptChars: nullIfSame(
+          data.maxExtractionPromptChars,
+          contextLimits.maxExtractionPromptChars.default,
+        ),
+        maxCvUploadBytes: nullIfSame(
+          data.maxCvUploadBytes,
+          pipeline.maxCvUploadBytes.default,
+        ),
+        maxCoverLetterUploadBytes: nullIfSame(
+          data.maxCoverLetterUploadBytes,
+          pipeline.maxCoverLetterUploadBytes.default,
+        ),
+        maxExpandedLatexBytes: nullIfSame(
+          data.maxExpandedLatexBytes,
+          pipeline.maxExpandedLatexBytes.default,
         ),
         ...envPayload,
       };
@@ -808,6 +942,16 @@ export const SettingsPage: React.FC = () => {
       activeSectionContent = (
         <ChatSettingsSection
           values={chat}
+          isLoading={isLoading}
+          isSaving={isSaving}
+          layoutMode="panel"
+        />
+      );
+      break;
+    case "context-limits":
+      activeSectionContent = (
+        <ContextLimitsSection
+          values={contextLimits}
           isLoading={isLoading}
           isSaving={isSaving}
           layoutMode="panel"

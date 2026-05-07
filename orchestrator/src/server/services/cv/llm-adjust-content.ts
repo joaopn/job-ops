@@ -3,6 +3,7 @@ import { LlmService } from "@server/services/llm/service";
 import type { JsonSchemaDefinition } from "@server/services/llm/types";
 import { resolveLlmModel } from "@server/services/modelSelection";
 import { loadPrompt } from "@server/services/prompts";
+import { getEffectiveSettings } from "@server/services/settings";
 import {
   getWritingStyle,
   stripLanguageDirectivesFromConstraints,
@@ -73,7 +74,12 @@ export type AdjustContentResult =
       matched: string[];
       skipped: string[];
     }
-  | { success: false; error: string };
+  | {
+      success: false;
+      error: string;
+      /** Set when the failure is the configured tailored-content cap. */
+      cap?: { field: string; observed: number; max: number };
+    };
 
 const FORBIDDEN_PATTERNS: Array<{ pattern: RegExp; description: string }> = [
   {
@@ -255,6 +261,28 @@ export async function llmAdjustContent(
     return {
       success: false,
       error: `Tailoring produced no usable changes — ${reasons.join("; ")}.`,
+    };
+  }
+
+  // Post-LLM size check. Snapshot what tailoredFields would look like AFTER
+  // applying the patches and reject if the serialized size exceeds the
+  // user's configured cap. The user can lift the cap or trim their CV.
+  const settings = await getEffectiveSettings();
+  const maxTailoredContentChars = settings.maxTailoredContentChars.value;
+  const overridesPreview: CvFieldOverrides = { ...args.currentOverrides };
+  for (const patch of patches) {
+    overridesPreview[patch.fieldId] = patch.newValue;
+  }
+  const serialized = JSON.stringify(overridesPreview);
+  if (serialized.length > maxTailoredContentChars) {
+    return {
+      success: false,
+      error: `Tailored content exceeds the configured limit (${serialized.length} > ${maxTailoredContentChars} chars). Lift maxTailoredContentChars in Settings or trim your CV.`,
+      cap: {
+        field: "tailoredFields",
+        observed: serialized.length,
+        max: maxTailoredContentChars,
+      },
     };
   }
 

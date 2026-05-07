@@ -56,4 +56,16 @@ export type PipelineSettingsValues = {
   enableJobScoring: EffectiveDefault<boolean>;
   inboxStaleThresholdDays: EffectiveDefault<number>;
   inboxAgeoutThresholdDays: EffectiveDefault<number>;
+  maxCvUploadBytes: EffectiveDefault<number>;
+  maxCoverLetterUploadBytes: EffectiveDefault<number>;
+  maxExpandedLatexBytes: EffectiveDefault<number>;
+};
+
+export type ContextLimitsValues = {
+  maxBriefChars: EffectiveDefault<number>;
+  maxJobDescriptionChars: EffectiveDefault<number>;
+  maxTailoredContentChars: EffectiveDefault<number>;
+  maxCoverLetterChars: EffectiveDefault<number>;
+  maxFetchedJobHtmlChars: EffectiveDefault<number>;
+  maxExtractionPromptChars: EffectiveDefault<number>;
 };

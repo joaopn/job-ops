@@ -16,8 +16,6 @@ type SearchTermSuggestionModelResponse = {
   terms: string[];
 };
 
-const MAX_BRIEF_CHARS = 6000;
-
 const SEARCH_TERMS_SCHEMA: JsonSchemaDefinition = {
   name: "onboarding_search_terms",
   schema: {
@@ -38,7 +36,10 @@ const SEARCH_TERMS_SCHEMA: JsonSchemaDefinition = {
   },
 };
 
-function dedupe(values: Array<string | undefined>, maxItems = MAX_SEARCH_TERMS): string[] {
+function dedupe(
+  values: Array<string | undefined>,
+  maxItems = MAX_SEARCH_TERMS,
+): string[] {
   return normalizeSearchTerms(
     values.filter((value): value is string => Boolean(value)),
     {
@@ -72,12 +73,6 @@ function collectCvHints(fields: CvField[]): {
     .map((field) => field.value);
 
   return { headline, positions, projectNames, skillNames };
-}
-
-function truncateBrief(brief: string): string {
-  const trimmed = brief.trim();
-  if (trimmed.length <= MAX_BRIEF_CHARS) return trimmed;
-  return `${trimmed.slice(0, MAX_BRIEF_CHARS)}\n[brief truncated]`;
 }
 
 export type OnboardingSearchTermContext = {
@@ -116,8 +111,8 @@ async function buildPrompt(
   context: OnboardingSearchTermContext,
 ): Promise<{ system: string; user: string }> {
   const loaded = await loadPrompt("onboarding-search-terms", {
-    briefText: context.brief
-      ? truncateBrief(context.brief)
+    briefText: context.brief.trim()
+      ? context.brief.trim()
       : "No personal brief provided.",
     contextJson: JSON.stringify(
       {

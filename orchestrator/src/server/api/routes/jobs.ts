@@ -5,6 +5,7 @@ import {
   conflict,
   notFound,
   toAppError,
+  unprocessableEntity,
 } from "@infra/errors";
 import { fail, ok } from "@infra/http";
 import { logger } from "@infra/logger";
@@ -20,6 +21,7 @@ import { getActivePersonalBrief } from "@server/services/brief";
 import { generateCoverLetter } from "@server/services/cover-letter/generate";
 import { renderCoverLetterPdf } from "@server/services/cover-letter/render";
 import { scoreJobSuitability } from "@server/services/scorer";
+import { getEffectiveSettings } from "@server/services/settings";
 import { asyncPool } from "@server/utils/async-pool";
 import {
   APPLICATION_OUTCOMES,
@@ -72,11 +74,11 @@ const updateJobSchema = z.object({
     .optional(),
   outcome: z.enum(APPLICATION_OUTCOMES).nullable().optional(),
   closedAt: z.number().int().nullable().optional(),
-  jobDescription: z.string().trim().max(40000).nullable().optional(),
+  jobDescription: z.string().trim().nullable().optional(),
   suitabilityCategory: z.enum(SUITABILITY_CATEGORIES).nullable().optional(),
   suitabilityReason: z.string().optional(),
   pdfPath: z.string().optional(),
-  coverLetterDraft: z.string().max(40000).optional(),
+  coverLetterDraft: z.string().optional(),
   coverLetterDocumentId: z.string().min(1).nullable().optional(),
   coverLetterFieldOverrides: z.record(z.string(), z.string()).optional(),
   coverLetterPdfPath: z.string().nullable().optional(),
@@ -1237,6 +1239,42 @@ jobsRouter.patch("/:id/outcome", async (req: Request, res: Response) => {
 jobsRouter.patch("/:id", async (req: Request, res: Response) => {
   try {
     const input = updateJobSchema.parse(req.body);
+    const settings = await getEffectiveSettings();
+
+    if (typeof input.jobDescription === "string") {
+      const max = settings.maxJobDescriptionChars.value;
+      if (input.jobDescription.length > max) {
+        return fail(
+          res,
+          unprocessableEntity(
+            `jobDescription exceeds the configured limit (${input.jobDescription.length} > ${max} chars).`,
+            {
+              field: "jobDescription",
+              observed: input.jobDescription.length,
+              max,
+            },
+          ),
+        );
+      }
+    }
+
+    if (typeof input.coverLetterDraft === "string") {
+      const max = settings.maxCoverLetterChars.value;
+      if (input.coverLetterDraft.length > max) {
+        return fail(
+          res,
+          unprocessableEntity(
+            `coverLetterDraft exceeds the configured limit (${input.coverLetterDraft.length} > ${max} chars).`,
+            {
+              field: "coverLetterDraft",
+              observed: input.coverLetterDraft.length,
+              max,
+            },
+          ),
+        );
+      }
+    }
+
     const currentJob = await jobsRepo.getJobById(req.params.id);
 
     if (!currentJob) {
@@ -1488,9 +1526,7 @@ jobsRouter.delete(
   async (req: Request, res: Response) => {
     try {
       const raw = req.params.category;
-      if (
-        !(SUITABILITY_CATEGORIES as readonly string[]).includes(raw)
-      ) {
+      if (!(SUITABILITY_CATEGORIES as readonly string[]).includes(raw)) {
         return fail(
           res,
           badRequest(
@@ -1499,8 +1535,7 @@ jobsRouter.delete(
         );
       }
       const category = raw as (typeof SUITABILITY_CATEGORIES)[number];
-      const targetRank =
-        SUITABILITY_CATEGORIES.indexOf(category);
+      const targetRank = SUITABILITY_CATEGORIES.indexOf(category);
       const categoriesToDelete = SUITABILITY_CATEGORIES.filter(
         (_value, idx) => idx >= targetRank,
       );

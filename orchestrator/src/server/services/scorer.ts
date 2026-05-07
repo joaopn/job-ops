@@ -29,8 +29,6 @@ type ScoringPreferences = {
   instructions: string;
 };
 
-const MAX_BRIEF_CHARS = 6000;
-
 /** JSON schema for suitability scoring response */
 const SCORING_SCHEMA: JsonSchemaDefinition = {
   name: "job_suitability_category",
@@ -40,8 +38,7 @@ const SCORING_SCHEMA: JsonSchemaDefinition = {
       category: {
         type: "string",
         enum: [...SUITABILITY_CATEGORIES],
-        description:
-          "Categorical fit: very_good_fit, good_fit, or bad_fit.",
+        description: "Categorical fit: very_good_fit, good_fit, or bad_fit.",
       },
       reason: {
         type: "string",
@@ -89,12 +86,6 @@ function applySalaryPenalty(
   return { category: demoted, reason: `${reason} ${note}` };
 }
 
-function truncateBrief(brief: string): string {
-  const trimmed = brief.trim();
-  if (trimmed.length <= MAX_BRIEF_CHARS) return trimmed;
-  return `${trimmed.slice(0, MAX_BRIEF_CHARS)}\n[brief truncated]`;
-}
-
 function isSuitabilityCategory(value: unknown): value is SuitabilityCategory {
   return (
     typeof value === "string" &&
@@ -111,7 +102,7 @@ export async function scoreJobSuitability(
     getEffectiveSettings(),
   ]);
 
-  const prompt = await buildScoringPrompt(job, truncateBrief(brief), {
+  const prompt = await buildScoringPrompt(job, brief.trim(), {
     instructions: settings.scoringInstructions?.value ?? "",
   });
 
@@ -246,7 +237,12 @@ export async function scoreAndRankJobs(
   jobs: Job[],
   brief: string,
 ): Promise<
-  Array<Job & { suitabilityCategory: SuitabilityCategory; suitabilityReason: string }>
+  Array<
+    Job & {
+      suitabilityCategory: SuitabilityCategory;
+      suitabilityReason: string;
+    }
+  >
 > {
   const scoredJobs = await Promise.all(
     jobs.map(async (job) => {

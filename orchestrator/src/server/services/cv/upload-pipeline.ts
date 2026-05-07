@@ -49,6 +49,8 @@ export interface UploadPipelineArgs {
    * every retry attempt.
    */
   extractionPrompt?: string;
+  /** Optional override for the expanded-LaTeX byte cap; sourced from settings. */
+  maxExpandedBytes?: number;
 }
 
 /**
@@ -104,6 +106,7 @@ export async function runUploadPipeline(
     flattened = flattenInput({
       archive: args.archive,
       filename: args.filename,
+      maxExpandedBytes: args.maxExpandedBytes,
     });
   } catch (error) {
     if (error instanceof FlattenInputError) {
@@ -312,8 +315,7 @@ async function runOneAttempt(input: {
   } catch (error) {
     const stderr =
       error instanceof RunTectonicError ? error.stderr : String(error);
-    const message =
-      error instanceof Error ? error.message : String(error);
+    const message = error instanceof Error ? error.message : String(error);
     return {
       kind: "failure",
       record: {

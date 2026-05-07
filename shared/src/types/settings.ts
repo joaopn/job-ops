@@ -88,6 +88,15 @@ export interface AppSettings {
   enableJobScoring: Resolved<boolean>;
   inboxStaleThresholdDays: Resolved<number>;
   inboxAgeoutThresholdDays: Resolved<number>;
+  maxBriefChars: Resolved<number>;
+  maxJobDescriptionChars: Resolved<number>;
+  maxTailoredContentChars: Resolved<number>;
+  maxCoverLetterChars: Resolved<number>;
+  maxFetchedJobHtmlChars: Resolved<number>;
+  maxExtractionPromptChars: Resolved<number>;
+  maxCvUploadBytes: Resolved<number>;
+  maxCoverLetterUploadBytes: Resolved<number>;
+  maxExpandedLatexBytes: Resolved<number>;
 
   // Model variants (no own default, fallback to model.value):
   modelScorer: ModelResolved;

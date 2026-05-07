@@ -2,7 +2,7 @@ import { posix } from "node:path";
 import AdmZip from "adm-zip";
 
 const MAX_DEPTH = 10;
-const MAX_EXPANDED_BYTES = 5 * 1024 * 1024;
+const DEFAULT_MAX_EXPANDED_BYTES = 50 * 1024 * 1024;
 const MAX_INCLUDE_COUNT = 100;
 
 const INPUT_PATTERN = /\\(?:input|include)\{([^}]+)\}/g;
@@ -26,6 +26,12 @@ export interface FlattenInputArgs {
    * Defaults to `DEFAULT_ENTRYPOINT_PRIORITY` (CV-style entrypoints).
    */
   entrypointPriority?: readonly string[];
+  /**
+   * Cap on total bytes of expanded LaTeX (after `\input{}` resolution).
+   * Callers should source this from `settings.maxExpandedLatexBytes` so the
+   * limit is user-configurable. Defaults to 50 MB when omitted.
+   */
+  maxExpandedBytes?: number;
 }
 
 export interface FlattenInputResult {
@@ -49,8 +55,9 @@ export class FlattenInputError extends Error {
 export function flattenInput(args: FlattenInputArgs): FlattenInputResult {
   const buf = Buffer.from(args.archive);
   const priority = args.entrypointPriority ?? DEFAULT_ENTRYPOINT_PRIORITY;
+  const maxExpandedBytes = args.maxExpandedBytes ?? DEFAULT_MAX_EXPANDED_BYTES;
   if (looksLikeZip(buf)) {
-    return flattenZip(buf, priority);
+    return flattenZip(buf, priority, maxExpandedBytes);
   }
   return flattenSingleTex(buf, args.filename);
 }
@@ -69,10 +76,7 @@ function flattenSingleTex(buf: Buffer, filename: string): FlattenInputResult {
   const tex = buf.toString("utf8");
   const trimmed = tex.trimStart();
   if (!trimmed) {
-    throw new FlattenInputError(
-      "Uploaded file is empty.",
-      "EMPTY_INPUT",
-    );
+    throw new FlattenInputError("Uploaded file is empty.", "EMPTY_INPUT");
   }
   for (const match of tex.matchAll(INPUT_PATTERN)) {
     if (isInLatexComment(tex, match.index ?? 0)) continue;
@@ -91,6 +95,7 @@ function flattenSingleTex(buf: Buffer, filename: string): FlattenInputResult {
 function flattenZip(
   buf: Buffer,
   entrypointPriority: readonly string[],
+  maxExpandedBytes: number,
 ): FlattenInputResult {
   const zip = new AdmZip(buf);
   const files = new Map<string, string>();
@@ -130,10 +135,7 @@ function flattenZip(
       );
     }
     if (visited.has(path)) {
-      throw new FlattenInputError(
-        `Cycle detected at "${path}".`,
-        "CYCLE",
-      );
+      throw new FlattenInputError(`Cycle detected at "${path}".`, "CYCLE");
     }
     const source = files.get(path);
     if (source === undefined) {
@@ -172,9 +174,9 @@ function flattenZip(
     expanded += source.slice(cursor);
 
     totalSize += Buffer.byteLength(expanded, "utf8");
-    if (totalSize > MAX_EXPANDED_BYTES) {
+    if (totalSize > maxExpandedBytes) {
       throw new FlattenInputError(
-        `Expanded LaTeX exceeded ${MAX_EXPANDED_BYTES} bytes.`,
+        `Expanded LaTeX exceeded ${maxExpandedBytes} bytes.`,
         "SIZE_EXCEEDED",
       );
     }

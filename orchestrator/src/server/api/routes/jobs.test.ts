@@ -39,13 +39,12 @@ describe.sequential("POST /api/jobs/actions — 5g action variants", () => {
         | "backlog"
         | "skipped"
         | "closed",
-      outcome:
-        (overrides.outcome ?? null) as
-          | "rejected"
-          | "withdrawn"
-          | "ghosted"
-          | "other"
-          | null,
+      outcome: (overrides.outcome ?? null) as
+        | "rejected"
+        | "withdrawn"
+        | "ghosted"
+        | "other"
+        | null,
       closedAt: overrides.closedAt ?? null,
     });
   }
@@ -208,5 +207,45 @@ describe.sequential("POST /api/jobs/actions — 5g action variants", () => {
     for (const result of body.data.results) {
       expect(result.job.status).toBe("skipped");
     }
+  });
+
+  it("PATCH rejects with 422 when jobDescription exceeds maxJobDescriptionChars", async () => {
+    await seedJob({ id: "job-jd", status: "discovered" });
+    const oversized = "x".repeat(100_001);
+    const res = await fetch(`${baseUrl}/api/jobs/job-jd`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jobDescription: oversized }),
+    });
+    expect(res.status).toBe(422);
+    const payload = (await res.json()) as {
+      error: {
+        code: string;
+        details: { field: string; observed: number; max: number };
+      };
+    };
+    expect(payload.error.code).toBe("UNPROCESSABLE_ENTITY");
+    expect(payload.error.details.field).toBe("jobDescription");
+    expect(payload.error.details.max).toBe(100_000);
+  });
+
+  it("PATCH rejects with 422 when coverLetterDraft exceeds maxCoverLetterChars", async () => {
+    await seedJob({ id: "job-cl", status: "ready" });
+    const oversized = "x".repeat(50_001);
+    const res = await fetch(`${baseUrl}/api/jobs/job-cl`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ coverLetterDraft: oversized }),
+    });
+    expect(res.status).toBe(422);
+    const payload = (await res.json()) as {
+      error: {
+        code: string;
+        details: { field: string; observed: number; max: number };
+      };
+    };
+    expect(payload.error.code).toBe("UNPROCESSABLE_ENTITY");
+    expect(payload.error.details.field).toBe("coverLetterDraft");
+    expect(payload.error.details.max).toBe(50_000);
   });
 });

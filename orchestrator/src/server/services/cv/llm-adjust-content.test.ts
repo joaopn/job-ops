@@ -40,6 +40,14 @@ vi.mock("@server/services/writing-style", () => ({
   stripLanguageDirectivesFromConstraints: (s: string) => s,
 }));
 
+const settingsMock = vi.fn().mockResolvedValue({
+  maxTailoredContentChars: { value: 100_000, default: 100_000, override: null },
+});
+
+vi.mock("@server/services/settings", () => ({
+  getEffectiveSettings: () => settingsMock(),
+}));
+
 const SAMPLE_FIELDS: CvField[] = [
   { id: "basics.name", role: "name", value: "Ada Lovelace" },
   { id: "experience.0.company", role: "company", value: "Analytical" },
@@ -93,8 +101,7 @@ describe("llmAdjustContent", () => {
       "cv-adjust",
       expect.objectContaining({
         personalBrief: "I'm Ada — I write algorithms in Python.",
-        jobDescription:
-          "Hiring a Python engineer who can write algorithms.",
+        jobDescription: "Hiring a Python engineer who can write algorithms.",
         fieldsJson: expect.stringContaining("Analytical"),
         outputLanguage: "English",
         tone: "professional",
@@ -220,5 +227,39 @@ describe("llmAdjustContent", () => {
       matched: ["python", "rust"],
       skipped: [],
     });
+  });
+
+  it("returns failure with cap details when serialized overrides exceed maxTailoredContentChars", async () => {
+    settingsMock.mockResolvedValueOnce({
+      maxTailoredContentChars: { value: 50, default: 50, override: null },
+    });
+    const longValue = "x".repeat(200);
+    callJsonMock.mockResolvedValue({
+      success: true,
+      data: {
+        patchesJson: JSON.stringify([
+          { fieldId: "basics.name", newValue: longValue },
+        ]),
+        matched: [],
+        skipped: [],
+      },
+    });
+
+    const result = await llmAdjustContent({
+      personalBrief: "x",
+      jobDescription: "y",
+      currentFields: SAMPLE_FIELDS,
+      currentOverrides: {},
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toMatch(/configured limit/);
+      expect(result.cap).toMatchObject({
+        field: "tailoredFields",
+        max: 50,
+      });
+      expect(result.cap?.observed).toBeGreaterThan(50);
+    }
   });
 });

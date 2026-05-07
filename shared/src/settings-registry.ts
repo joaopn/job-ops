@@ -3,10 +3,7 @@ import {
   LOCATION_MATCH_STRICTNESS_VALUES,
   LOCATION_SEARCH_SCOPE_VALUES,
 } from "./location-preferences";
-import {
-  SUITABILITY_CATEGORIES,
-  type SuitabilityCategory,
-} from "./types/jobs";
+import { SUITABILITY_CATEGORIES, type SuitabilityCategory } from "./types/jobs";
 import {
   CHAT_STYLE_LANGUAGE_MODE_VALUES,
   CHAT_STYLE_MANUAL_LANGUAGE_VALUES,
@@ -445,9 +442,8 @@ export const settingsRegistry = {
         ? (raw as SuitabilityCategory)
         : null;
     },
-    serialize: (
-      value: SuitabilityCategory | null | undefined,
-    ): string | null => value ?? null,
+    serialize: (value: SuitabilityCategory | null | undefined): string | null =>
+      value ?? null,
   },
   autoSkipCategory: {
     kind: "typed" as const,
@@ -459,9 +455,8 @@ export const settingsRegistry = {
         ? (raw as SuitabilityCategory)
         : null;
     },
-    serialize: (
-      value: SuitabilityCategory | null | undefined,
-    ): string | null => value ?? null,
+    serialize: (value: SuitabilityCategory | null | undefined): string | null =>
+      value ?? null,
   },
   autoTailoringEnabled: {
     kind: "typed" as const,
@@ -495,6 +490,87 @@ export const settingsRegistry = {
       const parsed = raw ? parseInt(raw, 10) : NaN;
       return Number.isNaN(parsed) ? null : Math.min(365, Math.max(0, parsed));
     },
+    serialize: serializeNullableNumber,
+  },
+
+  // --- Context limits (LLM-bound character caps) ---
+  // Enforced at the write boundary; exceeding a cap returns 422 with the
+  // observed length rather than silently truncating into the prompt.
+  maxBriefChars: {
+    kind: "typed" as const,
+    schema: z.number().int().min(1000).max(1_000_000),
+    default: (): number => 200_000,
+    parse: parseIntOrNull,
+    serialize: serializeNullableNumber,
+  },
+  maxJobDescriptionChars: {
+    kind: "typed" as const,
+    schema: z.number().int().min(1000).max(1_000_000),
+    default: (): number => 100_000,
+    parse: parseIntOrNull,
+    serialize: serializeNullableNumber,
+  },
+  maxTailoredContentChars: {
+    kind: "typed" as const,
+    schema: z.number().int().min(1000).max(1_000_000),
+    default: (): number => 100_000,
+    parse: parseIntOrNull,
+    serialize: serializeNullableNumber,
+  },
+  maxCoverLetterChars: {
+    kind: "typed" as const,
+    schema: z.number().int().min(1000).max(1_000_000),
+    default: (): number => 50_000,
+    parse: parseIntOrNull,
+    serialize: serializeNullableNumber,
+  },
+  maxFetchedJobHtmlChars: {
+    kind: "typed" as const,
+    schema: z.number().int().min(10_000).max(5_000_000),
+    default: (): number => 500_000,
+    parse: parseIntOrNull,
+    serialize: serializeNullableNumber,
+  },
+  maxExtractionPromptChars: {
+    kind: "typed" as const,
+    schema: z.number().int().min(1000).max(1_000_000),
+    default: (): number => 100_000,
+    parse: parseIntOrNull,
+    serialize: serializeNullableNumber,
+  },
+
+  // --- File-IO byte caps (Pipeline section) ---
+  maxCvUploadBytes: {
+    kind: "typed" as const,
+    schema: z
+      .number()
+      .int()
+      .min(1024 * 1024)
+      .max(500 * 1024 * 1024),
+    default: (): number => 50 * 1024 * 1024,
+    parse: parseIntOrNull,
+    serialize: serializeNullableNumber,
+  },
+  maxCoverLetterUploadBytes: {
+    kind: "typed" as const,
+    schema: z
+      .number()
+      .int()
+      .min(1024 * 1024)
+      .max(500 * 1024 * 1024),
+    default: (): number => 50 * 1024 * 1024,
+    parse: parseIntOrNull,
+    serialize: serializeNullableNumber,
+  },
+  maxExpandedLatexBytes: {
+    kind: "typed" as const,
+    schema: z
+      .number()
+      .int()
+      .min(1024 * 1024)
+      .max(500 * 1024 * 1024),
+    default: (): number => 50 * 1024 * 1024,
+    parse: parseIntOrNull,
     serialize: serializeNullableNumber,
   },
 

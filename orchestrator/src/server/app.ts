@@ -100,7 +100,11 @@ export function createApp() {
 
   app.use(corsMiddleware);
   app.use(requestContextMiddleware());
-  app.use(express.json());
+  // Body limit must exceed the largest user-configurable text cap. The
+  // registry caps top out near 1M chars (≤ ~4 MB UTF-8) plus JSON
+  // overhead — 16 MB leaves comfortable headroom while still bounding
+  // memory.
+  app.use(express.json({ limit: "16mb" }));
 
   // Logging middleware
   app.use((req, res, next) => {

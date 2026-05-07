@@ -26,19 +26,24 @@ export type JobChatPromptContext = {
   coverLetterSnapshot: string;
 };
 
-const MAX_JOB_DESCRIPTION = 4000;
-const MAX_BRIEF_SNAPSHOT = 6000;
-const MAX_TAILORED_CONTENT = 6000;
-const MAX_COVER_LETTER = 8000;
-
-function truncate(value: string | null | undefined, max: number): string {
-  if (!value) return "";
-  const trimmed = value.trim();
-  if (trimmed.length <= max) return trimmed;
-  return `${trimmed.slice(0, max)}...`;
-}
+/**
+ * Hard cap on `suitabilityReason` length. The scorer prompt asks for "1-2
+ * sentences" — a value past this is a sign of a regression (LLM ignoring
+ * the constraint), not a user-input limit. Fail loud rather than silently
+ * truncate so the bug surfaces.
+ */
+const SUITABILITY_REASON_HARD_CAP = 4000;
 
 function buildJobSnapshot(job: Job): string {
+  if (
+    job.suitabilityReason &&
+    job.suitabilityReason.length > SUITABILITY_REASON_HARD_CAP
+  ) {
+    throw new Error(
+      `suitabilityReason length ${job.suitabilityReason.length} exceeds the ${SUITABILITY_REASON_HARD_CAP}-char hard cap (regression detector — the scorer should emit 1-2 sentences).`,
+    );
+  }
+
   const snapshot = {
     event: "job.completed",
     sentAt: new Date().toISOString(),
@@ -53,8 +58,8 @@ function buildJobSnapshot(job: Job): string {
       jobUrl: job.jobUrl,
       applicationLink: job.applicationLink,
       suitabilityCategory: job.suitabilityCategory,
-      suitabilityReason: truncate(job.suitabilityReason, 600),
-      jobDescription: truncate(job.jobDescription, MAX_JOB_DESCRIPTION),
+      suitabilityReason: job.suitabilityReason ?? "",
+      jobDescription: job.jobDescription ?? "",
     },
   };
 
@@ -62,7 +67,7 @@ function buildJobSnapshot(job: Job): string {
 }
 
 function buildBriefSnapshot(brief: string): string {
-  return truncate(brief, MAX_BRIEF_SNAPSHOT);
+  return brief.trim();
 }
 
 function buildCvSnapshot(job: Job, cv: CvDocument | null): string {
@@ -91,11 +96,11 @@ function buildCvSnapshot(job: Job, cv: CvDocument | null): string {
     },
   };
 
-  return truncate(JSON.stringify(snapshot, null, 2), MAX_TAILORED_CONTENT);
+  return JSON.stringify(snapshot, null, 2);
 }
 
 function buildCoverLetterSnapshot(job: Job): string {
-  return truncate(job.coverLetterDraft, MAX_COVER_LETTER);
+  return (job.coverLetterDraft ?? "").trim();
 }
 
 async function buildSystemPrompt(

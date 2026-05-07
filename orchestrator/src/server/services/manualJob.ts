@@ -2,7 +2,7 @@
  * Service for inferring job details from a pasted job description.
  */
 
-import { AppError } from "@infra/errors";
+import { AppError, unprocessableEntity } from "@infra/errors";
 import { logger } from "@infra/logger";
 import type { ManualJobDraft } from "@shared/types";
 import { JSDOM } from "jsdom";
@@ -10,6 +10,7 @@ import { LlmService } from "./llm/service";
 import type { JsonSchemaDefinition } from "./llm/types";
 import { resolveLlmModel } from "./modelSelection";
 import { loadPrompt } from "./prompts";
+import { getEffectiveSettings } from "./settings";
 
 export interface ManualJobInferenceResult {
   job: ManualJobDraft;
@@ -24,9 +25,10 @@ export interface FetchedJobContent {
 /**
  * Fetch a job listing URL and return cleaned text + metadata for LLM consumption.
  *
- * Throws an AppError on network/HTTP failures; the returned `content` is the
- * concatenation of page metadata (title, og:*, description) and the main body
- * text, capped to 50k characters.
+ * Throws an AppError on network/HTTP failures; throws 422 when the fetched
+ * page exceeds `settings.maxFetchedJobHtmlChars`. The returned `content` is
+ * the concatenation of page metadata (title, og:*, description) and the
+ * main body text.
  */
 export async function fetchAndExtractJobContent(
   url: string,
@@ -123,8 +125,17 @@ export async function fetchAndExtractJobContent(
     if (enrichedContent) enrichedContent += "\n---\n\n";
     enrichedContent += textContent;
 
-    if (enrichedContent.length > 50000) {
-      enrichedContent = enrichedContent.substring(0, 50000);
+    const settings = await getEffectiveSettings();
+    const max = settings.maxFetchedJobHtmlChars.value;
+    if (enrichedContent.length > max) {
+      throw unprocessableEntity(
+        `Fetched job HTML exceeds the configured limit (${enrichedContent.length} > ${max} chars).`,
+        {
+          field: "fetchedJobHtml",
+          observed: enrichedContent.length,
+          max,
+        },
+      );
     }
 
     return { content: enrichedContent, url };
