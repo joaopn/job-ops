@@ -13,6 +13,17 @@ export const queryKeys = {
     extractionPromptDefault: () =>
       [...queryKeys.cvDocuments.all, "extraction-prompt-default"] as const,
   },
+  coverLetterDocuments: {
+    all: ["cover-letter-documents"] as const,
+    list: () => [...queryKeys.coverLetterDocuments.all, "list"] as const,
+    detail: (id: string) =>
+      [...queryKeys.coverLetterDocuments.all, "detail", id] as const,
+    extractionPromptDefault: () =>
+      [
+        ...queryKeys.coverLetterDocuments.all,
+        "extraction-prompt-default",
+      ] as const,
+  },
   jobs: {
     all: ["jobs"] as const,
     list: (options?: { statuses?: JobStatus[]; view?: "list" | "full" }) =>

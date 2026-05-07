@@ -10,6 +10,9 @@ import type {
   BatchUrlImportStreamEvent,
   BranchInfo,
   CreateJobNoteInput,
+  CoverLetterDocument,
+  CoverLetterDocumentSummary,
+  CoverLetterUploadTemplateResponse,
   CvDocument,
   CvDocumentSummary,
   CvUploadTemplateResponse,
@@ -978,6 +981,18 @@ export async function reTailorJob(id: string): Promise<Job> {
   });
 }
 
+export async function generateCoverLetter(id: string): Promise<Job> {
+  return fetchApi<Job>(`/jobs/${id}/generate-cover-letter`, {
+    method: "POST",
+  });
+}
+
+export async function renderCoverLetterPdf(id: string): Promise<Job> {
+  return fetchApi<Job>(`/jobs/${id}/render-cover-letter`, {
+    method: "POST",
+  });
+}
+
 export type AcceptEditResponse =
   | { kind: "cv-edit"; message: JobChatMessage; job: Job }
   | { kind: "brief-edit"; message: JobChatMessage; cv: CvDocument };
@@ -1277,6 +1292,83 @@ export async function reExtractCvDocumentTemplate(
 export async function fetchExtractionPromptDefault(): Promise<string> {
   const result = await fetchApi<{ prompt: string }>(
     "/cv/extraction-prompt-default",
+  );
+  return result.prompt;
+}
+
+export async function listCoverLetters(): Promise<CoverLetterDocumentSummary[]> {
+  return fetchApi<CoverLetterDocumentSummary[]>("/coverletter");
+}
+
+export async function getCoverLetter(id: string): Promise<CoverLetterDocument> {
+  return fetchApi<CoverLetterDocument>(`/coverletter/${id}`);
+}
+
+export async function updateCoverLetter(
+  id: string,
+  input: Partial<{ name: string; extractionPrompt: string }>,
+): Promise<CoverLetterDocument> {
+  return fetchApi<CoverLetterDocument>(`/coverletter/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deleteCoverLetter(
+  id: string,
+): Promise<{ deleted: number }> {
+  return fetchApi<{ deleted: number }>(`/coverletter/${id}`, {
+    method: "DELETE",
+  });
+}
+
+/**
+ * 5h gated upload: POSTs the file to /api/coverletter/upload-template,
+ * which runs the templated-tex pipeline (compile original → LLM extract
+ * loop with body-field-count check → compile substituted → pdftotext
+ * diff) and only persists if every gate passes.
+ */
+export async function uploadCoverLetterTemplate(args: {
+  file: Blob;
+  filename: string;
+  name?: string;
+  maxRetries?: number;
+  extractionPrompt?: string;
+}): Promise<CoverLetterUploadTemplateResponse> {
+  const form = new FormData();
+  form.append("file", args.file, args.filename);
+  if (args.name) form.append("name", args.name);
+  if (args.maxRetries !== undefined) {
+    form.append("maxRetries", String(args.maxRetries));
+  }
+  if (args.extractionPrompt !== undefined) {
+    form.append("extractionPrompt", args.extractionPrompt);
+  }
+  return fetchApi<CoverLetterUploadTemplateResponse>(
+    "/coverletter/upload-template",
+    {
+      method: "POST",
+      body: form,
+    },
+  );
+}
+
+export async function reExtractCoverLetterTemplate(
+  id: string,
+  options?: { maxRetries?: number; extractionPrompt?: string },
+): Promise<CoverLetterUploadTemplateResponse> {
+  return fetchApi<CoverLetterUploadTemplateResponse>(
+    `/coverletter/${id}/re-extract-template`,
+    {
+      method: "POST",
+      body: JSON.stringify(options ?? {}),
+    },
+  );
+}
+
+export async function fetchCoverLetterExtractionPromptDefault(): Promise<string> {
+  const result = await fetchApi<{ prompt: string }>(
+    "/coverletter/extraction-prompt-default",
   );
   return result.prompt;
 }

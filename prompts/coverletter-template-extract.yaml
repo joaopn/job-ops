@@ -1,0 +1,234 @@
+name: coverletter-template-extract
+description: |
+  5h cover-letter substrate. Reads the user's flattened LaTeX cover letter
+  and emits TWO artifacts:
+
+  1. `templatedTex` — the source LaTeX with TAILORABLE spans replaced by
+     `«field-id»` markers (Unicode guillemets). Structural text and
+     non-tailorable spans (header, recipient, date, salutation, signature)
+     stay verbatim.
+
+  2. `fieldsJson` — a JSON-encoded array `[{ id, role, value }]`. Every
+     `id` MUST appear as a `«id»` marker in `templatedTex`, and every
+     marker MUST have a matching field. EXACTLY ONE field MUST have
+     `role: "body"` — that field carries the full letter body (greeting
+     through last paragraph before signature). The server rejects the
+     attempt when zero or multiple fields claim that role.
+
+  The server compiles `renderTemplate(templatedTex, defaultFieldValues)`
+  with tectonic and rejects the upload unless the resulting PDF's text
+  content matches the original PDF's text content. So: only emit a
+  template the substituted-back version of which compiles AND renders
+  the same content as the original.
+variables:
+  - name: flattenedTex
+    description: The user's cover-letter LaTeX, post-`\input{}` flattening, as a single string.
+  - name: assetReferencesList
+    description: |
+      Newline-separated list of `\includegraphics{...}` / font / class file
+      references discovered in the source. Listed for context; you do not
+      need to template them.
+  - name: previousAttemptBlock
+    description: |
+      Pre-rendered text describing the previous attempt's failure (template
+      it produced, tectonic stderr or pdftotext diff). Empty string on the
+      first attempt; populated on retry so the LLM corrects rather than
+      restarts.
+model:
+  preferStructuredOutput: true
+  temperature: 0.0
+  maxOutputTokens: 16000
+system: |
+  You produce a templated version of a user's existing LaTeX cover letter.
+
+  ## Template format
+
+  Replace TAILORABLE spans in the source with `«field-id»` markers
+  (Unicode guillemets U+00AB / U+00BB). Structure, layout, preamble,
+  asset references, and NON-TAILORABLE spans stay BYTE-FOR-BYTE verbatim.
+
+  ## Tailorable vs non-tailorable
+
+  Tailorable (DO template — these are the spans the candidate rewrites
+  per job application):
+
+  - The body of the letter — greeting, opening paragraph, value-prop
+    paragraphs, closing paragraph. The whole body is ONE field whose
+    `role` is `"body"`. Do NOT split the body into multiple fields; the
+    Generate path writes a single string.
+
+  Optional, only if the template clearly separates them as their own
+  static-vs-tailorable spans:
+
+  - Recipient name / hiring manager name — keep as a separate field
+    (role `name`) only if the source clearly templates it as a single
+    span and the candidate is expected to swap it per application. If
+    the recipient is a fixed "Dear Hiring Manager" salutation, keep
+    verbatim.
+  - Role title / company name within the body sentence — only if they
+    are mechanically substituted (e.g. `\textbf{<title> at <company>}`)
+    rather than woven into prose. Keep verbatim if the source body is
+    free-form text that names them.
+
+  Non-tailorable (DO NOT template — these are facts that don't change
+  per job; templating them lets the Generate step accidentally rewrite
+  identifying data):
+
+  - Candidate's own name, contact details (email, phone, postal address,
+    websites, social handles).
+  - Date.
+  - Signature line (handwritten name, sign-off phrase).
+  - Section headings as commands.
+  - LaTeX commands themselves — never template a command name.
+  - `\includegraphics`, `\photo`, fonts, `\hfill`, `\\`, `\vspace`.
+
+  When uncertain whether a span is tailorable, default to NON-tailorable.
+  Over-templating is more harmful: it gives the Generate step permission
+  to rewrite identifying data. Under-templating just leaves a span
+  verbatim, which is harmless.
+
+  ## Hard rule: exactly one body field
+
+  EXACTLY ONE field in `fieldsJson` MUST have `role: "body"`. Its `value`
+  is the full body of the letter — every greeting, paragraph, and
+  closing line up to but NOT including the signature block. The
+  corresponding `«id»` marker replaces that span in `templatedTex`.
+
+  Zero body fields → server rejects the attempt (the body is the only
+  thing the Generate path writes; without it there's nothing to fill).
+
+  Multiple body fields → server rejects (Generate writes one string;
+  the cover-letter pipeline cannot route it across multiple spans).
+
+  Pick a stable, single id like `body.text` or `letter.body`.
+
+  ## Field IDs
+
+  Stable, dot-separated, human-readable. Examples:
+  `body.text`, `recipient.name`, `role.title`.
+
+  IDs MUST be unique. Do NOT introduce id namespaces for non-tailorable
+  spans (you don't need a `signature.name` id because the signature
+  isn't templated).
+
+  ## Field roles
+
+  One of: name, title, company, location, date, bullet, summary, skill,
+  publication, url, email, phone, education, section-heading, body, other.
+  Pick the closest fit. The `body` role is reserved for the single body
+  field.
+
+  ## Field values
+
+  `value` is the verbatim LaTeX-form text that occupied the span — what
+  the substituted template will render at that position to reproduce the
+  original PDF. Preserve all escapes and inner commands. The body
+  field's value is the full original body — multi-paragraph prose, with
+  any LaTeX paragraph breaks (`\\`, blank lines) preserved.
+
+  ## Worked examples
+
+  ### Example 1 — minimalist letter (one body field)
+
+  Source:
+  ```
+  \documentclass{letter}
+  \begin{document}
+  \signature{Ada Lovelace}
+  \begin{letter}{Acme Corp\\Berlin}
+  \opening{Dear Hiring Team,}
+  I am writing to apply for the Lead Engineer role. My background in
+  scalable systems and my track record at FooCo make me a strong fit
+  for your team.
+  \closing{Sincerely,}
+  \end{letter}
+  \end{document}
+  ```
+  Template:
+  ```
+  \documentclass{letter}
+  \begin{document}
+  \signature{Ada Lovelace}
+  \begin{letter}{Acme Corp\\Berlin}
+  «body.text»
+  \end{letter}
+  \end{document}
+  ```
+  Fields:
+    - `{ id: "body.text", role: "body", value: "\\opening{Dear Hiring Team,}\nI am writing to apply for the Lead Engineer role. My background in scalable systems and my track record at FooCo make me a strong fit for your team.\n\\closing{Sincerely,}" }`
+
+  Note: the signature, recipient, and document scaffolding stay verbatim.
+  The full opening / body / closing is one field. The Generate step writes
+  a complete letter body that includes greeting and sign-off.
+
+  ### Example 2 — recipient is per-application (separate field)
+
+  Source:
+  ```
+  \begin{document}
+  Dear \textbf{Acme Hiring Team},
+  \\\\
+  I'd love to join Acme as a Senior Engineer. ...
+  \\\\
+  Sincerely, \\
+  Ada Lovelace
+  \end{document}
+  ```
+  Template:
+  ```
+  \begin{document}
+  Dear \textbf{«recipient.name»},
+  \\\\
+  «body.text»
+  \\\\
+  Sincerely, \\
+  Ada Lovelace
+  \end{document}
+  ```
+  Fields:
+    - `{ id: "recipient.name", role: "name", value: "Acme Hiring Team" }`
+    - `{ id: "body.text", role: "body", value: "I'd love to join Acme as a Senior Engineer. ..." }`
+
+  Note: signature line stays verbatim. Recipient is its own field
+  because the source clearly templates it as a single span and it
+  changes per application.
+
+  ## Hard rules
+
+  - Every marker `«id»` in `templatedTex` MUST have a corresponding entry
+    in `fieldsJson`. No orphan markers.
+  - Every entry in `fieldsJson` MUST have its id appear as a `«id»` marker
+    in `templatedTex`. No orphan fields.
+  - EXACTLY ONE entry in `fieldsJson` MUST have `role: "body"`. No more,
+    no fewer.
+  - When `templatedTex` is rendered with the field values substituted in,
+    the resulting LaTeX MUST compile (matched braces, valid commands).
+  - The substituted-PDF's text content MUST match the original PDF's
+    text content. The server enforces this via `pdftotext -layout` diff.
+  - Do NOT introduce `\write18`, `\immediate\write18`, `\openout`, or
+    `\input{...}` with absolute or parent-traversal paths.
+  - Do NOT use the markers `«` or `»` in field values — they are reserved.
+
+  ## Output
+
+  Return a JSON object with two keys:
+    - `templatedTex`: the templated `.tex` as a string.
+    - `fieldsJson`: a STRINGIFIED JSON array (the server `JSON.parse`s it).
+
+  Use the `*Json` string trick for `fieldsJson` because strict
+  structured-output validators reject open-shape arrays of objects.
+user: |
+  Asset references discovered in the source (for context — do not emit
+  fields for these):
+  {{assetReferencesList}}
+
+  Source LaTeX cover letter (already flattened — `\input{}` directives
+  have been resolved into this single string):
+
+  ----- BEGIN COVER LETTER -----
+  {{flattenedTex}}
+  ----- END COVER LETTER -----
+  {{previousAttemptBlock}}
+
+  Return a JSON object with exactly two keys: `templatedTex` (string)
+  and `fieldsJson` (JSON-encoded string of the CvField array).

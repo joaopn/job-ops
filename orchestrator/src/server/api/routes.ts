@@ -4,6 +4,7 @@
 
 import { Router } from "express";
 import { authRouter } from "./routes/auth";
+import { coverLetterRouter } from "./routes/coverletter";
 import { cvRouter } from "./routes/cv";
 import { databaseRouter } from "./routes/database";
 import { extractorHealthRouter } from "./routes/extractor-health";
@@ -25,6 +26,7 @@ apiRouter.use("/pipeline", pipelineRouter);
 apiRouter.use("/manual-jobs", manualJobsRouter);
 apiRouter.use("/llm/calls", llmCallsRouter);
 apiRouter.use("/cv", cvRouter);
+apiRouter.use("/coverletter", coverLetterRouter);
 apiRouter.use("/database", databaseRouter);
 apiRouter.use("/onboarding", onboardingRouter);
 apiRouter.use("/prompts", promptsRouter);

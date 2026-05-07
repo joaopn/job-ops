@@ -1,67 +1,109 @@
-# JobOps (fork)
+# job-ops-tex
 
-Self-hosted job search automation. Searches LinkedIn, Indeed, Glassdoor and 10+ job boards from one screen, rewrites your CV for each role, scores fit, checks visa sponsorship, and tracks applications — all running locally in Docker.
+Self-hosted job search workspace built around a LaTeX-native CV pipeline.
+Scrapes job boards, scores fit, tailors a LaTeX CV and a cover letter per
+job, and tracks them through an inbox/live/closed lifecycle. Runs locally
+in Docker. Does not auto-apply.
 
-Does not auto-apply.
+## What this is
 
-## Quick Start
+Workflow:
+
+1. Upload a LaTeX CV (single `.tex` or zip with `\input{}`). The server
+   flattens it, has the LLM extract a templated `.tex` plus a JSON of
+   substitutable fields, then verifies the round-trip by recompiling and
+   diffing the PDF text against the original. Partial extractions are
+   rejected — there is no "mostly worked" state.
+2. Write a `personal_brief` — long-form free text describing context the
+   CV doesn't capture (side projects, things you've used in passing).
+3. Scrape jobs from LinkedIn, Indeed, Glassdoor (via jobspy), Hiring Cafe,
+   Working Nomads, startup.jobs, and Golang Jobs.
+4. Per job, tailor the CV at the field level (JSON-Patch edits over the
+   flattened TeX) using `personal_brief + JD + currentContent`, plus an
+   ATS-keyword pass that surfaces matched/skipped JD terms. Generate a
+   cover letter against the same substrate.
+5. Render with Tectonic. Review and edit through a chat panel that
+   proposes accept/reject patches against either document.
+6. Move the job through Inbox → Live → Closed with outcome tagging.
+
+LLM providers: OpenAI, Gemini, OpenRouter, Codex, or any
+OpenAI-compatible endpoint. Prompts live in `prompts/` as YAML and are
+hot-reloaded.
+
+## Where it came from
+
+Fork of [JobOps](https://github.com/DaKheera47/jobops). Diverged at
+commit `01452b6`. The fork is intentionally independent — no GHCR pulls,
+no upstream pings, no analytics, no CI.
+
+Removed:
+- Telemetry (Umami client/server, fingerprint, reverse proxy).
+- CI workflows and FUNDING.
+- Reactive Resume integration and the RxResume-era tailoring UI.
+- Gmail / Tracking Inbox / post-application stack.
+- In-progress kanban + application stage tracking.
+- Tracer link rewriting + click analytics.
+- Visa sponsorship, demo mode, conversion analytics, outbound webhooks,
+  DB backup.
+- Region-specific extractors: Adzuna, Gradcracker, UK Visa Jobs, Seek.
+- Bundled documentation site.
+
+Replaced or added:
+- LaTeX CV substrate: flatten → Eta render → Tectonic compile, with a
+  pdftotext content-equivalence gate on upload.
+- `personal_brief` substrate; the rigid `cvContentSchema` is gone — the
+  tailored JSON mirrors whatever shape the source CV uses.
+- Field-level tailoring via JSON-Patch over flattened TeX, plus an
+  ATS-coverage sidecar (matched/skipped JD keywords).
+- Cover-letter document substrate with its own gated upload, per-job
+  Generate, and Edit/PDF tab toggle.
+- Job lifecycle redesign: Inbox / Live / Closed tabs, repost detection,
+  pipeline-bound auto-aging, posted-date sort, outcome tagging.
+- Batch URL import via streaming sheet.
+- LLM observability: structured per-call logs, live call queue, status
+  button, persistent upload spinner.
+- User-editable YAML prompts in `prompts/`.
+- Onboarding wizard with a CV upload step.
+
+## Operator manual
+
+### Run
 
 ```bash
-docker compose up -d
+docker compose up -d --build
 ```
 
-Open `http://localhost:3005` and follow the onboarding wizard.
+App is at `http://localhost:3005`. The image builds locally from the
+included [`Dockerfile`](Dockerfile); nothing is pulled from a registry.
 
-The image is built locally from the included [`Dockerfile`](Dockerfile); nothing is pulled from an upstream registry.
+### Persistent state
 
-## How It Works
+- `data/` — SQLite DB (`data/jobs.db`), generated PDFs, JWT secret
+  (`data/jwt-secret`, mode 0600). Gitignored. Back this up.
+- `prompts/` — bind-mounted into the container; edits hot-reload via
+  mtime cache. Edit YAML in place.
+- `codex-home` named volume — Codex provider auth, if used.
 
-| Step | What happens |
-|------|-------------|
-| **Search** | Scrapes 10+ job boards for roles matching your criteria |
-| **Score** | AI ranks each job 0-100 against your profile |
-| **Tailor** | Generates a rewritten CV matched to each job description |
-| **Export** | Creates a polished PDF locally, or via [Reactive Resume](https://rxresu.me) |
-| **Track** | Connects to Gmail and auto-detects interviews, offers, and rejections |
+### Configuration
 
-## Supported Job Boards
+LLM provider keys and any env overrides go in `./.env` (optional). See
+the Settings page in the UI for in-app config (provider selection,
+scoring toggle, tailoring opt-in, prompt overrides).
 
-| Platform | Focus |
-|----------|-------|
-| LinkedIn | Global |
-| Indeed | Global |
-| Glassdoor | Global |
-| Adzuna | Multi-country API |
-| Hiring Cafe | Global |
-| startup.jobs | Startup/remote roles |
-| Working Nomads | Remote-only |
-| Gradcracker | STEM/Grads (UK) |
-| UK Visa Jobs | Sponsorship (UK) |
-| Golang Jobs | Go developers |
-| Seek | Australia/NZ (via Apify) |
+### Common operations
 
-Custom extractors can be added in TypeScript — see [`extractors/`](extractors/).
+```bash
+# Tail logs
+docker compose logs -f --tail=200 job-ops
 
-## Post-Application Tracking
+# Stop
+docker compose down
 
-Connect Gmail and JobOps watches for recruiter replies automatically.
-
-- *"We'd like to invite you to interview..."* → **Interviewing**
-- *"Unfortunately we won't be progressing..."* → **Rejected**
-
-## AI Providers
-
-Works with any of:
-
-- Codex (local app-server in Docker, authenticated with `codex login`)
-- OpenAI
-- Google Gemini
-- OpenRouter
-- Any OpenAI-compatible endpoint (Ollama, LM Studio, etc.)
-
-## Documentation
-
-Docs are bundled with the app. When running locally, open `http://localhost:3005/docs`. The source markdown lives in [`docs-site/docs/`](docs-site/docs/).
+# Wipe state (destructive — deletes all jobs, CVs, generated PDFs)
+docker compose down
+rm -rf data/
+docker compose up -d --build
+```
 
 ## License
 

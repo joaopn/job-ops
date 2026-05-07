@@ -17,6 +17,8 @@ import {
 import * as jobsRepo from "@server/repositories/jobs";
 import * as settingsRepo from "@server/repositories/settings";
 import { getActivePersonalBrief } from "@server/services/brief";
+import { generateCoverLetter } from "@server/services/cover-letter/generate";
+import { renderCoverLetterPdf } from "@server/services/cover-letter/render";
 import { scoreJobSuitability } from "@server/services/scorer";
 import { asyncPool } from "@server/utils/async-pool";
 import {
@@ -1383,6 +1385,53 @@ jobsRouter.post("/:id/re-tailor", async (req: Request, res: Response) => {
     fail(res, toAppError(error));
   }
 });
+
+/**
+ * POST /api/jobs/:id/generate-cover-letter - Run cover-letter Generate
+ * for this job. Strict-JSON LLM call against the active cover-letter
+ * document's body field; merges the returned override into
+ * `coverLetterFieldOverrides`. Returns the updated job.
+ */
+jobsRouter.post(
+  "/:id/generate-cover-letter",
+  async (req: Request, res: Response) => {
+    try {
+      const result = await generateCoverLetter({ jobId: req.params.id });
+      if (!result.success) {
+        return fail(
+          res,
+          badRequest(result.error ?? "Cover-letter generation failed"),
+        );
+      }
+      ok(res, result.job);
+    } catch (error) {
+      fail(res, toAppError(error));
+    }
+  },
+);
+
+/**
+ * POST /api/jobs/:id/render-cover-letter - Render the cover-letter PDF
+ * for this job by substituting `coverLetterFieldOverrides` (textarea
+ * state) into the active cover-letter doc's templated tex. No LLM call.
+ */
+jobsRouter.post(
+  "/:id/render-cover-letter",
+  async (req: Request, res: Response) => {
+    try {
+      const result = await renderCoverLetterPdf({ jobId: req.params.id });
+      if (!result.success) {
+        return fail(
+          res,
+          badRequest(result.error ?? "Cover-letter render failed"),
+        );
+      }
+      ok(res, result.job);
+    } catch (error) {
+      fail(res, toAppError(error));
+    }
+  },
+);
 
 /**
  * POST /api/jobs/:id/apply - Mark a job as applied
