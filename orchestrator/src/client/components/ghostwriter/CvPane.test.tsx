@@ -170,4 +170,91 @@ describe("CvPane", () => {
     });
     expect(apiMocks.updateJob).toHaveBeenCalled();
   });
+
+  it("Raw sub-tab hydrates fence text from the current state", async () => {
+    renderWithQueryClient(<CvPane job={baseJob} onJobUpdated={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /^raw$/i }));
+
+    const textareas = screen.getAllByRole(
+      "textbox",
+    ) as HTMLTextAreaElement[];
+    const raw = textareas[textareas.length - 1];
+    expect(raw.value).toContain("--- basics.name ---");
+    expect(raw.value).toContain("Ada Lovelace");
+    expect(raw.value).toContain("--- experience.0.bullet.0 ---");
+  });
+
+  it("Raw sub-tab Save persists the edited override after parsing", async () => {
+    apiMocks.updateJob.mockResolvedValue({ ...baseJob });
+    renderWithQueryClient(<CvPane job={baseJob} onJobUpdated={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /^raw$/i }));
+
+    const textareas = screen.getAllByRole(
+      "textbox",
+    ) as HTMLTextAreaElement[];
+    const raw = textareas[textareas.length - 1];
+    fireEvent.change(raw, {
+      target: {
+        value: raw.value.replace("Built things.", "Built fancy things."),
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /save/i }));
+
+    await waitFor(() => {
+      expect(apiMocks.updateJob).toHaveBeenCalled();
+    });
+    expect(apiMocks.updateJob).toHaveBeenCalledWith("job-1", {
+      tailoredFields: {
+        "experience.0.bullet.0": "Built fancy things.",
+      },
+    });
+  });
+
+  it("Raw sub-tab Save surfaces parse errors and does NOT call updateJob", async () => {
+    apiMocks.updateJob.mockResolvedValue({ ...baseJob });
+    renderWithQueryClient(<CvPane job={baseJob} onJobUpdated={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /^raw$/i }));
+
+    const textareas = screen.getAllByRole(
+      "textbox",
+    ) as HTMLTextAreaElement[];
+    const raw = textareas[textareas.length - 1];
+    fireEvent.change(raw, {
+      target: { value: raw.value.replace("--- basics.name ---", "stray text") },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /save/i }));
+
+    expect(
+      await screen.findByText(/parse error/i),
+    ).toBeInTheDocument();
+    expect(apiMocks.updateJob).not.toHaveBeenCalled();
+  });
+
+  it("switching from a malformed Raw tab back to Fields is blocked", async () => {
+    renderWithQueryClient(<CvPane job={baseJob} onJobUpdated={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /^raw$/i }));
+
+    const textareas = screen.getAllByRole(
+      "textbox",
+    ) as HTMLTextAreaElement[];
+    const raw = textareas[textareas.length - 1];
+    fireEvent.change(raw, {
+      target: { value: raw.value.replace("--- basics.name ---", "garbage") },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^fields$/i }));
+
+    // Errors should now be displayed under the Raw textarea, and the Raw
+    // textarea is still present (sub-tab did not switch).
+    expect(
+      await screen.findByText(/parse error/i),
+    ).toBeInTheDocument();
+    expect(raw).toBeInTheDocument();
+  });
 });

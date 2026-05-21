@@ -4,7 +4,7 @@ import { FileSearch } from "lucide-react";
 import type React from "react";
 import { useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { CvFieldsEditor } from "./CvFieldsEditor";
+import { CvEditTab } from "./CvEditTab";
 import { CvPdfPane } from "./CvPdfPane";
 
 type Tab = "edit" | "pdf";
@@ -49,7 +49,7 @@ export const CvPane: React.FC<Props> = ({ job, onJobUpdated }) => {
 
       {tab === "edit" ? (
         cv ? (
-          <CvFieldsEditor
+          <CvEditTab
             job={job}
             cv={cv}
             onJobUpdated={onJobUpdated}

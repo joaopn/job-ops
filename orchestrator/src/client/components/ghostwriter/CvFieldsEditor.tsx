@@ -1,27 +1,19 @@
-import * as api from "@client/api";
-import type { CvDocument, CvField, Job } from "@shared/types";
-import { useMutation } from "@tanstack/react-query";
-import {
-  FileText,
-  Loader2,
-  Lock,
-  LockOpen,
-  RotateCcw,
-  Save,
-  Undo2,
-} from "lucide-react";
+import type { CvField } from "@shared/types";
+import { Lock, LockOpen, Undo2 } from "lucide-react";
 import type React from "react";
-import { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
+import { useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
 type Props = {
-  job: Job;
-  cv: CvDocument;
-  onJobUpdated: () => void | Promise<void>;
-  onRendered?: () => void;
+  fields: CvField[];
+  defaults: Record<string, string>;
+  overrides: Record<string, string>;
+  locks: ReadonlySet<string>;
+  onChange: (id: string, value: string) => void;
+  onReset: (id: string) => void;
+  onToggleLock: (id: string) => void;
 };
 
 type FieldGroup = {
@@ -46,10 +38,7 @@ function groupKey(fieldId: string): string {
   if (parts.length <= 1) return fieldId;
   const last = parts[parts.length - 1];
   if (/^\d+$/.test(last)) {
-    if (
-      parts.length >= 3 &&
-      !/^\d+$/.test(parts[parts.length - 2])
-    ) {
+    if (parts.length >= 3 && !/^\d+$/.test(parts[parts.length - 2])) {
       return parts.slice(0, -2).join(".");
     }
     return parts.slice(0, -1).join(".");
@@ -86,224 +75,42 @@ function deriveGroupLabel(key: string, fields: CvField[]): string {
   return key;
 }
 
-function diffOverrides(
-  local: Record<string, string>,
-  fields: CvField[],
+function isFieldEdited(
+  field: CvField,
+  overrides: Record<string, string>,
   defaults: Record<string, string>,
-): Record<string, string> {
-  const out: Record<string, string> = {};
-  const fieldIds = new Set(fields.map((f) => f.id));
-  for (const [id, value] of Object.entries(local)) {
-    if (!fieldIds.has(id)) continue;
-    const baseline = defaults[id] ?? fields.find((f) => f.id === id)?.value;
-    if (baseline !== undefined && value === baseline) continue;
-    out[id] = value;
-  }
-  return out;
+): boolean {
+  if (!(field.id in overrides)) return false;
+  const baseline = defaults[field.id] ?? field.value;
+  return overrides[field.id] !== baseline;
 }
 
 export const CvFieldsEditor: React.FC<Props> = ({
-  job,
-  cv,
-  onJobUpdated,
-  onRendered,
+  fields,
+  defaults,
+  overrides,
+  locks,
+  onChange,
+  onReset,
+  onToggleLock,
 }) => {
-  const groups = useMemo(() => buildGroups(cv.fields), [cv.fields]);
-  const defaults = cv.defaultFieldValues ?? {};
-
-  const initialOverrides = useMemo(
-    () => ({ ...(job.tailoredFields ?? {}) }),
-    [job.tailoredFields],
-  );
-  const initialLocks = useMemo(
-    () => new Set(job.cvFieldLocks ?? []),
-    [job.cvFieldLocks],
-  );
-
-  const [overrides, setOverrides] =
-    useState<Record<string, string>>(initialOverrides);
-  const [locks, setLocks] = useState<Set<string>>(initialLocks);
-
-  useEffect(() => {
-    setOverrides({ ...(job.tailoredFields ?? {}) });
-  }, [job.tailoredFields]);
-  useEffect(() => {
-    setLocks(new Set(job.cvFieldLocks ?? []));
-  }, [job.cvFieldLocks]);
-
-  const dirtyOverrides = useMemo(() => {
-    const next = diffOverrides(overrides, cv.fields, defaults);
-    const persisted = job.tailoredFields ?? {};
-    const persistedKeys = Object.keys(persisted);
-    const nextKeys = Object.keys(next);
-    if (persistedKeys.length !== nextKeys.length) return next;
-    for (const k of nextKeys) {
-      if (persisted[k] !== next[k]) return next;
-    }
-    return null;
-  }, [overrides, cv.fields, defaults, job.tailoredFields]);
-
-  const dirtyLocks = useMemo(() => {
-    const persisted = job.cvFieldLocks ?? [];
-    if (locks.size !== persisted.length) return Array.from(locks);
-    for (const id of persisted) {
-      if (!locks.has(id)) return Array.from(locks);
-    }
-    return null;
-  }, [locks, job.cvFieldLocks]);
-
-  const isDirty = dirtyOverrides !== null || dirtyLocks !== null;
-
-  const saveMutation = useMutation({
-    mutationFn: async () => {
-      const patch: Partial<Job> = {};
-      if (dirtyOverrides !== null) patch.tailoredFields = dirtyOverrides;
-      if (dirtyLocks !== null) patch.cvFieldLocks = dirtyLocks;
-      return api.updateJob(job.id, patch);
-    },
-    onSuccess: async () => {
-      await onJobUpdated();
-    },
-    onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to save CV edits",
-      );
-    },
-  });
-
-  const renderMutation = useMutation({
-    mutationFn: async () => {
-      if (isDirty) {
-        await saveMutation.mutateAsync();
-      }
-      return api.renderCvPdf(job.id);
-    },
-    onSuccess: async () => {
-      toast.success("CV PDF rendered");
-      await onJobUpdated();
-      onRendered?.();
-    },
-    onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to render CV PDF",
-      );
-    },
-  });
-
-  const handleFieldChange = (id: string, value: string) => {
-    setOverrides((prev) => ({ ...prev, [id]: value }));
-  };
-
-  const handleReset = (id: string) => {
-    setOverrides((prev) => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
-  };
-
-  const handleToggleLock = (id: string) => {
-    setLocks((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  };
-
-  const handleResetAll = () => {
-    if (
-      !window.confirm(
-        "Reset all field overrides to the original CV defaults? Lock state is preserved.",
-      )
-    ) {
-      return;
-    }
-    setOverrides({});
-  };
-
-  const handleClearLocks = () => {
-    if (
-      !window.confirm("Clear all field locks? Override values are preserved.")
-    ) {
-      return;
-    }
-    setLocks(new Set());
-  };
-
-  const canSave = isDirty && !saveMutation.isPending;
-  const canRender = !renderMutation.isPending && !saveMutation.isPending;
+  const groups = useMemo(() => buildGroups(fields), [fields]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="mb-2 flex flex-wrap items-center justify-end gap-1">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 gap-1 px-2 text-xs"
-          onClick={handleClearLocks}
-          disabled={locks.size === 0}
-        >
-          <LockOpen className="h-3 w-3" />
-          Clear locks
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 gap-1 px-2 text-xs"
-          onClick={handleResetAll}
-          disabled={Object.keys(overrides).length === 0}
-        >
-          <RotateCcw className="h-3 w-3" />
-          Reset all
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-7 gap-1 px-2 text-xs"
-          onClick={() => renderMutation.mutate()}
-          disabled={!canRender}
-        >
-          {renderMutation.isPending ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
-          ) : (
-            <FileText className="h-3 w-3" />
-          )}
-          Render PDF
-        </Button>
-        <Button
-          size="sm"
-          className="h-7 gap-1 px-2 text-xs"
-          onClick={() => saveMutation.mutate()}
-          disabled={!canSave}
-        >
-          {saveMutation.isPending ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
-          ) : (
-            <Save className="h-3 w-3" />
-          )}
-          Save
-        </Button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto pr-1">
-        {groups.map((group, idx) => (
-          <FieldGroupSection
-            key={group.key}
-            group={group}
-            defaultOpen={idx < COLLAPSE_AFTER}
-            overrides={overrides}
-            locks={locks}
-            defaults={defaults}
-            onChange={handleFieldChange}
-            onReset={handleReset}
-            onToggleLock={handleToggleLock}
-          />
-        ))}
-      </div>
+    <div className="flex-1 overflow-y-auto pr-1">
+      {groups.map((group, idx) => (
+        <FieldGroupSection
+          key={group.key}
+          group={group}
+          defaultOpen={idx < COLLAPSE_AFTER}
+          overrides={overrides}
+          locks={locks}
+          defaults={defaults}
+          onChange={onChange}
+          onReset={onReset}
+          onToggleLock={onToggleLock}
+        />
+      ))}
     </div>
   );
 };
@@ -312,7 +119,7 @@ type SectionProps = {
   group: FieldGroup;
   defaultOpen: boolean;
   overrides: Record<string, string>;
-  locks: Set<string>;
+  locks: ReadonlySet<string>;
   defaults: Record<string, string>;
   onChange: (id: string, value: string) => void;
   onReset: (id: string) => void;
@@ -368,16 +175,6 @@ const FieldGroupSection: React.FC<SectionProps> = ({
     </details>
   );
 };
-
-function isFieldEdited(
-  field: CvField,
-  overrides: Record<string, string>,
-  defaults: Record<string, string>,
-): boolean {
-  if (!(field.id in overrides)) return false;
-  const baseline = defaults[field.id] ?? field.value;
-  return overrides[field.id] !== baseline;
-}
 
 type FieldRowProps = {
   field: CvField;
