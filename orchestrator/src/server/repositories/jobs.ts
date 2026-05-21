@@ -419,8 +419,9 @@ async function tryInsertJob(input: CreateJobInput): Promise<Job | null> {
  * `datePosted` than the existing row, treat it as a repost: bump
  * `repostCount`, set `repostedAt = now`, advance `datePosted`, and re-promote
  * the row to `discovered` if it had aged into `backlog`. All other statuses
- * keep their position so user-driven state (`selected`, `skipped`, `closed`,
- * etc.) is sacred.
+ * keep their position so user-driven state (`selected`, `stale`, `skipped`,
+ * `closed`, etc.) is sacred — stale rows in particular were deliberately
+ * shelved by the user and shouldn't be auto-rescued by a churning ad.
  */
 export async function createJobs(input: CreateJobInput): Promise<Job>;
 export async function createJobs(
@@ -599,6 +600,7 @@ export async function getJobStats(): Promise<Record<JobStatus, number>> {
     applied: 0,
     in_progress: 0,
     backlog: 0,
+    stale: 0,
     skipped: 0,
     closed: 0,
   };
@@ -654,6 +656,54 @@ export async function getUnscoredDiscoveredJobs(
 export async function deleteJobsByStatus(status: JobStatus): Promise<number> {
   const result = await db.delete(jobs).where(eq(jobs.status, status)).run();
   return result.changes;
+}
+
+/**
+ * Move every row in {discovered, selected, backlog} whose `discovered_at` is
+ * older than `thresholdDays` into the `stale` status. Returns the total moved
+ * plus a per-source-status breakdown.
+ *
+ * Uses `discovered_at` (always ISO) as the SQL cutoff. The client display
+ * still shows `datePosted ?? discoveredAt` for human readability, but the
+ * sweep predicate avoids `date_posted` (mixed-format text — jobspy stores
+ * Unix-ms, others ISO) so the WHERE doesn't silently drop a swath of rows.
+ */
+export async function sweepStaleJobs(thresholdDays: number): Promise<{
+  moved: number;
+  breakdown: { discovered: number; selected: number; backlog: number };
+}> {
+  const eligibleStatuses: JobStatus[] = ["discovered", "selected", "backlog"];
+  const offsetParam = `-${thresholdDays} days`;
+  const cutoffClause = sql`datetime('now', ${offsetParam})`;
+  const rows = await db
+    .select({ status: jobs.status })
+    .from(jobs)
+    .where(
+      and(
+        inArray(jobs.status, eligibleStatuses),
+        sql`${jobs.discoveredAt} < ${cutoffClause}`,
+      ),
+    );
+  const breakdown = { discovered: 0, selected: 0, backlog: 0 };
+  for (const row of rows) {
+    if (row.status === "discovered") breakdown.discovered += 1;
+    else if (row.status === "selected") breakdown.selected += 1;
+    else if (row.status === "backlog") breakdown.backlog += 1;
+  }
+  const moved = breakdown.discovered + breakdown.selected + breakdown.backlog;
+  if (moved === 0) return { moved, breakdown };
+
+  await db
+    .update(jobs)
+    .set({ status: "stale", updatedAt: sql`(datetime('now'))` })
+    .where(
+      and(
+        inArray(jobs.status, eligibleStatuses),
+        sql`${jobs.discoveredAt} < ${cutoffClause}`,
+      ),
+    );
+
+  return { moved, breakdown };
 }
 
 /**

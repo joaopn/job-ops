@@ -33,6 +33,7 @@ const renderFilters = (
       ready: 2,
       live: 3,
       backlog: 0,
+      stale: 0,
       closed: 0,
       all: 6,
     },

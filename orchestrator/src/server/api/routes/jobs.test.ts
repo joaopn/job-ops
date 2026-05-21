@@ -37,6 +37,7 @@ describe.sequential("POST /api/jobs/actions — 5g action variants", () => {
         | "applied"
         | "in_progress"
         | "backlog"
+        | "stale"
         | "skipped"
         | "closed",
       outcome: (overrides.outcome ?? null) as
@@ -207,6 +208,132 @@ describe.sequential("POST /api/jobs/actions — 5g action variants", () => {
     for (const result of body.data.results) {
       expect(result.job.status).toBe("skipped");
     }
+  });
+
+  it("move_to_stale accepts discovered + selected + backlog", async () => {
+    await seedJob({ id: "stale-1", status: "discovered" });
+    await seedJob({ id: "stale-2", status: "selected" });
+    await seedJob({ id: "stale-3", status: "backlog" });
+
+    const { body } = await postAction({
+      action: "move_to_stale",
+      jobIds: ["stale-1", "stale-2", "stale-3"],
+    });
+
+    expect(body.data.succeeded).toBe(3);
+    for (const result of body.data.results) {
+      expect(result.job.status).toBe("stale");
+    }
+  });
+
+  it("move_to_stale rejects from non-source statuses", async () => {
+    await seedJob({ id: "stale-4", status: "applied" });
+
+    const { body } = await postAction({
+      action: "move_to_stale",
+      jobIds: ["stale-4"],
+    });
+
+    expect(body.data.succeeded).toBe(0);
+    expect(body.data.failed).toBe(1);
+    expect(body.data.results[0].error.code).toBe("INVALID_REQUEST");
+  });
+
+  it("move_to_inbox promotes a stale row to discovered", async () => {
+    await seedJob({ id: "stale-5", status: "stale" });
+
+    const { body } = await postAction({
+      action: "move_to_inbox",
+      jobIds: ["stale-5"],
+    });
+
+    expect(body.data.succeeded).toBe(1);
+    expect(body.data.results[0].job.status).toBe("discovered");
+  });
+
+  it("move_to_inbox rejects from non-stale statuses", async () => {
+    await seedJob({ id: "stale-6", status: "backlog" });
+
+    const { body } = await postAction({
+      action: "move_to_inbox",
+      jobIds: ["stale-6"],
+    });
+
+    expect(body.data.succeeded).toBe(0);
+    expect(body.data.failed).toBe(1);
+  });
+
+  it("skip is allowed from stale", async () => {
+    await seedJob({ id: "stale-7", status: "stale" });
+
+    const { body } = await postAction({
+      action: "skip",
+      jobIds: ["stale-7"],
+    });
+
+    expect(body.data.succeeded).toBe(1);
+    expect(body.data.results[0].job.status).toBe("skipped");
+  });
+
+  it("sweep-stale moves matching rows and reports per-source breakdown", async () => {
+    const { db, schema } = await import("@server/db/index");
+    const { sql } = await import("drizzle-orm");
+    // Old rows that should be swept.
+    await seedJob({ id: "sweep-old-discovered", status: "discovered" });
+    await seedJob({ id: "sweep-old-selected", status: "selected" });
+    await seedJob({ id: "sweep-old-backlog", status: "backlog" });
+    // Fresh row that should NOT be swept.
+    await seedJob({ id: "sweep-fresh", status: "discovered" });
+    // Ready row should never be swept regardless of age.
+    await seedJob({ id: "sweep-ready-old", status: "ready" });
+
+    await db
+      .update(schema.jobs)
+      .set({ discoveredAt: sql`datetime('now', '-30 days')` })
+      .where(
+        sql`${schema.jobs.id} IN ('sweep-old-discovered', 'sweep-old-selected', 'sweep-old-backlog', 'sweep-ready-old')`,
+      );
+
+    const res = await fetch(`${baseUrl}/api/jobs/sweep-stale`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ thresholdDays: 14 }),
+    });
+    expect(res.status).toBe(200);
+    const payload = (await res.json()) as {
+      ok: boolean;
+      data: {
+        moved: number;
+        breakdown: { discovered: number; selected: number; backlog: number };
+      };
+    };
+    expect(payload.ok).toBe(true);
+    expect(payload.data.moved).toBe(3);
+    expect(payload.data.breakdown).toEqual({
+      discovered: 1,
+      selected: 1,
+      backlog: 1,
+    });
+
+    // Verify the actual table state.
+    const rows = await db
+      .select({ id: schema.jobs.id, status: schema.jobs.status })
+      .from(schema.jobs);
+    const byId = Object.fromEntries(rows.map((r) => [r.id, r.status]));
+    expect(byId["sweep-old-discovered"]).toBe("stale");
+    expect(byId["sweep-old-selected"]).toBe("stale");
+    expect(byId["sweep-old-backlog"]).toBe("stale");
+    expect(byId["sweep-fresh"]).toBe("discovered");
+    expect(byId["sweep-ready-old"]).toBe("ready");
+  });
+
+  it("sweep-stale rejects invalid thresholdDays", async () => {
+    const res = await fetch(`${baseUrl}/api/jobs/sweep-stale`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ thresholdDays: 0 }),
+    });
+    expect(res.status).toBe(400);
   });
 
   it("PATCH rejects with 422 when jobDescription exceeds maxJobDescriptionChars", async () => {

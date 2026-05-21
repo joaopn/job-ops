@@ -5,10 +5,26 @@ const SKIPPABLE_STATUSES = new Set([
   "selected",
   "ready",
   "backlog",
+  "stale",
 ]);
 const MOVE_TO_READY_STATUSES = new Set(["discovered", "selected"]);
-const MOVE_TO_SELECTED_STATUSES = new Set(["discovered", "backlog", "ready"]);
-const MOVE_TO_BACKLOG_STATUSES = new Set(["discovered", "selected"]);
+const MOVE_TO_SELECTED_STATUSES = new Set([
+  "discovered",
+  "backlog",
+  "ready",
+  "stale",
+]);
+const MOVE_TO_BACKLOG_STATUSES = new Set([
+  "discovered",
+  "selected",
+  "stale",
+]);
+const MOVE_TO_STALE_STATUSES = new Set([
+  "discovered",
+  "selected",
+  "backlog",
+]);
+const MOVE_TO_INBOX_STATUSES = new Set(["stale"]);
 const CLOSABLE_STATUSES = new Set(["applied", "in_progress"]);
 const REOPENABLE_STATUSES = new Set(["skipped", "closed"]);
 
@@ -40,6 +56,20 @@ export function canMoveToBacklog(jobs: JobListItem[]): boolean {
   return (
     jobs.length > 0 &&
     jobs.every((job) => MOVE_TO_BACKLOG_STATUSES.has(job.status))
+  );
+}
+
+export function canMoveToStale(jobs: JobListItem[]): boolean {
+  return (
+    jobs.length > 0 &&
+    jobs.every((job) => MOVE_TO_STALE_STATUSES.has(job.status))
+  );
+}
+
+export function canMoveToInbox(jobs: JobListItem[]): boolean {
+  return (
+    jobs.length > 0 &&
+    jobs.every((job) => MOVE_TO_INBOX_STATUSES.has(job.status))
   );
 }
 

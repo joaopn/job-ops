@@ -124,6 +124,7 @@ export function useKeyboardShortcuts(args: UseKeyboardShortcutsArgs): void {
       [SHORTCUTS.tabReady.key]: () => setActiveTab("ready"),
       [SHORTCUTS.tabLive.key]: () => setActiveTab("live"),
       [SHORTCUTS.tabBacklog.key]: () => setActiveTab("backlog"),
+      [SHORTCUTS.tabStale.key]: () => setActiveTab("stale"),
       [SHORTCUTS.tabClosed.key]: () => setActiveTab("closed"),
       [SHORTCUTS.tabAll.key]: () => setActiveTab("all"),
       [SHORTCUTS.prevTabArrow.key]: (e) => {
@@ -237,6 +238,14 @@ export function useKeyboardShortcuts(args: UseKeyboardShortcutsArgs): void {
         if (shortcutActionInFlight.current) return;
         if (selectedJobIds.size > 0) {
           void runJobAction("move_to_backlog");
+        }
+      },
+
+      [SHORTCUTS.moveToInbox.key]: () => {
+        if (!isShortcutInScope(SHORTCUTS.moveToInbox, activeTab)) return;
+        if (shortcutActionInFlight.current) return;
+        if (selectedJobIds.size > 0) {
+          void runJobAction("move_to_inbox");
         }
       },
 

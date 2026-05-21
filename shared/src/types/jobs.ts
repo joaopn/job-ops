@@ -14,6 +14,7 @@ export type JobStatus =
   | "applied" // Application sent
   | "in_progress" // In process beyond initial application
   | "backlog" // Aged-out of inbox (auto or manual); revivable on repost
+  | "stale" // Holding pen for rows the user is considering retiring; manual sweep destination
   | "skipped" // User skipped without applying
   | "closed"; // Application concluded; outcome stored
 

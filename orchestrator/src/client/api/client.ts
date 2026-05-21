@@ -1075,6 +1075,21 @@ function getSingleJobFromActionResult(
   return result.job;
 }
 
+export async function sweepStaleJobs(
+  thresholdDays: number,
+): Promise<{
+  moved: number;
+  breakdown: { discovered: number; selected: number; backlog: number };
+}> {
+  return fetchApi<{
+    moved: number;
+    breakdown: { discovered: number; selected: number; backlog: number };
+  }>("/jobs/sweep-stale", {
+    method: "POST",
+    body: JSON.stringify({ thresholdDays }),
+  });
+}
+
 export async function streamJobAction(
   input: JobActionRequest,
   handlers: {

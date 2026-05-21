@@ -18,6 +18,7 @@ import { type FilterTab, tabs } from "./orchestrator/constants";
 import { FloatingJobActionsBar } from "./orchestrator/FloatingJobActionsBar";
 import { BatchUrlImportSheet } from "./orchestrator/BatchUrlImportSheet";
 import { ClosedFilterChips } from "./orchestrator/ClosedFilterChips";
+import { StaleControlBar } from "./orchestrator/StaleControlBar";
 import { LlmCallQueueSheet } from "./orchestrator/LlmCallQueueSheet";
 import { JobCommandBar } from "./orchestrator/JobCommandBar";
 import { JobDetailPanel } from "./orchestrator/JobDetailPanel";
@@ -60,6 +61,8 @@ export const OrchestratorPage: React.FC = () => {
     setMaxAgeDays,
     closedSubFilter,
     setClosedSubFilter,
+    staleThresholdDays,
+    setStaleThresholdDays,
     resetFilters,
   } = useOrchestratorFilters();
 
@@ -70,6 +73,7 @@ export const OrchestratorPage: React.FC = () => {
       "ready",
       "live",
       "backlog",
+      "stale",
       "closed",
       "all",
     ];
@@ -113,6 +117,7 @@ export const OrchestratorPage: React.FC = () => {
       "ready",
       "live",
       "backlog",
+      "stale",
       "closed",
       "all",
     ];
@@ -152,7 +157,10 @@ export const OrchestratorPage: React.FC = () => {
     [navigateWithContext, activeTab],
   );
 
-  const { settings, inboxStaleThresholdDays } = useSettings();
+  const { settings, inboxStaleThresholdDays, inboxAgeoutThresholdDays } =
+    useSettings();
+  const effectiveStaleThresholdDays =
+    staleThresholdDays ?? inboxAgeoutThresholdDays;
   const {
     jobs,
     selectedJob,
@@ -234,6 +242,8 @@ export const OrchestratorPage: React.FC = () => {
     canRescoreSelected,
     canMoveToSelectedSelected,
     canMoveToBacklogSelected,
+    canMoveToStaleSelected,
+    canMoveToInboxSelected,
     canUnselectSelected,
     canMarkClosedSelected,
     canReopenSelected,
@@ -547,6 +557,17 @@ export const OrchestratorPage: React.FC = () => {
                     />
                   ) : undefined
                 }
+                staleControlBar={
+                  activeTab === "stale" ? (
+                    <StaleControlBar
+                      thresholdDays={effectiveStaleThresholdDays}
+                      onThresholdChange={(value) =>
+                        setStaleThresholdDays(value)
+                      }
+                      onSwept={loadJobs}
+                    />
+                  ) : undefined
+                }
               />
             )}
 
@@ -592,6 +613,8 @@ export const OrchestratorPage: React.FC = () => {
         canRescoreSelected={canRescoreSelected}
         canMoveToSelectedSelected={canMoveToSelectedSelected}
         canMoveToBacklogSelected={canMoveToBacklogSelected}
+        canMoveToStaleSelected={canMoveToStaleSelected}
+        canMoveToInboxSelected={canMoveToInboxSelected}
         canUnselectSelected={canUnselectSelected}
         canMarkClosedSelected={canMarkClosedSelected}
         canReopenSelected={canReopenSelected}
@@ -601,6 +624,8 @@ export const OrchestratorPage: React.FC = () => {
         onRescoreSelected={() => void runJobAction("rescore")}
         onMoveToSelected={() => void runJobAction("move_to_selected")}
         onMoveToBacklog={() => void runJobAction("move_to_backlog")}
+        onMoveToStale={() => void runJobAction("move_to_stale")}
+        onMoveToInbox={() => void runJobAction("move_to_inbox")}
         onUnselect={() => void runJobAction("unselect")}
         onMarkClosed={(outcome) => void runMarkClosedAction(outcome)}
         onReopen={() => void runJobAction("reopen")}

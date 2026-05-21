@@ -78,15 +78,21 @@ export const SHORTCUTS = {
     label: "Backlog tab",
     group: "tabs",
   },
-  tabClosed: {
+  tabStale: {
     key: "6",
     displayKey: "6",
+    label: "Stale tab",
+    group: "tabs",
+  },
+  tabClosed: {
+    key: "7",
+    displayKey: "7",
     label: "Closed tab",
     group: "tabs",
   },
   tabAll: {
-    key: "7",
-    displayKey: "7",
+    key: "8",
+    displayKey: "8",
     label: "All Jobs tab",
     group: "tabs",
   },
@@ -109,7 +115,7 @@ export const SHORTCUTS = {
     displayKey: "s",
     label: "Skip job",
     group: "actions",
-    scope: ["inbox", "selected", "ready", "backlog"],
+    scope: ["inbox", "selected", "ready", "backlog", "stale"],
   },
   moveToReady: {
     key: "r",
@@ -130,14 +136,21 @@ export const SHORTCUTS = {
     displayKey: "e",
     label: "Move to Selected",
     group: "actions",
-    scope: ["inbox", "backlog"],
+    scope: ["inbox", "backlog", "stale"],
   },
   moveToBacklog: {
     key: "b",
     displayKey: "b",
     label: "Move to Backlog",
     group: "actions",
-    scope: ["inbox", "selected"],
+    scope: ["inbox", "selected", "stale"],
+  },
+  moveToInbox: {
+    key: "i",
+    displayKey: "i",
+    label: "Move to Inbox",
+    group: "actions",
+    scope: ["stale"],
   },
   reopenJob: {
     key: "u",

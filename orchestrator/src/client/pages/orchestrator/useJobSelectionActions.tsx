@@ -16,8 +16,10 @@ import { JobActionProgressToast } from "./JobActionProgressToast";
 import {
   canMarkClosed,
   canMoveToBacklog,
+  canMoveToInbox,
   canMoveToReady,
   canMoveToSelected,
+  canMoveToStale,
   canReopen,
   canRescore,
   canSkip,
@@ -35,6 +37,8 @@ const jobActionLabel: Record<JobAction, string> = {
   move_to_selected: "Moving to Selected...",
   unselect: "Unselecting...",
   move_to_backlog: "Moving to Backlog...",
+  move_to_stale: "Moving to Stale...",
+  move_to_inbox: "Moving to Inbox...",
   mark_closed: "Closing applications...",
   reopen: "Reopening...",
 };
@@ -46,6 +50,8 @@ const jobActionSuccessLabel: Record<JobAction, string> = {
   move_to_selected: "jobs moved to Selected",
   unselect: "jobs unselected",
   move_to_backlog: "jobs moved to Backlog",
+  move_to_stale: "jobs moved to Stale",
+  move_to_inbox: "jobs moved to Inbox",
   mark_closed: "applications closed",
   reopen: "jobs reopened",
 };
@@ -89,6 +95,14 @@ export function useJobSelectionActions({
   );
   const canMoveToBacklogSelected = useMemo(
     () => canMoveToBacklog(selectedJobs),
+    [selectedJobs],
+  );
+  const canMoveToStaleSelected = useMemo(
+    () => canMoveToStale(selectedJobs),
+    [selectedJobs],
+  );
+  const canMoveToInboxSelected = useMemo(
+    () => canMoveToInbox(selectedJobs),
     [selectedJobs],
   );
   const canUnselectSelected = useMemo(
@@ -361,6 +375,8 @@ export function useJobSelectionActions({
     canRescoreSelected,
     canMoveToSelectedSelected,
     canMoveToBacklogSelected,
+    canMoveToStaleSelected,
+    canMoveToInboxSelected,
     canUnselectSelected,
     canMarkClosedSelected,
     canReopenSelected,

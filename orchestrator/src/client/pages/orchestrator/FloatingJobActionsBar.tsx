@@ -13,6 +13,8 @@ interface FloatingJobActionsBarProps {
   canRescoreSelected: boolean;
   canMoveToSelectedSelected: boolean;
   canMoveToBacklogSelected: boolean;
+  canMoveToStaleSelected: boolean;
+  canMoveToInboxSelected: boolean;
   canUnselectSelected: boolean;
   canMarkClosedSelected: boolean;
   canReopenSelected: boolean;
@@ -22,6 +24,8 @@ interface FloatingJobActionsBarProps {
   onRescoreSelected: () => void;
   onMoveToSelected: () => void;
   onMoveToBacklog: () => void;
+  onMoveToStale: () => void;
+  onMoveToInbox: () => void;
   onUnselect: () => void;
   onMarkClosed: (outcome: JobOutcome) => void;
   onReopen: () => void;
@@ -38,6 +42,8 @@ export const FloatingJobActionsBar: React.FC<FloatingJobActionsBarProps> = ({
   canRescoreSelected,
   canMoveToSelectedSelected,
   canMoveToBacklogSelected,
+  canMoveToStaleSelected,
+  canMoveToInboxSelected,
   canUnselectSelected,
   canMarkClosedSelected,
   canReopenSelected,
@@ -47,6 +53,8 @@ export const FloatingJobActionsBar: React.FC<FloatingJobActionsBarProps> = ({
   onRescoreSelected,
   onMoveToSelected,
   onMoveToBacklog,
+  onMoveToStale,
+  onMoveToInbox,
   onUnselect,
   onMarkClosed,
   onReopen,
@@ -270,6 +278,60 @@ export const FloatingJobActionsBar: React.FC<FloatingJobActionsBarProps> = ({
                 onClick={onRescoreSelected}
               >
                 Recalculate match
+              </Button>
+            )}
+            {canSkipSelected && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className={buttonClass}
+                disabled={jobActionInFlight}
+                onClick={onSkipSelected}
+              >
+                Skip
+              </Button>
+            )}
+          </>
+        );
+
+      case "stale":
+        return (
+          <>
+            {canMoveToInboxSelected && (
+              <Button
+                type="button"
+                size="sm"
+                variant="default"
+                className={buttonClass}
+                disabled={jobActionInFlight}
+                onClick={onMoveToInbox}
+              >
+                Move to Inbox
+              </Button>
+            )}
+            {canMoveToSelectedSelected && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className={buttonClass}
+                disabled={jobActionInFlight}
+                onClick={onMoveToSelected}
+              >
+                Move to Selected
+              </Button>
+            )}
+            {canMoveToBacklogSelected && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className={buttonClass}
+                disabled={jobActionInFlight}
+                onClick={onMoveToBacklog}
+              >
+                Move to Backlog
               </Button>
             )}
             {canSkipSelected && (

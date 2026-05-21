@@ -106,6 +106,7 @@ export const getFilterTab = (status: JobStatus): FilterTab => {
   if (status === "selected" || status === "processing") return "selected";
   if (status === "applied" || status === "in_progress") return "live";
   if (status === "backlog") return "backlog";
+  if (status === "stale") return "stale";
   if (status === "skipped" || status === "closed") return "closed";
   return "all";
 };

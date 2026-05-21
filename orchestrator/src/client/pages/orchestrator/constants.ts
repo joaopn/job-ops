@@ -60,6 +60,11 @@ export const statusTokens: Record<
     badge: "border-muted-foreground/20 bg-muted/30 text-muted-foreground",
     dot: "bg-muted-foreground",
   },
+  stale: {
+    label: "Stale",
+    badge: "border-stone-500/30 bg-stone-500/10 text-stone-200",
+    dot: "bg-stone-400",
+  },
   skipped: {
     label: "Skipped",
     badge: "border-rose-500/30 bg-rose-500/10 text-rose-200",
@@ -89,6 +94,7 @@ export type FilterTab =
   | "ready"
   | "live"
   | "backlog"
+  | "stale"
   | "closed"
   | "all";
 export type DateFilterPreset = "7" | "14" | "30" | "90" | "custom";
@@ -185,6 +191,7 @@ export const tabs: Array<{
   { id: "ready", label: "Ready", statuses: ["ready"] },
   { id: "live", label: "Live", statuses: ["applied", "in_progress"] },
   { id: "backlog", label: "Backlog", statuses: ["backlog"] },
+  { id: "stale", label: "Stale", statuses: ["stale"] },
   { id: "closed", label: "Closed", statuses: ["skipped", "closed"] },
   { id: "all", label: "All Jobs", statuses: [] },
 ];
@@ -195,6 +202,7 @@ export const emptyStateCopy: Record<FilterTab, string> = {
   ready: "Tailor selected jobs to generate PDFs.",
   live: "Applied jobs land here. Mark a Ready row as Applied to start tracking.",
   backlog: "Empty. Inbox rows that age past the threshold land here automatically; reposted listings get re-promoted.",
+  stale: "Empty. Set an age threshold above and click \"Move stale rows here\" to sweep aged rows from Inbox, Selected, and Backlog into this holding pen.",
   closed: "Empty. Skipped jobs and Live rows you Mark Closed land here with an outcome chip.",
   all: "No jobs in the system yet. Run the pipeline to get started.",
 };

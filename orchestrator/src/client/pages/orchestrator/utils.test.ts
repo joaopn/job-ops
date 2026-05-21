@@ -15,7 +15,7 @@ describe("orchestrator utils", () => {
     expect(getEnabledSources(createAppSettings())).toContain("golangjobs");
   });
 
-  it("groups jobs by 5g tab including the `discovered` alias", () => {
+  it("groups jobs by tab including the `discovered` alias and `stale` bucket", () => {
     const jobs = [
       createJob({ id: "ready", status: "ready", closedAt: null }),
       createJob({ id: "processing", status: "processing", closedAt: null }),
@@ -24,6 +24,7 @@ describe("orchestrator utils", () => {
       createJob({ id: "applied", status: "applied", closedAt: null }),
       createJob({ id: "in_progress", status: "in_progress", closedAt: null }),
       createJob({ id: "backlog", status: "backlog", closedAt: null }),
+      createJob({ id: "stale", status: "stale", closedAt: null }),
       createJob({ id: "skipped", status: "skipped", closedAt: null }),
       createJob({ id: "closed", status: "closed", closedAt: 1700000000 }),
     ];
@@ -34,8 +35,9 @@ describe("orchestrator utils", () => {
       ready: 1,
       live: 2, // applied + in_progress
       backlog: 1,
+      stale: 1,
       closed: 2, // skipped + closed
-      all: 9,
+      all: 10,
       discovered: 1, // legacy alias for inbox
     });
   });

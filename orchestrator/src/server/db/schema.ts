@@ -122,6 +122,7 @@ export const jobs = sqliteTable("jobs", {
       "applied",
       "in_progress",
       "backlog",
+      "stale",
       "skipped",
       "closed",
     ],

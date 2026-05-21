@@ -51,6 +51,8 @@ export const useFilteredJobs = (
       );
     } else if (activeTab === "backlog") {
       filtered = filtered.filter((job) => job.status === "backlog");
+    } else if (activeTab === "stale") {
+      filtered = filtered.filter((job) => job.status === "stale");
     } else if (activeTab === "closed") {
       filtered = filtered.filter(
         (job) => job.status === "skipped" || job.status === "closed",
@@ -69,7 +71,10 @@ export const useFilteredJobs = (
       const includeClosedJobs = dateFilter.dimensions.includes("closed");
       if (!includeClosedJobs) {
         filtered = filtered.filter(
-          (job) => job.status !== "skipped" && job.status !== "closed",
+          (job) =>
+            job.status !== "skipped" &&
+            job.status !== "closed" &&
+            job.status !== "stale",
         );
       }
     }

@@ -31,6 +31,8 @@ export function useSettings() {
       settings?.renderMarkdownInJobDescriptions?.value ?? true,
     inboxStaleThresholdDays:
       settings?.inboxStaleThresholdDays?.value ?? 7,
+    inboxAgeoutThresholdDays:
+      settings?.inboxAgeoutThresholdDays?.value ?? 14,
     refreshSettings,
   };
 }

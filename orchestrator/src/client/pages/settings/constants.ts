@@ -14,6 +14,7 @@ export const ALL_JOB_STATUSES: JobStatus[] = [
   "applied",
   "in_progress",
   "backlog",
+  "stale",
   "skipped",
   "closed",
 ];
@@ -27,6 +28,7 @@ export const STATUS_DESCRIPTIONS: Record<JobStatus, string> = {
   applied: "Application sent",
   in_progress: "Application moved beyond applied stage",
   backlog: "Aged-out of inbox; revivable on repost",
+  stale: "Aged-out rows awaiting deletion or revival",
   skipped: "User skipped without applying",
   closed: "Application concluded",
 };

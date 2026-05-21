@@ -150,6 +150,8 @@ export type JobAction =
   | "move_to_selected"
   | "unselect"
   | "move_to_backlog"
+  | "move_to_stale"
+  | "move_to_inbox"
   | "mark_closed"
   | "reopen";
 
@@ -161,6 +163,8 @@ export type JobActionRequest =
         | "move_to_selected"
         | "unselect"
         | "move_to_backlog"
+        | "move_to_stale"
+        | "move_to_inbox"
         | "reopen";
       jobIds: string[];
     }

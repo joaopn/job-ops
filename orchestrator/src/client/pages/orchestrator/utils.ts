@@ -213,6 +213,7 @@ export const getJobCounts = (
     ready: 0,
     live: 0,
     backlog: 0,
+    stale: 0,
     closed: 0,
     all: jobs.length,
     discovered: 0,
@@ -231,6 +232,7 @@ export const getJobCounts = (
       byTab.live += 1;
     }
     if (job.status === "backlog") byTab.backlog += 1;
+    if (job.status === "stale") byTab.stale += 1;
     if (job.status === "skipped" || job.status === "closed") byTab.closed += 1;
   }
 

@@ -69,6 +69,7 @@ const updateJobSchema = z.object({
       "applied",
       "in_progress",
       "backlog",
+      "stale",
       "skipped",
       "closed",
     ])
@@ -128,6 +129,14 @@ const jobActionRequestSchema = z.discriminatedUnion("action", [
     jobIds: z.array(z.string().min(1)).min(1).max(100),
   }),
   z.object({
+    action: z.literal("move_to_stale"),
+    jobIds: z.array(z.string().min(1)).min(1).max(100),
+  }),
+  z.object({
+    action: z.literal("move_to_inbox"),
+    jobIds: z.array(z.string().min(1)).min(1).max(100),
+  }),
+  z.object({
     action: z.literal("mark_closed"),
     jobIds: z.array(z.string().min(1)).min(1).max(100),
     options: z.object({
@@ -154,18 +163,29 @@ const SKIPPABLE_STATUSES: ReadonlySet<JobStatus> = new Set([
   "selected",
   "ready",
   "backlog",
+  "stale",
 ]);
 
 const SELECTABLE_FROM_STATUSES: ReadonlySet<JobStatus> = new Set([
   "discovered",
   "backlog",
   "ready",
+  "stale",
 ]);
 
 const BACKLOG_FROM_STATUSES: ReadonlySet<JobStatus> = new Set([
   "discovered",
   "selected",
+  "stale",
 ]);
+
+const STALE_FROM_STATUSES: ReadonlySet<JobStatus> = new Set([
+  "discovered",
+  "selected",
+  "backlog",
+]);
+
+const INBOX_FROM_STATUSES: ReadonlySet<JobStatus> = new Set(["stale"]);
 
 const REOPENABLE_STATUSES: ReadonlySet<JobStatus> = new Set([
   "skipped",
@@ -398,6 +418,54 @@ async function executeJobActionForJob(
       }
 
       const updated = await jobsRepo.updateJob(jobId, { status: "backlog" });
+      if (!updated) {
+        throw new AppError({
+          status: 404,
+          code: "NOT_FOUND",
+          message: "Job not found",
+        });
+      }
+
+      return { jobId, ok: true, job: updated };
+    }
+
+    if (action === "move_to_stale") {
+      if (!STALE_FROM_STATUSES.has(job.status)) {
+        throw badRequest(
+          `Job is not movable to Stale from status "${job.status}"`,
+          {
+            jobId,
+            status: job.status,
+            allowedStatuses: Array.from(STALE_FROM_STATUSES),
+          },
+        );
+      }
+
+      const updated = await jobsRepo.updateJob(jobId, { status: "stale" });
+      if (!updated) {
+        throw new AppError({
+          status: 404,
+          code: "NOT_FOUND",
+          message: "Job not found",
+        });
+      }
+
+      return { jobId, ok: true, job: updated };
+    }
+
+    if (action === "move_to_inbox") {
+      if (!INBOX_FROM_STATUSES.has(job.status)) {
+        throw badRequest(
+          `Job is not movable to Inbox from status "${job.status}"`,
+          {
+            jobId,
+            status: job.status,
+            allowedStatuses: Array.from(INBOX_FROM_STATUSES),
+          },
+        );
+      }
+
+      const updated = await jobsRepo.updateJob(jobId, { status: "discovered" });
       if (!updated) {
         throw new AppError({
           status: 404,
@@ -935,6 +1003,52 @@ jobsRouter.post("/actions/stream", async (req: Request, res: Response) => {
     if (!res.writableEnded && !res.destroyed) {
       res.end();
     }
+  }
+});
+
+const sweepStaleRequestSchema = z.object({
+  thresholdDays: z.number().int().min(1).max(365),
+});
+
+/**
+ * POST /api/jobs/sweep-stale - Bulk-move rows in {discovered, selected,
+ * backlog} older than `thresholdDays` (by `discovered_at`) into `stale`.
+ * Single transaction; returns the row count plus a per-source-status
+ * breakdown so the UI can render a meaningful toast.
+ */
+jobsRouter.post("/sweep-stale", async (req: Request, res: Response) => {
+  try {
+    const parsed = sweepStaleRequestSchema.parse(req.body);
+    const result = await jobsRepo.sweepStaleJobs(parsed.thresholdDays);
+
+    logger.info("Stale sweep completed", {
+      route: "POST /api/jobs/sweep-stale",
+      thresholdDays: parsed.thresholdDays,
+      moved: result.moved,
+      breakdown: result.breakdown,
+    });
+
+    ok(res, result);
+  } catch (error) {
+    const err =
+      error instanceof z.ZodError
+        ? badRequest("Invalid sweep-stale request", error.flatten())
+        : error instanceof AppError
+          ? error
+          : new AppError({
+              status: 500,
+              code: "INTERNAL_ERROR",
+              message: error instanceof Error ? error.message : "Unknown error",
+            });
+
+    logger.error("Stale sweep failed", {
+      route: "POST /api/jobs/sweep-stale",
+      status: err.status,
+      code: err.code,
+      details: err.details,
+    });
+
+    fail(res, err);
   }
 });
 

@@ -20,6 +20,7 @@ const statusLabels: Record<JobStatus, string> = {
   applied: "Applied",
   in_progress: "In Progress",
   backlog: "Backlog",
+  stale: "Stale",
   skipped: "Skipped",
   closed: "Closed",
 };
@@ -44,6 +45,7 @@ const statusStyles: Record<
     className: "text-cyan-400 border-cyan-500/30",
   },
   backlog: { variant: "outline", className: "text-muted-foreground" },
+  stale: { variant: "outline", className: "text-stone-300 border-stone-500/30" },
   skipped: { variant: "destructive" },
   closed: { variant: "outline", className: "text-muted-foreground" },
 };

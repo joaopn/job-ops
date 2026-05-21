@@ -238,6 +238,32 @@ export const useOrchestratorFilters = () => {
     [setSearchParams],
   );
 
+  const staleThresholdDays = useMemo((): number | null => {
+    const raw = searchParams.get("staleThreshold");
+    if (raw == null) return null;
+    const parsed = Number.parseInt(raw, 10);
+    if (!Number.isFinite(parsed)) return null;
+    if (parsed < 1 || parsed > 365) return null;
+    return parsed;
+  }, [searchParams]);
+
+  const setStaleThresholdDays = useCallback(
+    (value: number | null) => {
+      setSearchParams(
+        (prev) => {
+          if (value == null || value < 1 || value > 365) {
+            prev.delete("staleThreshold");
+          } else {
+            prev.set("staleThreshold", String(value));
+          }
+          return prev;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
   const closedSubFilter = useMemo((): ClosedSubFilter => {
     const raw = searchParams.get("closedFilter") ?? "all";
     return ALLOWED_CLOSED_SUB_FILTERS.includes(raw as ClosedSubFilter)
@@ -299,6 +325,7 @@ export const useOrchestratorFilters = () => {
         prev.delete("appliedRange");
         prev.delete("maxAge");
         prev.delete("closedFilter");
+        prev.delete("staleThreshold");
         return prev;
       },
       { replace: true },
@@ -321,6 +348,8 @@ export const useOrchestratorFilters = () => {
     setMaxAgeDays,
     closedSubFilter,
     setClosedSubFilter,
+    staleThresholdDays,
+    setStaleThresholdDays,
     resetFilters,
   };
 };

@@ -48,6 +48,7 @@ interface JobListPanelProps {
   emptyStateMessage?: string;
   staleThresholdDays?: number;
   closedFilterChips?: ReactNode;
+  staleControlBar?: ReactNode;
 }
 
 const ROW_ESTIMATE = 84;
@@ -70,6 +71,7 @@ export const JobListPanel = forwardRef<VirtualListHandle, JobListPanelProps>(
       emptyStateMessage,
       staleThresholdDays,
       closedFilterChips,
+      staleControlBar,
     },
     ref,
   ) => {
@@ -114,6 +116,7 @@ export const JobListPanel = forwardRef<VirtualListHandle, JobListPanelProps>(
       return (
         <div className="min-w-0 rounded-xl border border-border bg-card shadow-sm">
           {closedFilterChips}
+          {staleControlBar}
           <div className="flex flex-col items-center justify-center gap-4 px-6 py-12 text-center">
             <div className="text-base font-semibold">No jobs found</div>
             <p className="max-w-md text-sm text-muted-foreground">
@@ -150,6 +153,9 @@ export const JobListPanel = forwardRef<VirtualListHandle, JobListPanelProps>(
           <div className="shrink-0 border-b border-border/40">
             {closedFilterChips}
           </div>
+        ) : null}
+        {staleControlBar ? (
+          <div className="shrink-0">{staleControlBar}</div>
         ) : null}
         <div className="flex min-h-0 flex-1 flex-col">
           <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/40 px-4 py-2 opacity-100 transition-opacity sm:opacity-50 sm:hover:opacity-100">
