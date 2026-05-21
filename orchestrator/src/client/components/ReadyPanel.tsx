@@ -1,12 +1,3 @@
-/**
- * ReadyPanel - Optimized "shipping lane" view for Ready jobs.
- *
- * Designed for a single, fast, repeatable workflow: verify → download → apply → mark applied.
- * The PDF is the primary artifact, represented abstractly through an Application Kit summary.
- *
- * Now includes inline tailoring mode for editing and regenerating PDFs without switching tabs.
- */
-
 import type { Job } from "@shared/types.js";
 import {
   CheckCircle2,
@@ -32,7 +23,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   cn,
   copyTextToClipboard,
@@ -47,10 +37,16 @@ import {
 } from "../hooks/queries/useJobMutations";
 import { useActiveCv } from "../hooks/useActiveCv";
 import { useRescoreJob } from "../hooks/useRescoreJob";
+import { useResizablePanel } from "../hooks/useResizableListPanel";
 import { useSettings } from "../hooks/useSettings";
 import { FitAssessment } from ".";
 import { CollapsibleSection } from "./discovered-panel/CollapsibleSection";
-import { UnifiedPanel } from "./ghostwriter/UnifiedPanel";
+import { AtsCoverageBadge } from "./ghostwriter/AtsCoverageBadge";
+import { BriefDrawer } from "./ghostwriter/BriefDrawer";
+import { CoverLetterPane } from "./ghostwriter/CoverLetterPane";
+import { CvPane } from "./ghostwriter/CvPane";
+import { GhostwriterPanel } from "./ghostwriter/GhostwriterPanel";
+import { TailorColumnSplitter } from "./ghostwriter/TailorColumnSplitter";
 import { JobDescriptionMarkdown } from "./JobDescriptionMarkdown";
 import { JobDetailsEditDrawer } from "./JobDetailsEditDrawer";
 import { KbdHint } from "./KbdHint";
@@ -58,6 +54,23 @@ import { OpenJobListingButton } from "./OpenJobListingButton";
 import { ReadySummaryAccordion } from "./ReadySummaryAccordion";
 import { FitIndicator } from "./ScoreIndicator";
 import { buildReadyPanelGoogleDorks } from "./ready-panel-google-dorks";
+
+const TAILOR_PANEL_STORAGE_KEY = "jobops:tailorPanel:rightWidth";
+const TAILOR_PANEL_DEFAULT_WIDTH = 380;
+const TAILOR_PANEL_MIN_WIDTH = 320;
+const TAILOR_PANEL_MAX_WIDTH = 720;
+
+const READY_TAB_STORAGE_KEY = "jobops:ready-tab";
+type ReadyTab = "tailor-cv" | "tailor-cover" | "details";
+
+function readInitialReadyTab(): ReadyTab {
+  if (typeof window === "undefined") return "tailor-cv";
+  const raw = window.localStorage.getItem(READY_TAB_STORAGE_KEY);
+  if (raw === "tailor-cv" || raw === "tailor-cover" || raw === "details") {
+    return raw;
+  }
+  return "tailor-cv";
+}
 
 interface ReadyPanelProps {
   job: Job | null;
@@ -89,7 +102,24 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
   const markAsAppliedMutation = useMarkAsAppliedMutation();
   const skipJobMutation = useSkipJobMutation();
 
-  const { personName } = useActiveCv();
+  const { cv, personName } = useActiveCv();
+  const [activeTab, setActiveTab] = useState<ReadyTab>(readInitialReadyTab);
+  const [pendingCoverLetter, setPendingCoverLetter] = useState<string | null>(
+    null,
+  );
+
+  const {
+    width: rightColumnWidth,
+    isDragging,
+    startDrag,
+  } = useResizablePanel({
+    storageKey: TAILOR_PANEL_STORAGE_KEY,
+    defaultWidth: TAILOR_PANEL_DEFAULT_WIDTH,
+    minWidth: TAILOR_PANEL_MIN_WIDTH,
+    maxWidth: TAILOR_PANEL_MAX_WIDTH,
+    invertDelta: true,
+  });
+
   const openEditDetails = useCallback(() => {
     window.setTimeout(() => setIsEditDetailsOpen(true), 0);
   }, []);
@@ -102,6 +132,11 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
     setShowDescription(false);
     onTailoringDirtyChange?.(false);
   }, [job?.id, onTailoringDirtyChange]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(READY_TAB_STORAGE_KEY, activeTab);
+  }, [activeTab]);
 
   // Compute derived values
   const pdfHref = job
@@ -253,6 +288,29 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
     }
   }, [job]);
 
+  const handleUseAsCoverLetter = useCallback(
+    async (content: string) => {
+      if (!job) return;
+      // Optimistically reflect the pasted content; the cover-letter pane
+      // re-syncs from the server-confirmed job once `onJobUpdated` resolves.
+      setPendingCoverLetter(content);
+      try {
+        await api.updateJob(job.id, { coverLetterDraft: content });
+        toast.success("Saved as cover-letter draft");
+        await onJobUpdated();
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Failed to save cover letter";
+        toast.error(message);
+      } finally {
+        setPendingCoverLetter(null);
+      }
+    },
+    [job, onJobUpdated],
+  );
+
   // Empty state
   if (!job) {
     return (
@@ -270,6 +328,19 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
     );
   }
 
+  const coverLetterJob: Job =
+    pendingCoverLetter !== null
+      ? { ...job, coverLetterDraft: pendingCoverLetter }
+      : job;
+
+  const showRightColumn = activeTab !== "details";
+
+  const tailorGridStyle = showRightColumn
+    ? {
+        gridTemplateColumns: `minmax(0, 1fr) auto ${rightColumnWidth}px`,
+      }
+    : { gridTemplateColumns: "minmax(0, 1fr)" };
+
   return (
     <div className="flex flex-col h-full">
       <div className="pb-4 border-b border-border/40">
@@ -283,6 +354,10 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
           </div>
           <FitIndicator category={job.suitabilityCategory ?? null} />
         </div>
+      </div>
+
+      <div className="py-3">
+        <FitAssessment job={job} />
       </div>
 
       {/* ─────────────────────────────────────────────────────────────────────
@@ -329,72 +404,134 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 py-4">
-        <Tabs defaultValue="tailor" className="flex h-full min-h-0 flex-col">
-          <TabsList className="self-start">
-            <TabsTrigger value="tailor">Tailor</TabsTrigger>
-            <TabsTrigger value="details">Details</TabsTrigger>
-          </TabsList>
-          <TabsContent value="tailor" className="mt-3 flex min-h-0 flex-1">
-            <UnifiedPanel
-              job={job}
-              onJobUpdated={async () => {
-                await onJobUpdated();
-              }}
-            />
-          </TabsContent>
-          <TabsContent value="details" className="mt-3 space-y-3">
-            <FitAssessment job={job} />
+      <div className="flex-1 min-h-0 py-4 flex flex-col">
+        <div className="mb-3 flex flex-wrap items-center gap-1">
+          <TabTrigger
+            active={activeTab === "tailor-cv"}
+            onClick={() => setActiveTab("tailor-cv")}
+          >
+            Tailor CV
+          </TabTrigger>
+          <TabTrigger
+            active={activeTab === "tailor-cover"}
+            onClick={() => setActiveTab("tailor-cover")}
+          >
+            Tailor Cover Letter
+          </TabTrigger>
+          <TabTrigger
+            active={activeTab === "details"}
+            onClick={() => setActiveTab("details")}
+          >
+            Details
+          </TabTrigger>
+        </div>
 
-            <CollapsibleSection
-              isOpen={showDescription}
-              onToggle={() => setShowDescription((prev) => !prev)}
-              label={`${showDescription ? "Hide" : "View"} Full Job Description`}
-            >
-              <div className="rounded-xl border border-border/40 bg-muted/5 p-4 mt-2 max-h-[400px] overflow-y-auto shadow-inner">
-                {renderMarkdownInJobDescriptions ? (
-                  <JobDescriptionMarkdown description={description} />
-                ) : (
-                  <p className="text-xs text-muted-foreground/90 whitespace-pre-wrap leading-relaxed">
-                    {description}
-                  </p>
-                )}
-              </div>
-            </CollapsibleSection>
-
-            {googleDorks.length > 0 ? (
-              <ReadySummaryAccordion
-                icon={ExternalLink}
-                summary={
-                  <>
-                    {googleDorks.length}{" "}
-                    {googleDorks.length === 1 ? "search link" : "search links"}
-                  </>
-                }
-                value="search-dorks"
-              >
-                <div className="text-muted-foreground flex flex-col items-start gap-2">
-                  {googleDorks.map((dork) => (
-                    <a
-                      key={dork.query}
-                      href={dork.href}
-                      rel="noopener noreferrer"
-                      target="_blank"
-                      title={dork.query}
-                      className={cn(
-                        buttonVariants({ variant: "link", size: "sm" }),
-                        "justify-start w-fit h-fit gap-1 px-0 wrap-break-word",
-                      )}
-                    >
-                      {dork.label}
-                      <ExternalLink className="ml-1" />
-                    </a>
-                  ))}
+        <div
+          className="grid flex-1 min-h-0 gap-0"
+          style={tailorGridStyle}
+        >
+          <div className="flex min-h-0 min-w-0 flex-col">
+            {activeTab === "tailor-cv" ? (
+              <div className="flex h-full min-h-0 flex-col gap-3">
+                <div className="min-h-[420px] flex-1">
+                  <CvPane job={job} onJobUpdated={onJobUpdated} />
                 </div>
-              </ReadySummaryAccordion>
+                <div className="flex flex-wrap items-center gap-2">
+                  <AtsCoverageBadge job={job} />
+                </div>
+                <BriefDrawer
+                  jobId={job.id}
+                  cvId={cv?.id ?? null}
+                  brief={cv?.personalBrief ?? ""}
+                  onJobUpdated={onJobUpdated}
+                />
+              </div>
             ) : null}
-          </TabsContent>
-        </Tabs>
+
+            {activeTab === "tailor-cover" ? (
+              <div className="flex h-full min-h-[420px] flex-col">
+                <CoverLetterPane
+                  job={coverLetterJob}
+                  onJobUpdated={onJobUpdated}
+                />
+              </div>
+            ) : null}
+
+            {activeTab === "details" ? (
+              <div className="space-y-3">
+                <CollapsibleSection
+                  isOpen={showDescription}
+                  onToggle={() => setShowDescription((prev) => !prev)}
+                  label={`${showDescription ? "Hide" : "View"} Full Job Description`}
+                >
+                  <div className="rounded-xl border border-border/40 bg-muted/5 p-4 mt-2 max-h-[400px] overflow-y-auto shadow-inner">
+                    {renderMarkdownInJobDescriptions ? (
+                      <JobDescriptionMarkdown description={description} />
+                    ) : (
+                      <p className="text-xs text-muted-foreground/90 whitespace-pre-wrap leading-relaxed">
+                        {description}
+                      </p>
+                    )}
+                  </div>
+                </CollapsibleSection>
+
+                {googleDorks.length > 0 ? (
+                  <ReadySummaryAccordion
+                    icon={ExternalLink}
+                    summary={
+                      <>
+                        {googleDorks.length}{" "}
+                        {googleDorks.length === 1
+                          ? "search link"
+                          : "search links"}
+                      </>
+                    }
+                    value="search-dorks"
+                  >
+                    <div className="text-muted-foreground flex flex-col items-start gap-2">
+                      {googleDorks.map((dork) => (
+                        <a
+                          key={dork.query}
+                          href={dork.href}
+                          rel="noopener noreferrer"
+                          target="_blank"
+                          title={dork.query}
+                          className={cn(
+                            buttonVariants({ variant: "link", size: "sm" }),
+                            "justify-start w-fit h-fit gap-1 px-0 wrap-break-word",
+                          )}
+                        >
+                          {dork.label}
+                          <ExternalLink className="ml-1" />
+                        </a>
+                      ))}
+                    </div>
+                  </ReadySummaryAccordion>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+
+          {showRightColumn ? (
+            <TailorColumnSplitter
+              onDrag={startDrag}
+              isDragging={isDragging}
+              width={rightColumnWidth}
+              minWidth={TAILOR_PANEL_MIN_WIDTH}
+              maxWidth={TAILOR_PANEL_MAX_WIDTH}
+            />
+          ) : null}
+
+          {showRightColumn ? (
+            <div className="flex min-h-0 min-w-0 flex-col rounded-md border border-border/60 bg-background p-3">
+              <GhostwriterPanel
+                job={job}
+                onJobUpdated={onJobUpdated}
+                onUseAsCoverLetter={handleUseAsCoverLetter}
+              />
+            </div>
+          ) : null}
+        </div>
       </div>
 
       {/* ─────────────────────────────────────────────────────────────────────
@@ -513,3 +650,22 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
     </div>
   );
 };
+
+const TabTrigger: React.FC<{
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}> = ({ active, onClick, children }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={cn(
+      "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+      active
+        ? "bg-muted text-foreground"
+        : "text-muted-foreground hover:bg-muted/40",
+    )}
+  >
+    {children}
+  </button>
+);

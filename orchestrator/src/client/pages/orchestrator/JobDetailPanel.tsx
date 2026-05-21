@@ -384,6 +384,8 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
         <FitIndicator category={selectedJob.suitabilityCategory ?? null} />
       </div>
 
+      <FitAssessment job={selectedJob} />
+
       <div className="flex flex-wrap items-center gap-1.5">
         <Button
           asChild
@@ -604,8 +606,6 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
         </TabsList>
 
         <TabsContent value="overview" className="space-y-3 pt-2">
-          <FitAssessment job={selectedJob} />
-
           <div className="grid gap-2 text-xs sm:grid-cols-2">
             <div>
               <div className="text-[10px] text-muted-foreground/70 uppercase tracking-wide">

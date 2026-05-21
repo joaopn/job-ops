@@ -36,7 +36,7 @@ afterEach(async () => {
   // notify fires it dispatches a React reducer action, which schedules a
   // follow-up microtask/timer; a few tick+microtask cycles drain the chain
   // while jsdom is still alive.
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 5; i++) {
     await new Promise((resolve) => setTimeout(resolve, 0));
     await Promise.resolve();
   }

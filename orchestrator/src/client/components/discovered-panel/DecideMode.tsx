@@ -87,6 +87,8 @@ export const DecideMode: React.FC<DecideModeProps> = ({
           </div>
         </div>
 
+        <FitAssessment job={job} />
+
         <div className="flex flex-col gap-2.5 pt-2 sm:flex-row">
           {jobLink ? (
             <OpenJobListingButton
@@ -172,8 +174,6 @@ export const DecideMode: React.FC<DecideModeProps> = ({
       <Separator className="opacity-40" />
 
       <div className="flex-1 py-6 space-y-6 overflow-y-auto">
-        <FitAssessment job={job} />
-
         <CollapsibleSection
           isOpen={showDescription}
           onToggle={() => setShowDescription((prev) => !prev)}

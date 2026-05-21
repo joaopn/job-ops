@@ -76,6 +76,7 @@ beforeEach(() => {
 describe("CvPane", () => {
   it("renders the Fields editor with one row per CvField", () => {
     renderWithQueryClient(<CvPane job={baseJob} onJobUpdated={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /^fields$/i }));
     expect(screen.getByText("basics.name")).toBeInTheDocument();
     expect(screen.getByText("experience.0.bullet.0")).toBeInTheDocument();
     expect(screen.getByText("experience.0.bullet.1")).toBeInTheDocument();
@@ -99,6 +100,7 @@ describe("CvPane", () => {
     renderWithQueryClient(
       <CvPane job={baseJob} onJobUpdated={onJobUpdated} />,
     );
+    fireEvent.click(screen.getByRole("button", { name: /^fields$/i }));
 
     const textareas = screen.getAllByRole("textbox");
     const bulletZero = textareas.find(
@@ -124,6 +126,7 @@ describe("CvPane", () => {
   it("toggling lock writes cvFieldLocks on save without touching overrides", async () => {
     apiMocks.updateJob.mockResolvedValue({ ...baseJob });
     renderWithQueryClient(<CvPane job={baseJob} onJobUpdated={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /^fields$/i }));
 
     // Find the lock button next to basics.name. The lock title text varies
     // by state — the unlocked state's title starts with "Lock —".

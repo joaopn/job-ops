@@ -62,7 +62,7 @@ export const CvEditTab: React.FC<Props> = ({
   const [locks, setLocks] = useState<Set<string>>(
     () => new Set(job.cvFieldLocks ?? []),
   );
-  const [subTab, setSubTab] = useState<SubTab>("fields");
+  const [subTab, setSubTab] = useState<SubTab>("raw");
   const rawHandleRef = useRef<CvRawEditorHandle | null>(null);
 
   useEffect(() => {
