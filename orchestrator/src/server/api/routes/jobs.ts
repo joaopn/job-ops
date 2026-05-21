@@ -20,6 +20,7 @@ import * as settingsRepo from "@server/repositories/settings";
 import { getActivePersonalBrief } from "@server/services/brief";
 import { generateCoverLetter } from "@server/services/cover-letter/generate";
 import { renderCoverLetterPdf } from "@server/services/cover-letter/render";
+import { renderCvPdf } from "@server/services/cv/render-cv";
 import { scoreJobSuitability } from "@server/services/scorer";
 import { getEffectiveSettings } from "@server/services/settings";
 import { asyncPool } from "@server/utils/async-pool";
@@ -1465,6 +1466,26 @@ jobsRouter.post(
           res,
           badRequest(result.error ?? "Cover-letter render failed"),
         );
+      }
+      ok(res, result.job);
+    } catch (error) {
+      fail(res, toAppError(error));
+    }
+  },
+);
+
+/**
+ * POST /api/jobs/:id/render-cv - Render the CV PDF for this job by
+ * substituting `tailoredFields` (per-field override map) into the
+ * pinned CV doc's templated tex. No LLM call — just template + tectonic.
+ */
+jobsRouter.post(
+  "/:id/render-cv",
+  async (req: Request, res: Response) => {
+    try {
+      const result = await renderCvPdf({ jobId: req.params.id });
+      if (!result.success) {
+        return fail(res, badRequest(result.error ?? "CV render failed"));
       }
       ok(res, result.job);
     } catch (error) {

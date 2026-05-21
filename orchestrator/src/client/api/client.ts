@@ -994,6 +994,12 @@ export async function renderCoverLetterPdf(id: string): Promise<Job> {
   });
 }
 
+export async function renderCvPdf(id: string): Promise<Job> {
+  return fetchApi<Job>(`/jobs/${id}/render-cv`, {
+    method: "POST",
+  });
+}
+
 export type AcceptEditResponse =
   | { kind: "cv-edit"; message: JobChatMessage; job: Job }
   | { kind: "brief-edit"; message: JobChatMessage; cv: CvDocument };

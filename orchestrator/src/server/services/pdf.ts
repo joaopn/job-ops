@@ -22,6 +22,13 @@ export interface GeneratePdfArgs {
    * source CV.
    */
   overrides?: CvFieldOverrides;
+  /**
+   * When true, skip the "overrides produced no change" safeguard. Manual
+   * render-on-demand sets this so a user clicking Render with no edits (or
+   * after resetting all overrides) can still recompile to a baseline PDF.
+   * The tailoring path leaves this false so an LLM no-op patch still fails.
+   */
+  allowBaselineRender?: boolean;
 }
 
 export interface PdfResult {
@@ -92,7 +99,7 @@ export async function generatePdf(args: GeneratePdfArgs): Promise<PdfResult> {
   // missing from the CV's extracted fields OR every tailored value was
   // identical to the original. Shipping a baseline PDF as a "tailored" one
   // is forbidden.
-  if (overrideCount > 0 && identicalToBaseline) {
+  if (overrideCount > 0 && identicalToBaseline && !args.allowBaselineRender) {
     const overrideIds = Object.keys(overrides);
     const knownFieldIds = document.fields.slice(0, 5).map((f) => f.id);
     logger.error(

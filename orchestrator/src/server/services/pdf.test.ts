@@ -118,6 +118,24 @@ describe("generatePdf", () => {
     expect(result.error).toMatch(/no actual change to the CV/);
   });
 
+  it("renders successfully when overrides are no-op but allowBaselineRender is true", async () => {
+    vi.mocked(cvRepo.getCvDocumentById).mockResolvedValueOnce({
+      ...FAKE_CV,
+      templatedTex: "\\documentclass{article}\n\\name{«basics.name»}\n",
+      defaultFieldValues: { "basics.name": "Ada Lovelace" },
+    });
+
+    const result = await generatePdf({
+      jobId: "job-44b",
+      cvDocumentId: "cv-1",
+      overrides: { "ghost.field": "ignored" },
+      allowBaselineRender: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.pdfPath).toBe(join(dataDir, "pdfs", "resume_job-44b.pdf"));
+  });
+
   it("hard-fails when the CV has no templatedTex (legacy upload)", async () => {
     vi.mocked(cvRepo.getCvDocumentById).mockResolvedValueOnce({
       ...FAKE_CV,
