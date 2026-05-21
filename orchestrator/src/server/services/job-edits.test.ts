@@ -175,6 +175,33 @@ describe("acceptEditForJob: cv-edit", () => {
     );
   });
 
+  it("rejects with conflict when the edit targets a locked field", async () => {
+    const proposed: JobChatProposedCvEdit = {
+      kind: "cv-edit",
+      rationale: "Tighten",
+      edits: [
+        {
+          fieldId: "basics.name",
+          from: "Alice",
+          to: "Alice (PhD)",
+        },
+      ],
+    };
+    mocks.jobsRepo.getJobById.mockResolvedValueOnce({
+      ...baseJob,
+      cvFieldLocks: ["basics.name"],
+    });
+    mocks.jobChatRepo.getMessageById.mockResolvedValue(makeMessage(proposed));
+
+    await expect(
+      acceptEditForJob({ jobId: "job-1", messageId: "msg-1" }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+
+    expect(mocks.jobsRepo.updateJob).not.toHaveBeenCalled();
+    expect(mocks.pdf.generatePdf).not.toHaveBeenCalled();
+    expect(mocks.jobChatRepo.setMessageEditStatus).not.toHaveBeenCalled();
+  });
+
   it("rolls back tailoredFields when PDF render fails", async () => {
     const proposed: JobChatProposedCvEdit = {
       kind: "cv-edit",

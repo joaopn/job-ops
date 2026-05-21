@@ -378,11 +378,14 @@ export async function summarizeJob(
         };
       }
 
+      const lockedFieldIds = job.cvFieldLocks ?? [];
+      const previousOverrides = job.tailoredFields ?? {};
       const adjust = await llmAdjustContent({
         personalBrief: cv.personalBrief,
         jobDescription: job.jobDescription ?? "",
         currentFields: cv.fields,
-        currentOverrides: {},
+        currentOverrides: previousOverrides,
+        lockedFieldIds,
         jobId: job.id,
         jobTitle: job.title,
         jobEmployer: job.employer,
@@ -402,7 +405,14 @@ export async function summarizeJob(
       }
 
       const fieldIds = new Set(cv.fields.map((field) => field.id));
+      const lockedSet = new Set(lockedFieldIds);
       const overrides: Record<string, string> = {};
+      // Preserve any prior overrides on locked fields — re-tailoring must
+      // not erase a user's protected edits even though the LLM was told
+      // not to touch them.
+      for (const [fid, val] of Object.entries(previousOverrides)) {
+        if (lockedSet.has(fid) && fieldIds.has(fid)) overrides[fid] = val;
+      }
       for (const patch of adjust.patches) {
         if (fieldIds.has(patch.fieldId)) {
           overrides[patch.fieldId] = patch.newValue;

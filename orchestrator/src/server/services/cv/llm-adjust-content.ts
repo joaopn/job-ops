@@ -61,6 +61,12 @@ export interface AdjustContentArgs {
   jobDescription: string;
   currentFields: CvField[];
   currentOverrides: CvFieldOverrides;
+  /**
+   * Field ids the user has locked against LLM tailoring. The model is told
+   * these are read-only context (still rendered as evidence for ATS matches),
+   * and the server drops any patches that target a locked id post-LLM.
+   */
+  lockedFieldIds?: string[];
   /** Optional — used as the LLM-queue subject line and for diagnostic logging. */
   jobId?: string;
   jobTitle?: string;
@@ -97,11 +103,13 @@ const FORBIDDEN_PATTERNS: Array<{ pattern: RegExp; description: string }> = [
 function buildFieldsView(
   fields: CvField[],
   overrides: CvFieldOverrides,
-): Array<{ id: string; role: string; value: string }> {
+  lockedFieldIds: Set<string>,
+): Array<{ id: string; role: string; value: string; locked: boolean }> {
   return fields.map((field) => ({
     id: field.id,
     role: field.role,
     value: overrides[field.id] ?? field.value,
+    locked: lockedFieldIds.has(field.id),
   }));
 }
 
@@ -113,7 +121,20 @@ export async function llmAdjustContent(
     getWritingStyle(),
   ]);
 
-  const fieldsView = buildFieldsView(args.currentFields, args.currentOverrides);
+  const lockedFieldIds = new Set(args.lockedFieldIds ?? []);
+  // The LLM sees locked fields with their user-edited override (so it can
+  // use those values as ATS-matching evidence), but unlocked fields show
+  // source defaults — those are the spans the LLM is allowed to rewrite,
+  // and showing prior tailored values would anchor it on its own output.
+  const visibleOverrides: CvFieldOverrides = {};
+  for (const [fid, val] of Object.entries(args.currentOverrides)) {
+    if (lockedFieldIds.has(fid)) visibleOverrides[fid] = val;
+  }
+  const fieldsView = buildFieldsView(
+    args.currentFields,
+    visibleOverrides,
+    lockedFieldIds,
+  );
 
   const prompt = await loadPrompt("cv-adjust", {
     personalBrief: args.personalBrief || "(empty — no candidate brief on file)",
@@ -178,6 +199,7 @@ export async function llmAdjustContent(
   const fieldIds = new Set(args.currentFields.map((field) => field.id));
   const patches: AdjustFieldPatch[] = [];
   const droppedUnknownFieldIds: string[] = [];
+  const droppedLockedFieldIds: string[] = [];
   let droppedMalformed = 0;
   let droppedForbidden = 0;
   let droppedNoChange = 0;
@@ -195,6 +217,10 @@ export async function llmAdjustContent(
     }
     if (!fieldIds.has(fieldId)) {
       droppedUnknownFieldIds.push(fieldId);
+      continue;
+    }
+    if (lockedFieldIds.has(fieldId)) {
+      droppedLockedFieldIds.push(fieldId);
       continue;
     }
     if (typeof newValue !== "string") {
@@ -219,6 +245,9 @@ export async function llmAdjustContent(
     appliedCount: patches.length,
     droppedUnknownFieldIds: droppedUnknownFieldIds.slice(0, 10),
     droppedUnknownCount: droppedUnknownFieldIds.length,
+    droppedLockedFieldIds: droppedLockedFieldIds.slice(0, 10),
+    droppedLockedCount: droppedLockedFieldIds.length,
+    lockedFieldCount: lockedFieldIds.size,
     droppedMalformed,
     droppedForbidden,
     droppedNoChange,
@@ -237,6 +266,14 @@ export async function llmAdjustContent(
     if (droppedUnknownFieldIds.length > 0) {
       reasons.push(
         `${droppedUnknownFieldIds.length} change(s) targeted unknown CV fields (e.g. ${droppedUnknownFieldIds
+          .slice(0, 3)
+          .map((id) => `"${id}"`)
+          .join(", ")})`,
+      );
+    }
+    if (droppedLockedFieldIds.length > 0) {
+      reasons.push(
+        `${droppedLockedFieldIds.length} change(s) targeted locked CV fields (e.g. ${droppedLockedFieldIds
           .slice(0, 3)
           .map((id) => `"${id}"`)
           .join(", ")})`,

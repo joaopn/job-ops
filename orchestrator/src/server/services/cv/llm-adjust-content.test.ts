@@ -110,11 +110,13 @@ describe("llmAdjustContent", () => {
     );
   });
 
-  it("uses overrides as the effective field value in the prompt", async () => {
+  it("hides unlocked overrides from the LLM (fresh tailor anchors on source defaults)", async () => {
     callJsonMock.mockResolvedValue({
       success: true,
       data: {
-        patchesJson: JSON.stringify([]),
+        patchesJson: JSON.stringify([
+          { fieldId: "basics.name", newValue: "Updated" },
+        ]),
         matched: [],
         skipped: [],
       },
@@ -130,8 +132,8 @@ describe("llmAdjustContent", () => {
     const calls = (loadPrompt as unknown as ReturnType<typeof vi.fn>).mock
       .calls;
     const call = calls[calls.length - 1][1];
-    expect(call.fieldsJson).toContain("Ada L.");
-    expect(call.fieldsJson).not.toContain("Ada Lovelace");
+    expect(call.fieldsJson).toContain("Ada Lovelace");
+    expect(call.fieldsJson).not.toContain("Ada L.");
   });
 
   it("substitutes placeholders for empty brief and JD", async () => {
@@ -227,6 +229,99 @@ describe("llmAdjustContent", () => {
       matched: ["python", "rust"],
       skipped: [],
     });
+  });
+
+  it("marks locked fields in the prompt and drops LLM patches targeting them", async () => {
+    callJsonMock.mockResolvedValue({
+      success: true,
+      data: {
+        patchesJson: JSON.stringify([
+          { fieldId: "basics.name", newValue: "Locked override attempt" },
+          {
+            fieldId: "experience.0.bullet.0",
+            newValue: "Built algorithms in Python.",
+          },
+        ]),
+        matched: ["python"],
+        skipped: [],
+      },
+    });
+
+    const result = await llmAdjustContent({
+      personalBrief: "x",
+      jobDescription: "y",
+      currentFields: SAMPLE_FIELDS,
+      currentOverrides: {},
+      lockedFieldIds: ["basics.name"],
+    });
+
+    expect(result).toMatchObject({
+      success: true,
+      patches: [
+        {
+          fieldId: "experience.0.bullet.0",
+          newValue: "Built algorithms in Python.",
+        },
+      ],
+    });
+
+    const lastCall = vi.mocked(loadPrompt).mock.calls.at(-1);
+    const fieldsJson = (
+      lastCall?.[1] as { fieldsJson?: string } | undefined
+    )?.fieldsJson;
+    expect(fieldsJson).toBeDefined();
+    const parsed = JSON.parse(fieldsJson ?? "[]") as Array<{
+      id: string;
+      locked: boolean;
+    }>;
+    const name = parsed.find((entry) => entry.id === "basics.name");
+    const bullet = parsed.find(
+      (entry) => entry.id === "experience.0.bullet.0",
+    );
+    expect(name?.locked).toBe(true);
+    expect(bullet?.locked).toBe(false);
+  });
+
+  it("locked-field current value uses the override; unlocked field shows source default", async () => {
+    callJsonMock.mockResolvedValue({
+      success: true,
+      data: {
+        patchesJson: JSON.stringify([
+          {
+            fieldId: "experience.0.bullet.0",
+            newValue: "rewrite from defaults",
+          },
+        ]),
+        matched: [],
+        skipped: [],
+      },
+    });
+
+    await llmAdjustContent({
+      personalBrief: "x",
+      jobDescription: "y",
+      currentFields: SAMPLE_FIELDS,
+      currentOverrides: {
+        "basics.name": "Ada L. Byron",
+        "experience.0.bullet.0": "Stale prior tailoring",
+      },
+      lockedFieldIds: ["basics.name"],
+    });
+
+    const lastCall = vi.mocked(loadPrompt).mock.calls.at(-1);
+    const fieldsJson = (
+      lastCall?.[1] as { fieldsJson?: string } | undefined
+    )?.fieldsJson;
+    const parsed = JSON.parse(fieldsJson ?? "[]") as Array<{
+      id: string;
+      value: string;
+    }>;
+    expect(parsed.find((e) => e.id === "basics.name")?.value).toBe(
+      "Ada L. Byron",
+    );
+    expect(parsed.find((e) => e.id === "experience.0.bullet.0")?.value).toBe(
+      "Wrote algorithms.",
+    );
   });
 
   it("returns failure with cap details when serialized overrides exceed maxTailoredContentChars", async () => {

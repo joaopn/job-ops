@@ -15,8 +15,10 @@ variables:
   - name: fieldsJson
     description: |
       JSON-stringified array of the CV's fields. Each entry is
-      `{ id, role, value }` where `value` is the field's current effective
-      text (override-or-original), in verbatim LaTeX.
+      `{ id, role, value, locked }` where `value` is the field's current
+      effective text in verbatim LaTeX, and `locked` is `true` when the
+      user has frozen this field against LLM rewriting (use it as evidence
+      only — never propose a patch for it).
   - name: outputLanguage
   - name: tone
   - name: formality
@@ -49,6 +51,11 @@ system: |
     4. Where evidence is missing, drop the keyword.
     5. Do not invent fields, do not change a field's role, do not patch a
        field whose value the brief cannot support.
+    6. NEVER emit a patch whose `fieldId` corresponds to a field marked
+       `locked: true`. Locked fields are user-frozen — read them for
+       evidence and ATS matching, but treat their values as immutable.
+       The server drops any patch that targets a locked id, so a violation
+       is wasted output.
 
   Honesty rules — NEVER violate:
     - Never invent an employer, title, date, technology, certification,

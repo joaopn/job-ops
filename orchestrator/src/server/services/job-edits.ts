@@ -58,6 +58,15 @@ export async function acceptEditForJob(input: {
       throw notFound("Pinned CV document not found");
     }
 
+    const lockedSet = new Set(job.cvFieldLocks ?? []);
+    const blockedOps = proposed.edits.filter((op) => lockedSet.has(op.fieldId));
+    if (blockedOps.length > 0) {
+      const ids = blockedOps.map((op) => op.fieldId).join(", ");
+      throw conflict(
+        `Cannot accept edit on locked field(s): ${ids}. Unlock from the Edit tab first.`,
+      );
+    }
+
     const previousOverrides: CvFieldOverrides = job.tailoredFields ?? {};
     const nextOverrides = applyCvEditOps(
       cv.fields,

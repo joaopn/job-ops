@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { AtsCoverageBadge } from "./AtsCoverageBadge";
 import { BriefDrawer } from "./BriefDrawer";
 import { CoverLetterPane } from "./CoverLetterPane";
-import { CvPdfPane } from "./CvPdfPane";
+import { CvPane } from "./CvPane";
 import { GhostwriterPanel } from "./GhostwriterPanel";
 
 type UnifiedPanelProps = {
@@ -64,7 +64,7 @@ export const UnifiedPanel: React.FC<UnifiedPanelProps> = ({
   return (
     <div className="flex h-full min-h-0 w-full flex-col gap-3">
       <div className="grid min-h-[420px] flex-1 grid-cols-1 gap-3 lg:grid-cols-2">
-        <CvPdfPane job={job} />
+        <CvPane job={job} onJobUpdated={onJobUpdated} />
         <CoverLetterPane job={coverLetterJob} onJobUpdated={onJobUpdated} />
       </div>
 
