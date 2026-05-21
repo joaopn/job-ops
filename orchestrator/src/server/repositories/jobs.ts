@@ -418,10 +418,10 @@ async function tryInsertJob(input: CreateJobInput): Promise<Job | null> {
  * On URL collision in the bulk path, if the incoming row carries a newer
  * `datePosted` than the existing row, treat it as a repost: bump
  * `repostCount`, set `repostedAt = now`, advance `datePosted`, and re-promote
- * the row to `discovered` if it had aged into `backlog`. All other statuses
- * keep their position so user-driven state (`selected`, `stale`, `skipped`,
- * `closed`, etc.) is sacred — stale rows in particular were deliberately
- * shelved by the user and shouldn't be auto-rescued by a churning ad.
+ * the row to `discovered` if it had been shelved (either auto-aged into
+ * `backlog` or manually swept into `stale`). Other user-driven statuses
+ * (`selected`, `skipped`, `closed`, etc.) keep their position — those reflect
+ * active work or a final decision and shouldn't be undone by a repost.
  */
 export async function createJobs(input: CreateJobInput): Promise<Job>;
 export async function createJobs(
@@ -487,7 +487,9 @@ export async function createJobs(
       if (isForwardShift) {
         const now = new Date().toISOString();
         const nextStatus =
-          existing.status === "backlog" ? "discovered" : existing.status;
+          existing.status === "backlog" || existing.status === "stale"
+            ? "discovered"
+            : existing.status;
         await db
           .update(jobs)
           .set({
