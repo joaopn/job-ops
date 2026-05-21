@@ -75,6 +75,9 @@ const DEFAULT_FORM_VALUES: UpdateSettingsInput = {
   maxTailoredContentChars: null,
   maxCoverLetterChars: null,
   maxFetchedJobHtmlChars: null,
+  manualJobFetchTimeoutMs: null,
+  manualJobFetchMinExtractedChars: null,
+  manualJobFetchBrowserSettleMs: null,
   maxExtractionPromptChars: null,
   maxCvUploadBytes: null,
   maxCoverLetterUploadBytes: null,
@@ -245,6 +248,9 @@ const SECTION_FIELD_MAP: Record<
     "enableJobScoring",
     "inboxStaleThresholdDays",
     "inboxAgeoutThresholdDays",
+    "manualJobFetchTimeoutMs",
+    "manualJobFetchMinExtractedChars",
+    "manualJobFetchBrowserSettleMs",
     "maxCvUploadBytes",
     "maxCoverLetterUploadBytes",
     "maxExpandedLatexBytes",
@@ -301,6 +307,9 @@ const NULL_SETTINGS_PAYLOAD: UpdateSettingsInput = {
   maxTailoredContentChars: null,
   maxCoverLetterChars: null,
   maxFetchedJobHtmlChars: null,
+  manualJobFetchTimeoutMs: null,
+  manualJobFetchMinExtractedChars: null,
+  manualJobFetchBrowserSettleMs: null,
   maxExtractionPromptChars: null,
   maxCvUploadBytes: null,
   maxCoverLetterUploadBytes: null,
@@ -343,6 +352,9 @@ const mapSettingsToForm = (data: AppSettings): UpdateSettingsInput => ({
   maxTailoredContentChars: data.maxTailoredContentChars.override,
   maxCoverLetterChars: data.maxCoverLetterChars.override,
   maxFetchedJobHtmlChars: data.maxFetchedJobHtmlChars.override,
+  manualJobFetchTimeoutMs: data.manualJobFetchTimeoutMs.override,
+  manualJobFetchMinExtractedChars: data.manualJobFetchMinExtractedChars.override,
+  manualJobFetchBrowserSettleMs: data.manualJobFetchBrowserSettleMs.override,
   maxExtractionPromptChars: data.maxExtractionPromptChars.override,
   maxCvUploadBytes: data.maxCvUploadBytes.override,
   maxCoverLetterUploadBytes: data.maxCoverLetterUploadBytes.override,
@@ -458,6 +470,18 @@ const getDerivedSettings = (settings: AppSettings | null) => {
       inboxAgeoutThresholdDays: {
         effective: settings?.inboxAgeoutThresholdDays?.value ?? 14,
         default: settings?.inboxAgeoutThresholdDays?.default ?? 14,
+      },
+      manualJobFetchTimeoutMs: {
+        effective: settings?.manualJobFetchTimeoutMs?.value ?? 15_000,
+        default: settings?.manualJobFetchTimeoutMs?.default ?? 15_000,
+      },
+      manualJobFetchMinExtractedChars: {
+        effective: settings?.manualJobFetchMinExtractedChars?.value ?? 200,
+        default: settings?.manualJobFetchMinExtractedChars?.default ?? 200,
+      },
+      manualJobFetchBrowserSettleMs: {
+        effective: settings?.manualJobFetchBrowserSettleMs?.value ?? 5_000,
+        default: settings?.manualJobFetchBrowserSettleMs?.default ?? 5_000,
       },
       maxCvUploadBytes: {
         effective: settings?.maxCvUploadBytes?.value ?? 50 * 1024 * 1024,
@@ -688,6 +712,18 @@ export const SettingsPage: React.FC = () => {
         inboxAgeoutThresholdDays: nullIfSame(
           data.inboxAgeoutThresholdDays,
           pipeline.inboxAgeoutThresholdDays.default,
+        ),
+        manualJobFetchTimeoutMs: nullIfSame(
+          data.manualJobFetchTimeoutMs,
+          pipeline.manualJobFetchTimeoutMs.default,
+        ),
+        manualJobFetchMinExtractedChars: nullIfSame(
+          data.manualJobFetchMinExtractedChars,
+          pipeline.manualJobFetchMinExtractedChars.default,
+        ),
+        manualJobFetchBrowserSettleMs: nullIfSame(
+          data.manualJobFetchBrowserSettleMs,
+          pipeline.manualJobFetchBrowserSettleMs.default,
         ),
         maxBriefChars: nullIfSame(
           data.maxBriefChars,

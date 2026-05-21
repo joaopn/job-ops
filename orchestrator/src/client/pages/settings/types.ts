@@ -56,6 +56,9 @@ export type PipelineSettingsValues = {
   enableJobScoring: EffectiveDefault<boolean>;
   inboxStaleThresholdDays: EffectiveDefault<number>;
   inboxAgeoutThresholdDays: EffectiveDefault<number>;
+  manualJobFetchTimeoutMs: EffectiveDefault<number>;
+  manualJobFetchMinExtractedChars: EffectiveDefault<number>;
+  manualJobFetchBrowserSettleMs: EffectiveDefault<number>;
   maxCvUploadBytes: EffectiveDefault<number>;
   maxCoverLetterUploadBytes: EffectiveDefault<number>;
   maxExpandedLatexBytes: EffectiveDefault<number>;

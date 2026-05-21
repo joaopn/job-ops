@@ -70,6 +70,13 @@ RUN --mount=type=cache,target=/root/.npm \
     npm install --workspaces --include-workspace-root --include=dev \
     --no-audit --no-fund --progress=false
 
+# Install the Firefox revision that the Node Playwright package version
+# expects, alongside the Python-installed Firefox that already lives in
+# /ms-playwright. The revisions live in disjoint firefox-<N>/ subdirs so
+# neither overwrites the other. Needed because orchestrator's manual-fetch
+# tier-2 fallback calls firefox.launch() without an explicit executablePath.
+RUN npx playwright install firefox
+
 # Fetch Camoufox binaries before copying source to keep the download cached.
 # Anonymous GitHub fetch — no token plumbing into the build by design.
 RUN node ./scripts/camoufox-fetch.mjs
@@ -142,6 +149,10 @@ FROM runtime-node-deps AS production
 COPY --from=tectonic /usr/local/bin/tectonic /usr/local/bin/tectonic
 COPY --from=python-deps /usr/local/lib/python3.11/dist-packages /usr/local/lib/python3.11/dist-packages
 COPY --from=python-deps /ms-playwright /ms-playwright
+# Node-installed Firefox revision (manual-fetch tier-2 fallback). Sits in a
+# disjoint firefox-<rev>/ subdir from python-deps' install above, so this
+# COPY adds the Node revision without overwriting Python's.
+COPY --from=node-deps /ms-playwright /ms-playwright
 COPY --from=node-deps /root/.cache/camoufox /root/.cache/camoufox
 
 # Copy built assets and runtime source code.

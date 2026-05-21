@@ -531,6 +531,27 @@ export const settingsRegistry = {
     parse: parseIntOrNull,
     serialize: serializeNullableNumber,
   },
+  manualJobFetchTimeoutMs: {
+    kind: "typed" as const,
+    schema: z.number().int().min(1_000).max(120_000),
+    default: (): number => 15_000,
+    parse: parseIntOrNull,
+    serialize: serializeNullableNumber,
+  },
+  manualJobFetchMinExtractedChars: {
+    kind: "typed" as const,
+    schema: z.number().int().min(0).max(100_000),
+    default: (): number => 200,
+    parse: parseIntOrNull,
+    serialize: serializeNullableNumber,
+  },
+  manualJobFetchBrowserSettleMs: {
+    kind: "typed" as const,
+    schema: z.number().int().min(0).max(60_000),
+    default: (): number => 5_000,
+    parse: parseIntOrNull,
+    serialize: serializeNullableNumber,
+  },
   maxExtractionPromptChars: {
     kind: "typed" as const,
     schema: z.number().int().min(1000).max(1_000_000),

@@ -60,6 +60,9 @@ export const PipelineSettingsSection: React.FC<
     enableJobScoring,
     inboxStaleThresholdDays,
     inboxAgeoutThresholdDays,
+    manualJobFetchTimeoutMs,
+    manualJobFetchMinExtractedChars,
+    manualJobFetchBrowserSettleMs,
     maxCvUploadBytes,
     maxCoverLetterUploadBytes,
     maxExpandedLatexBytes,
@@ -266,6 +269,163 @@ export const PipelineSettingsSection: React.FC<
             Current:{" "}
             <span className="font-mono">
               {inboxAgeoutThresholdDays.effective}
+            </span>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label
+            htmlFor="manualJobFetchTimeoutMs"
+            className="text-sm font-medium"
+          >
+            Manual-fetch timeout (ms)
+          </label>
+          <Controller
+            name="manualJobFetchTimeoutMs"
+            control={control}
+            rules={{
+              validate: (v) =>
+                v === null ||
+                v === undefined ||
+                (Number.isInteger(v) && v >= 1000 && v <= 120_000) ||
+                "Must be between 1000 and 120000",
+            }}
+            render={({ field }) => (
+              <Input
+                id="manualJobFetchTimeoutMs"
+                type="number"
+                min={1000}
+                max={120_000}
+                step={500}
+                placeholder={String(manualJobFetchTimeoutMs.default)}
+                disabled={isLoading || isSaving}
+                value={field.value ?? ""}
+                onChange={(e) => {
+                  const value = e.target.valueAsNumber;
+                  field.onChange(Number.isFinite(value) ? value : null);
+                }}
+              />
+            )}
+          />
+          {errors.manualJobFetchTimeoutMs && (
+            <div className="text-xs text-destructive">
+              {errors.manualJobFetchTimeoutMs.message as string}
+            </div>
+          )}
+          <div className="text-xs text-muted-foreground">
+            Outer wall on POST /api/manual-jobs/fetch. Applies to both the
+            static fetch and the browser-rendered fallback. Pages slower than
+            this fail with a 408.
+          </div>
+          <div className="text-xs text-muted-foreground">
+            Current:{" "}
+            <span className="font-mono">
+              {manualJobFetchTimeoutMs.effective}
+            </span>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label
+            htmlFor="manualJobFetchMinExtractedChars"
+            className="text-sm font-medium"
+          >
+            Manual-fetch min extracted chars
+          </label>
+          <Controller
+            name="manualJobFetchMinExtractedChars"
+            control={control}
+            rules={{
+              validate: (v) =>
+                v === null ||
+                v === undefined ||
+                (Number.isInteger(v) && v >= 0 && v <= 100_000) ||
+                "Must be between 0 and 100000",
+            }}
+            render={({ field }) => (
+              <Input
+                id="manualJobFetchMinExtractedChars"
+                type="number"
+                min={0}
+                max={100_000}
+                step={50}
+                placeholder={String(manualJobFetchMinExtractedChars.default)}
+                disabled={isLoading || isSaving}
+                value={field.value ?? ""}
+                onChange={(e) => {
+                  const value = e.target.valueAsNumber;
+                  field.onChange(Number.isFinite(value) ? value : null);
+                }}
+              />
+            )}
+          />
+          {errors.manualJobFetchMinExtractedChars && (
+            <div className="text-xs text-destructive">
+              {errors.manualJobFetchMinExtractedChars.message as string}
+            </div>
+          )}
+          <div className="text-xs text-muted-foreground">
+            If the static fetch extracts fewer than this many chars (SPA shell
+            pages return ~0), fall through to the in-process Playwright
+            browser. Set to 0 to disable the browser fallback entirely.
+          </div>
+          <div className="text-xs text-muted-foreground">
+            Current:{" "}
+            <span className="font-mono">
+              {manualJobFetchMinExtractedChars.effective}
+            </span>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label
+            htmlFor="manualJobFetchBrowserSettleMs"
+            className="text-sm font-medium"
+          >
+            Manual-fetch browser settle (ms)
+          </label>
+          <Controller
+            name="manualJobFetchBrowserSettleMs"
+            control={control}
+            rules={{
+              validate: (v) =>
+                v === null ||
+                v === undefined ||
+                (Number.isInteger(v) && v >= 0 && v <= 60_000) ||
+                "Must be between 0 and 60000",
+            }}
+            render={({ field }) => (
+              <Input
+                id="manualJobFetchBrowserSettleMs"
+                type="number"
+                min={0}
+                max={60_000}
+                step={500}
+                placeholder={String(manualJobFetchBrowserSettleMs.default)}
+                disabled={isLoading || isSaving}
+                value={field.value ?? ""}
+                onChange={(e) => {
+                  const value = e.target.valueAsNumber;
+                  field.onChange(Number.isFinite(value) ? value : null);
+                }}
+              />
+            )}
+          />
+          {errors.manualJobFetchBrowserSettleMs && (
+            <div className="text-xs text-destructive">
+              {errors.manualJobFetchBrowserSettleMs.message as string}
+            </div>
+          )}
+          <div className="text-xs text-muted-foreground">
+            After the browser fallback navigates, wait up to this many ms for
+            the page's network to go idle (SPA hydration). Returns sooner if
+            the network settles. Bump for slow SPAs; 0 reads the DOM as soon
+            as goto resolves.
+          </div>
+          <div className="text-xs text-muted-foreground">
+            Current:{" "}
+            <span className="font-mono">
+              {manualJobFetchBrowserSettleMs.effective}
             </span>
           </div>
         </div>

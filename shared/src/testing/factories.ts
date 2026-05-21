@@ -246,6 +246,21 @@ export const createAppSettings = (
     default: 500_000,
     override: null,
   },
+  manualJobFetchTimeoutMs: {
+    value: 15_000,
+    default: 15_000,
+    override: null,
+  },
+  manualJobFetchMinExtractedChars: {
+    value: 200,
+    default: 200,
+    override: null,
+  },
+  manualJobFetchBrowserSettleMs: {
+    value: 5_000,
+    default: 5_000,
+    override: null,
+  },
   maxExtractionPromptChars: {
     value: 100_000,
     default: 100_000,

@@ -93,6 +93,9 @@ export interface AppSettings {
   maxTailoredContentChars: Resolved<number>;
   maxCoverLetterChars: Resolved<number>;
   maxFetchedJobHtmlChars: Resolved<number>;
+  manualJobFetchTimeoutMs: Resolved<number>;
+  manualJobFetchMinExtractedChars: Resolved<number>;
+  manualJobFetchBrowserSettleMs: Resolved<number>;
   maxExtractionPromptChars: Resolved<number>;
   maxCvUploadBytes: Resolved<number>;
   maxCoverLetterUploadBytes: Resolved<number>;
