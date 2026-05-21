@@ -201,6 +201,7 @@ export interface Job {
   suitabilityCategory: SuitabilityCategory | null; // AI-generated categorical fit
   suitabilityReason: string | null; // AI explanation
   tailoredFields: CvFieldOverrides; // Per-field override map; absent ids fall back to the field's original value
+  cvFieldLocks: string[]; // Field ids the LLM tailoring + chat accept-edit paths must not modify
   tailoringMatched: string[] | null; // ATS keywords surfaced in tailoredFields
   tailoringSkipped: string[] | null; // JD keywords dropped for lack of evidence
   cvDocumentId: string | null; // FK to cv_documents.id; pins which CV was tailored
@@ -369,6 +370,7 @@ export interface UpdateJobInput {
   suitabilityCategory?: SuitabilityCategory | null;
   suitabilityReason?: string;
   tailoredFields?: CvFieldOverrides;
+  cvFieldLocks?: string[];
   tailoringMatched?: string[] | null;
   tailoringSkipped?: string[] | null;
   cvDocumentId?: string | null;

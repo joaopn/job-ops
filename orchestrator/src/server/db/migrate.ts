@@ -304,6 +304,12 @@ const migrations: string[] = [
   `ALTER TABLE jobs ADD COLUMN cover_letter_field_overrides TEXT NOT NULL DEFAULT '{}'`,
   `ALTER TABLE jobs ADD COLUMN cover_letter_pdf_path TEXT`,
 
+  // 5i: per-job CV field locks (JSON array of fieldIds the LLM tailoring
+  // and chat accept-edit paths must leave alone). Defensive ALTER before
+  // the canonical rebuild so the INSERT SELECT can reference it on legacy
+  // DBs. Idempotent via the duplicate-column-name skip below.
+  `ALTER TABLE jobs ADD COLUMN cv_field_locks TEXT NOT NULL DEFAULT '[]'`,
+
   // Canonical jobs-table rebuild. Originally added in 5d to drop unused
   // columns (tailored_summary/headline/skills, tracer_links_enabled,
   // sponsor_match_*); 5g extended it with the new status + outcome enums and
@@ -361,6 +367,7 @@ const migrations: string[] = [
     suitability_category TEXT CHECK(suitability_category IS NULL OR suitability_category IN ('very_good_fit', 'good_fit', 'bad_fit')),
     suitability_reason TEXT,
     tailored_fields TEXT NOT NULL DEFAULT '{}',
+    cv_field_locks TEXT NOT NULL DEFAULT '[]',
     tailoring_matched TEXT,
     tailoring_skipped TEXT,
     cv_document_id TEXT REFERENCES cv_documents(id) ON DELETE SET NULL,
@@ -389,6 +396,7 @@ const migrations: string[] = [
     application_link, disciplines, deadline, salary, location,
     location_evidence, degree_required, starting, job_description, status,
     outcome, closed_at, suitability_category, suitability_reason, tailored_fields,
+    cv_field_locks,
     tailoring_matched, tailoring_skipped, cv_document_id,
     pdf_path, cover_letter_draft,
     cover_letter_document_id, cover_letter_field_overrides, cover_letter_pdf_path,
@@ -415,6 +423,7 @@ const migrations: string[] = [
     END AS outcome,
     closed_at, suitability_category, suitability_reason,
     tailored_fields,
+    COALESCE(cv_field_locks, '[]') AS cv_field_locks,
     tailoring_matched, tailoring_skipped, cv_document_id,
     pdf_path, cover_letter_draft,
     cover_letter_document_id,

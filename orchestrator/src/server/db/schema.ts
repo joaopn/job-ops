@@ -142,6 +142,9 @@ export const jobs = sqliteTable("jobs", {
   tailoredFields: text("tailored_fields", { mode: "json" })
     .notNull()
     .default(sql`('{}')`),
+  cvFieldLocks: text("cv_field_locks", { mode: "json" })
+    .notNull()
+    .default(sql`('[]')`),
   tailoringMatched: text("tailoring_matched", { mode: "json" }),
   tailoringSkipped: text("tailoring_skipped", { mode: "json" }),
   cvDocumentId: text("cv_document_id").references(() => cvDocuments.id, {

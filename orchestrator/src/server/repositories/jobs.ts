@@ -536,6 +536,7 @@ export async function updateJob(
   const {
     locationEvidence,
     tailoredFields,
+    cvFieldLocks,
     tailoringMatched,
     tailoringSkipped,
     coverLetterFieldOverrides,
@@ -562,6 +563,7 @@ export async function updateJob(
         ? { locationEvidence: serializeLocationEvidence(locationEvidence) }
         : {}),
       ...(tailoredFields !== undefined ? { tailoredFields } : {}),
+      ...(cvFieldLocks !== undefined ? { cvFieldLocks } : {}),
       ...(tailoringMatched !== undefined ? { tailoringMatched } : {}),
       ...(tailoringSkipped !== undefined ? { tailoringSkipped } : {}),
       ...(coverLetterFieldOverrides !== undefined
@@ -702,6 +704,7 @@ function mapRowToJob(row: typeof jobs.$inferSelect): Job {
     suitabilityCategory: row.suitabilityCategory ?? null,
     suitabilityReason: row.suitabilityReason,
     tailoredFields: parseFieldOverrides(row.tailoredFields),
+    cvFieldLocks: parseStringList(row.cvFieldLocks) ?? [],
     tailoringMatched: parseStringList(row.tailoringMatched),
     tailoringSkipped: parseStringList(row.tailoringSkipped),
     cvDocumentId: row.cvDocumentId ?? null,
