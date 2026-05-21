@@ -1,5 +1,10 @@
 import { useKeyboardAvailability } from "@client/hooks/useKeyboardAvailability";
 import { useLlmCallQueue } from "@client/hooks/useLlmCallQueue";
+import {
+  LIST_PANEL_MAX_WIDTH,
+  LIST_PANEL_MIN_WIDTH,
+  useResizableListPanel,
+} from "@client/hooks/useResizableListPanel";
 import { useSettings } from "@client/hooks/useSettings";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -17,6 +22,7 @@ import { LlmCallQueueSheet } from "./orchestrator/LlmCallQueueSheet";
 import { JobCommandBar } from "./orchestrator/JobCommandBar";
 import { JobDetailPanel } from "./orchestrator/JobDetailPanel";
 import { JobListPanel } from "./orchestrator/JobListPanel";
+import { JobListRevealTab, JobListSplitter } from "./orchestrator/JobListSplitter";
 import { OrchestratorFilters } from "./orchestrator/OrchestratorFilters";
 import { OrchestratorHeader } from "./orchestrator/OrchestratorHeader";
 import { OrchestratorSummary } from "./orchestrator/OrchestratorSummary";
@@ -130,6 +136,14 @@ export const OrchestratorPage: React.FC = () => {
       ? window.matchMedia("(min-width: 1024px)").matches
       : false,
   );
+
+  const {
+    width: listPanelWidth,
+    isVisible: isListPanelVisible,
+    isDragging: isListPanelDragging,
+    toggleVisible: toggleListPanelVisible,
+    startDrag: startListPanelDrag,
+  } = useResizableListPanel();
 
   const handleSelectJobId = useCallback(
     (id: string | null) => {
@@ -452,7 +466,7 @@ export const OrchestratorPage: React.FC = () => {
       />
 
       <main
-        className={`container mx-auto space-y-6 px-4 py-6 ${
+        className={`space-y-6 px-4 py-6 ${
           selectedJobIds.size > 0 ? "pb-36 lg:pb-12" : "pb-12"
         }`}
       >
@@ -495,33 +509,61 @@ export const OrchestratorPage: React.FC = () => {
           />
 
           {/* List/Detail grid - directly under tabs, no extra section */}
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,400px)_minmax(0,1fr)]">
+          <div
+            className={isDesktop ? "grid gap-0" : "grid gap-4"}
+            style={
+              isDesktop
+                ? {
+                    gridTemplateColumns: isListPanelVisible
+                      ? `${listPanelWidth}px 12px minmax(0, 1fr)`
+                      : "24px minmax(0, 1fr)",
+                  }
+                : undefined
+            }
+          >
             {/* Primary region: Job list with highest visual weight */}
-            <JobListPanel
-              ref={jobListHandleRef}
-              isLoading={isLoading}
-              jobs={jobs}
-              activeJobs={activeJobs}
-              selectedJobId={selectedJobId}
-              selectedJobIds={selectedJobIds}
-              activeTab={activeTab}
-              onSelectJob={handleSelectJob}
-              onToggleSelectJob={toggleSelectJob}
-              onToggleSelectAll={toggleSelectAll}
-              onSelectAllByCategory={selectAllByCategory}
-              primaryEmptyStateAction={primaryEmptyStateAction}
-              secondaryEmptyStateAction={secondaryEmptyStateAction}
-              emptyStateMessage={emptyStateMessage}
-              staleThresholdDays={inboxStaleThresholdDays}
-              closedFilterChips={
-                activeTab === "closed" ? (
-                  <ClosedFilterChips
-                    value={closedSubFilter}
-                    onChange={setClosedSubFilter}
-                  />
-                ) : undefined
-              }
-            />
+            {(!isDesktop || isListPanelVisible) && (
+              <JobListPanel
+                ref={jobListHandleRef}
+                isLoading={isLoading}
+                jobs={jobs}
+                activeJobs={activeJobs}
+                selectedJobId={selectedJobId}
+                selectedJobIds={selectedJobIds}
+                activeTab={activeTab}
+                onSelectJob={handleSelectJob}
+                onToggleSelectJob={toggleSelectJob}
+                onToggleSelectAll={toggleSelectAll}
+                onSelectAllByCategory={selectAllByCategory}
+                primaryEmptyStateAction={primaryEmptyStateAction}
+                secondaryEmptyStateAction={secondaryEmptyStateAction}
+                emptyStateMessage={emptyStateMessage}
+                staleThresholdDays={inboxStaleThresholdDays}
+                closedFilterChips={
+                  activeTab === "closed" ? (
+                    <ClosedFilterChips
+                      value={closedSubFilter}
+                      onChange={setClosedSubFilter}
+                    />
+                  ) : undefined
+                }
+              />
+            )}
+
+            {isDesktop && isListPanelVisible && (
+              <JobListSplitter
+                onDrag={startListPanelDrag}
+                onCollapse={toggleListPanelVisible}
+                isDragging={isListPanelDragging}
+                width={listPanelWidth}
+                minWidth={LIST_PANEL_MIN_WIDTH}
+                maxWidth={LIST_PANEL_MAX_WIDTH}
+              />
+            )}
+
+            {isDesktop && !isListPanelVisible && (
+              <JobListRevealTab onClick={toggleListPanelVisible} />
+            )}
 
             {/* Inspector panel: visually subordinate to list */}
             {isDesktop && (

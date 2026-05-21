@@ -62,7 +62,7 @@ export const UnifiedPanel: React.FC<UnifiedPanelProps> = ({
       : job;
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3">
+    <div className="flex h-full min-h-0 w-full flex-col gap-3">
       <div className="grid min-h-[420px] flex-1 grid-cols-1 gap-3 lg:grid-cols-2">
         <CvPdfPane job={job} />
         <CoverLetterPane job={coverLetterJob} onJobUpdated={onJobUpdated} />
