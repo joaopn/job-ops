@@ -1293,6 +1293,14 @@ export async function reExtractCvDocumentTemplate(
 }
 
 /**
+ * Regenerate the per-CV personalBrief in isolation. Re-extract preserves
+ * the user's brief; this endpoint is the explicit "start over" path.
+ */
+export async function regenerateCvBrief(id: string): Promise<CvDocument> {
+  return fetchApi<CvDocument>(`/cv/${id}/regenerate-brief`, { method: "POST" });
+}
+
+/**
  * 5e.3a: returns the server's default extraction system prompt. Used by
  * the CV page to pre-fill the per-CV prompt textarea.
  */

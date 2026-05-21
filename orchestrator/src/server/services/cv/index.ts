@@ -43,6 +43,7 @@ export {
   type TemplateExtractPreviousAttempt,
   type TemplateExtractResult,
 } from "./llm-template-extract";
+export { generateBrief, GenerateBriefError } from "./llm-generate-brief";
 export {
   runUploadPipeline,
   type UploadPipelineArgs,

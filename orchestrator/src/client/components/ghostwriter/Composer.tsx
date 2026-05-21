@@ -52,15 +52,16 @@ export const Composer: React.FC<ComposerProps> = ({
         </div>
         <div className="flex items-center gap-1">
           <Button
-            size="icon"
+            size="sm"
             variant="outline"
             onClick={onReset}
             disabled={disabled || !canReset}
-            aria-label="Start over"
-            title="Start over"
-            className="text-destructive hover:text-destructive"
+            aria-label="Clear conversation"
+            title="Clear conversation"
+            className="h-9 gap-1.5 text-xs text-destructive hover:text-destructive"
           >
             <Eraser className="h-3.5 w-3.5" />
+            Clear
           </Button>
 
           {isStreaming && (

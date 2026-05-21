@@ -215,12 +215,21 @@ describe.sequential("CV API routes", () => {
     expect(payload.data.personalBrief.length).toBe(200_000);
   });
 
-  it("re-runs extraction on POST /api/cv/:id/re-extract and updates the brief", async () => {
+  it("re-runs extraction on POST /api/cv/:id/re-extract, refreshes fields, preserves the user's personal brief", async () => {
     const form = new FormData();
     form.append("file", new Blob([SAMPLE_TEX]), "ada.tex");
     const created = (await (
       await fetch(`${baseUrl}/api/cv`, { method: "POST", body: form })
     ).json()) as { data: { id: string } };
+
+    // User edits the brief between upload and re-extract — re-extract
+    // must NOT clobber it. Brief regeneration is opt-in via the
+    // dedicated /regenerate-brief endpoint.
+    await fetch(`${baseUrl}/api/cv/${created.data.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ personalBrief: "User-edited brief." }),
+    });
 
     vi.mocked(extractCv).mockClear();
     const refreshedFields: CvField[] = [
@@ -229,7 +238,7 @@ describe.sequential("CV API routes", () => {
     ];
     vi.mocked(extractCv).mockResolvedValue({
       fields: refreshedFields,
-      personalBrief: "Updated brief.",
+      personalBrief: "LLM-regenerated brief (should be ignored on re-extract).",
     });
 
     const res = await fetch(`${baseUrl}/api/cv/${created.data.id}/re-extract`, {
@@ -243,7 +252,7 @@ describe.sequential("CV API routes", () => {
       };
     };
     expect(payload.data.fields).toEqual(refreshedFields);
-    expect(payload.data.personalBrief).toBe("Updated brief.");
+    expect(payload.data.personalBrief).toBe("User-edited brief.");
     expect(extractCv).toHaveBeenCalledTimes(1);
   });
 });

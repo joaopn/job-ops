@@ -22,6 +22,10 @@ import {
   RunTectonicError,
   runTectonic,
 } from "@server/services/cv/run-tectonic";
+import {
+  GenerateBriefError,
+  generateBrief,
+} from "@server/services/cv/llm-generate-brief";
 import { getExtractionPromptDefault } from "@server/services/cv/llm-template-extract";
 import { runUploadPipeline } from "@server/services/cv/upload-pipeline";
 import { getEffectiveSettings } from "@server/services/settings";
@@ -310,10 +314,12 @@ cvRouter.post("/:id/re-extract", async (req: Request, res: Response) => {
       flattenedTex: flattened.flattenedTex,
       assetReferences: flattened.assetReferences,
     });
+    // Preserve the user's existing personalBrief — re-extract recovers
+    // template/fields, but the brief is user-editable scratch and gets
+    // its own regenerate-brief endpoint.
     const updated = await cvRepo.updateCvDocument(req.params.id, {
       flattenedTex: flattened.flattenedTex,
       fields: extracted.fields,
-      personalBrief: extracted.personalBrief,
     });
     if (!updated) return fail(res, notFound("CV document not found."));
 
@@ -476,10 +482,12 @@ cvRouter.post(
         );
       }
 
+      // Preserve the user's existing personalBrief — re-extract recovers
+      // template/fields, but the brief is user-editable scratch and gets
+      // its own regenerate-brief endpoint.
       const updated = await cvRepo.updateCvDocument(req.params.id, {
         flattenedTex: result.flattenedTex,
         fields: result.fields,
-        personalBrief: result.personalBrief,
         templatedTex: result.templatedTex,
         defaultFieldValues: result.defaultFieldValues,
         lastCompileStderr: result.compileStderr,
@@ -493,6 +501,39 @@ cvRouter.post(
         compileAttempts: result.compileAttempts,
       });
       ok(res, { cv: updated, attempts: result.attempts });
+    } catch (error) {
+      handleCvError(res, error);
+    }
+  },
+);
+
+/**
+ * Stand-alone brief regeneration. Decoupled from re-extract so the
+ * user's free-form brief edits don't get clobbered by every template
+ * re-extract. Invokes a small dedicated LLM call (cv-generate-brief
+ * prompt) against the persisted flattened tex and overwrites only the
+ * `personal_brief` column.
+ */
+cvRouter.post(
+  "/:id/regenerate-brief",
+  async (req: Request, res: Response) => {
+    try {
+      const existing = await cvRepo.getCvDocumentById(req.params.id);
+      if (!existing) return fail(res, notFound("CV document not found."));
+
+      const brief = await generateBrief({
+        flattenedTex: existing.flattenedTex,
+      });
+      const updated = await cvRepo.updateCvDocument(req.params.id, {
+        personalBrief: brief,
+      });
+      if (!updated) return fail(res, notFound("CV document not found."));
+
+      logger.info("CV personal brief regenerated", {
+        cvDocumentId: req.params.id,
+        briefLength: brief.length,
+      });
+      ok(res, updated);
     } catch (error) {
       handleCvError(res, error);
     }
@@ -598,6 +639,18 @@ function handleCvError(res: Response, error: unknown): void {
         code: "UPSTREAM_ERROR",
         message: error.message,
         details: { code: error.code, detail: error.detail },
+      }),
+    );
+    return;
+  }
+  if (error instanceof GenerateBriefError) {
+    fail(
+      res,
+      new AppError({
+        status: 502,
+        code: "UPSTREAM_ERROR",
+        message: error.message,
+        details: { code: error.code },
       }),
     );
     return;

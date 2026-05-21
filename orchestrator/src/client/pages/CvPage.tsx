@@ -24,6 +24,7 @@ import {
   Loader2,
   RefreshCw,
   Save,
+  Sparkles,
   Trash2,
   Upload,
 } from "lucide-react";
@@ -527,6 +528,20 @@ function CvEditor({ cv }: { cv: CvDocument }) {
     },
   });
 
+  const regenerateBriefMutation = useMutation({
+    mutationFn: () => api.regenerateCvBrief(cv.id),
+    onSuccess: async (next) => {
+      setPersonalBrief(next.personalBrief);
+      toast.success("Personal brief regenerated");
+      await invalidateAll();
+    },
+    onError: (err: unknown) => {
+      toast.error(
+        err instanceof Error ? err.message : "Regenerate brief failed",
+      );
+    },
+  });
+
   const handleSave = () => {
     saveMutation.mutate({
       name: name.trim() || cv.name,
@@ -760,15 +775,53 @@ function CvEditor({ cv }: { cv: CvDocument }) {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Personal brief</CardTitle>
-          <CardDescription>
-            Long-form, first-person background that powers per-job tailoring.
-            Paste in extra context the CV doesn't carry — side projects, tools
-            you've used in passing, transcripts of long-running chats. The
-            brief is the source of truth for tailoring; the CV's templated
-            tex is the render target.
-          </CardDescription>
+        <CardHeader className="flex flex-row items-start justify-between gap-4">
+          <div className="space-y-1.5">
+            <CardTitle>Personal brief</CardTitle>
+            <CardDescription>
+              Long-form, first-person background that powers per-job tailoring.
+              Paste in extra context the CV doesn't carry — side projects,
+              tools you've used in passing, transcripts of long-running chats.
+              The brief is the source of truth for tailoring; the CV's
+              templated tex is the render target. Re-extract preserves what
+              you've written here.
+            </CardDescription>
+          </div>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={regenerateBriefMutation.isPending}
+              >
+                {regenerateBriefMutation.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="mr-2 h-4 w-4" />
+                )}
+                Regenerate brief
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Regenerate personal brief?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This replaces the current brief with a fresh LLM summary of
+                  the CV's prose. Anything you've written or pasted in here
+                  will be lost.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => regenerateBriefMutation.mutate()}
+                >
+                  Regenerate
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </CardHeader>
         <CardContent>
           <Textarea
@@ -777,6 +830,7 @@ function CvEditor({ cv }: { cv: CvDocument }) {
             spellCheck
             className="min-h-[260px] text-sm"
             placeholder="I'm a …"
+            disabled={regenerateBriefMutation.isPending}
           />
         </CardContent>
       </Card>

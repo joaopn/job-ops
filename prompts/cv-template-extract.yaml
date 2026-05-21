@@ -61,7 +61,10 @@ system: |
     bullet stays its own field — the granularity matters for ATS keyword
     matching.
   - Skill keyword lists ("Python, PostgreSQL, …" — each list is one field).
-  - Project descriptions and tech stacks (per project).
+  - Project names, descriptions, and tech stacks (per project). Project
+    names ARE tailorable — unlike employer/institution names, candidates
+    rewrite project names + their parenthetical subtitles to emphasize the
+    aspect that matches a given JD.
   - Free-form expansion text (e.g., the description / abstract sentence
     under a publication or a course).
 
@@ -181,6 +184,62 @@ system: |
   Note: the category label ("AI \& Inference") stays verbatim — it's a
   stable taxonomy, not a tailorable claim. The keyword list templates
   because cv-adjust may want to add / re-order keywords for ATS matching.
+
+  ### Example 5 — awesome-cv project entry (tailorable: tech stack, project name, bullets)
+
+  Many awesome-cv-style templates repurpose the same `\cventry` command
+  for a `Selected Projects` section, BUT the argument semantics differ
+  from an Experience entry. Detect this by section context (`\cvsection
+  {...Projects}`, `\cvsection{Selected Projects}`, project-list block,
+  etc.) before deciding what stays verbatim.
+
+  Source:
+  ```
+  \cvsection{Selected Projects}
+  \begin{cventries}
+    \cventry
+      {Docker, Bash, Gitea, CI, LLM APIs}
+      {Agentic Dev Sandbox (Secure AI Development Environment)}
+      {}
+      {\href{https://github.com/joaopn/agentic-dev-sandbox}{\faGithub\ View Repository}}
+      {
+        \begin{cvitems}
+          \item {Engineered a containerized LLM development environment with strict network isolation.}
+          \item {Architected a human-in-the-loop Git workflow via local Gitea mirrors.}
+        \end{cvitems}
+      }
+  \end{cventries}
+  ```
+  Template:
+  ```
+  \cvsection{Selected Projects}
+  \begin{cventries}
+    \cventry
+      {«projects.0.tech»}
+      {«projects.0.name»}
+      {}
+      {\href{https://github.com/joaopn/agentic-dev-sandbox}{\faGithub\ View Repository}}
+      {
+        \begin{cvitems}
+          \item {«projects.0.bullet.0»}
+          \item {«projects.0.bullet.1»}
+        \end{cvitems}
+      }
+  \end{cventries}
+  ```
+  Fields:
+    - `{ id: "projects.0.tech", role: "skill", value: "Docker, Bash, Gitea, CI, LLM APIs" }`
+    - `{ id: "projects.0.name", role: "title", value: "Agentic Dev Sandbox (Secure AI Development Environment)" }`
+    - `{ id: "projects.0.bullet.0", role: "bullet", value: "Engineered a containerized LLM development environment with strict network isolation." }`
+    - `{ id: "projects.0.bullet.1", role: "bullet", value: "Architected a human-in-the-loop Git workflow via local Gitea mirrors." }`
+
+  Note: under `\cvsection{Selected Projects}`, the `\cventry` arg layout
+  is `{techStack}{projectName}{location}{link}{bullets}` — NOT the
+  experience-entry layout `{date}{title}{company}{location}{}{bullet}`.
+  Tech stack (arg 1), project name (arg 2), and each bullet are
+  tailorable. The empty location and the `\href{...}` link stay verbatim.
+  The section heading itself (`\cvsection{Selected Projects}`) is also
+  verbatim — that's structural taxonomy.
 
   ## Hard rules
 

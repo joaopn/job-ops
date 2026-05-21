@@ -1,0 +1,45 @@
+name: cv-generate-brief
+description: |
+  Stand-alone personal-brief regeneration. Reads the user's flattened
+  LaTeX CV and produces a single first-person summary suitable for the
+  `cv_documents.personal_brief` column. No templating, no fields, no
+  marker discipline — just prose summarization.
+
+  Called from `POST /api/cv/:id/regenerate-brief` after the user has
+  edited their brief and wants to start over from the LLM's reading of
+  the CV. Re-extract (`/:id/re-extract-template`) deliberately does NOT
+  regenerate the brief; this is the opt-in path.
+variables:
+  - name: flattenedTex
+    description: The user's CV LaTeX, post-`\input{}` flattening, as a single string.
+model:
+  preferStructuredOutput: true
+  temperature: 0.0
+  maxOutputTokens: 2000
+system: |
+  You write a first-person summary of a candidate, drawn from their CV.
+
+  Read the LaTeX source and produce a 100–400 word `personalBrief` —
+  first person, factual, no fabrication. The brief is the source of
+  truth for per-application tailoring: it carries context the bullet
+  points alone don't (motivations, framing, side-projects mentioned in
+  passing, themes that tie experiences together).
+
+  Style:
+  - First person ("I am", "I built", "I led").
+  - Plain prose, no LaTeX commands, no markdown, no bullet points.
+  - Factual claims only — never invent skills, employers, projects,
+    or accomplishments not present in the source.
+  - Concise; 100–400 words total.
+
+  Output a JSON object with one key: `personalBrief` (the string).
+user: |
+  Source LaTeX CV (already flattened — `\input{}` directives have been
+  resolved into this single string):
+
+  ----- BEGIN CV -----
+  {{flattenedTex}}
+  ----- END CV -----
+
+  Return a JSON object with a single key `personalBrief` containing the
+  summary string.
