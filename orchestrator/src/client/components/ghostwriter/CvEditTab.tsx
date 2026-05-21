@@ -12,6 +12,7 @@ import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { CvFieldsEditor } from "./CvFieldsEditor";
 import { CvRawEditor, type CvRawEditorHandle } from "./CvRawEditor";
@@ -21,6 +22,11 @@ type Props = {
   cv: CvDocument;
   onJobUpdated: () => void | Promise<void>;
   onRendered: () => void;
+  /**
+   * Edit|PDF parent-tab strip hoisted from `CvPane` so it shares a row
+   * with the Fields|Raw sub-tabs and the right-side toolbar.
+   */
+  tabSwitch?: React.ReactNode;
 };
 
 type SubTab = "fields" | "raw";
@@ -53,6 +59,7 @@ export const CvEditTab: React.FC<Props> = ({
   cv,
   onJobUpdated,
   onRendered,
+  tabSwitch,
 }) => {
   const defaults = cv.defaultFieldValues ?? {};
 
@@ -236,6 +243,12 @@ export const CvEditTab: React.FC<Props> = ({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="mb-2 flex flex-wrap items-center gap-2">
+        {tabSwitch ? (
+          <>
+            {tabSwitch}
+            <Separator orientation="vertical" className="h-6" />
+          </>
+        ) : null}
         <div className="flex items-center gap-1">
           <SubTabButton
             active={subTab === "fields"}

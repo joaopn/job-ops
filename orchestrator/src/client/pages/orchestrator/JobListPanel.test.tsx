@@ -8,7 +8,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { JobListPanel } from "./JobListPanel";
 
 const createJobs = (count: number) =>
@@ -23,6 +23,15 @@ const createJobs = (count: number) =>
 let virtualizationEnvironment: ReturnType<
   typeof setupWindowVirtualizerTestEnvironment
 > | null = null;
+
+beforeEach(() => {
+  // Default environment: the element-mode virtualizer needs ResizeObserver
+  // and a non-zero `getBoundingClientRect` on its scroll container, or it
+  // sees an empty viewport in jsdom and renders zero rows. Individual
+  // tests may override by reassigning `virtualizationEnvironment` with
+  // their own settings before render.
+  virtualizationEnvironment = setupWindowVirtualizerTestEnvironment();
+});
 
 afterEach(async () => {
   virtualizationEnvironment?.cleanup();
@@ -311,6 +320,7 @@ describe("JobListPanel", () => {
   });
 
   it("keeps large lists virtualized and scrolls offscreen rows into view", async () => {
+    virtualizationEnvironment?.cleanup();
     virtualizationEnvironment = setupWindowVirtualizerTestEnvironment({
       viewportHeight: 240,
       rowHeight: 72,
@@ -336,9 +346,10 @@ describe("JobListPanel", () => {
     expect(renderedRows.length).toBeGreaterThan(0);
     expect(renderedRows.length).toBeLessThan(jobs.length);
 
+    const scrollContainer = screen.getByTestId("job-list-scroll");
     act(() => {
-      window.scrollY = 2800;
-      window.dispatchEvent(new Event("scroll"));
+      scrollContainer.scrollTop = 2800;
+      scrollContainer.dispatchEvent(new Event("scroll"));
     });
 
     await waitFor(() => {

@@ -4,7 +4,13 @@ import {
   type SuitabilityCategory,
 } from "@shared/types.js";
 import { Loader2 } from "lucide-react";
-import { type ReactNode, forwardRef, useImperativeHandle } from "react";
+import {
+  type ReactNode,
+  forwardRef,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import {
   useVirtualizedList,
   type VirtualListHandle,
@@ -67,12 +73,21 @@ export const JobListPanel = forwardRef<VirtualListHandle, JobListPanelProps>(
     },
     ref,
   ) => {
+    const scrollRef = useRef<HTMLDivElement | null>(null);
+    const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(
+      null,
+    );
+
     const virtualizer = useVirtualizedList({
       count: activeJobs.length,
-      mode: "window",
+      mode: "element",
+      scrollElement,
       estimateSize: () => ROW_ESTIMATE,
       overscan: 8,
       getItemKey: (index) => activeJobs[index]?.id ?? index,
+      // Fallback used when ResizeObserver hasn't measured yet (SSR / jsdom).
+      // Real measurements take over after first paint in the browser.
+      initialRect: { width: 1024, height: 600 },
     });
 
     useImperativeHandle(
@@ -130,10 +145,14 @@ export const JobListPanel = forwardRef<VirtualListHandle, JobListPanelProps>(
     const virtualItems = virtualizer.getVirtualItems();
 
     return (
-      <div className="min-w-0 rounded-xl border border-border bg-card shadow-sm">
-        {closedFilterChips}
-        <div className="divide-y divide-border/40">
-          <div className="flex items-center justify-between gap-3 px-4 py-2 opacity-100 transition-opacity sm:opacity-50 sm:hover:opacity-100">
+      <div className="flex min-w-0 flex-col rounded-xl border border-border bg-card shadow-sm lg:h-[calc(100vh-14rem)]">
+        {closedFilterChips ? (
+          <div className="shrink-0 border-b border-border/40">
+            {closedFilterChips}
+          </div>
+        ) : null}
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/40 px-4 py-2 opacity-100 transition-opacity sm:opacity-50 sm:hover:opacity-100">
             <label
               htmlFor="job-list-select-all"
               className="flex items-center gap-2 text-xs text-muted-foreground"
@@ -183,11 +202,18 @@ export const JobListPanel = forwardRef<VirtualListHandle, JobListPanelProps>(
             </div>
           </div>
           <div
-            className="relative"
-            style={{
-              height: `${virtualizer.getTotalSize()}px`,
+            ref={(el) => {
+              scrollRef.current = el;
+              setScrollElement(el);
             }}
+            data-virtual-scroll-container="true"
+            data-testid="job-list-scroll"
+            className="relative min-h-0 flex-1 overflow-y-auto"
           >
+            <div
+              className="relative"
+              style={{ height: `${virtualizer.getTotalSize()}px` }}
+            >
             {virtualItems.map((virtualRow) => {
               const job = activeJobs[virtualRow.index];
               if (!job) return null;
@@ -267,6 +293,7 @@ export const JobListPanel = forwardRef<VirtualListHandle, JobListPanelProps>(
                 </div>
               );
             })}
+            </div>
           </div>
         </div>
       </div>

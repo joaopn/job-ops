@@ -35,6 +35,13 @@ interface PageHeaderProps {
   showVersionFooter?: boolean;
   navOpen?: boolean;
   onNavOpenChange?: (open: boolean) => void;
+  /**
+   * When true, the header content spans the full viewport width (just
+   * the `px-4` side padding). Default keeps the legacy `container mx-auto`
+   * cap so other pages don't shift; opt in from pages whose `<main>` also
+   * goes edge-to-edge (e.g. OrchestratorPage).
+   */
+  fullWidth?: boolean;
 }
 
 export const PageHeader: React.FC<PageHeaderProps> = ({
@@ -47,6 +54,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   showVersionFooter = true,
   navOpen: controlledNavOpen,
   onNavOpenChange,
+  fullWidth = false,
 }) => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -66,7 +74,12 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container mx-auto flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <div
+        className={cn(
+          "flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4",
+          fullWidth ? "w-full" : "container mx-auto",
+        )}
+      >
         <div className="flex min-w-0 items-center gap-3">
           <Sheet open={navOpen} onOpenChange={setNavOpen}>
             <SheetTrigger asChild>

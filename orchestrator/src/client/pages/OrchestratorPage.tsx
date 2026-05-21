@@ -22,7 +22,7 @@ import { LlmCallQueueSheet } from "./orchestrator/LlmCallQueueSheet";
 import { JobCommandBar } from "./orchestrator/JobCommandBar";
 import { JobDetailPanel } from "./orchestrator/JobDetailPanel";
 import { JobListPanel } from "./orchestrator/JobListPanel";
-import { JobListRevealTab, JobListSplitter } from "./orchestrator/JobListSplitter";
+import { JobListSplitter, JobListToggleBar } from "./orchestrator/JobListSplitter";
 import { OrchestratorFilters } from "./orchestrator/OrchestratorFilters";
 import { OrchestratorHeader } from "./orchestrator/OrchestratorHeader";
 import { OrchestratorSummary } from "./orchestrator/OrchestratorSummary";
@@ -515,7 +515,7 @@ export const OrchestratorPage: React.FC = () => {
               isDesktop
                 ? {
                     gridTemplateColumns: isListPanelVisible
-                      ? `${listPanelWidth}px 12px minmax(0, 1fr)`
+                      ? `${listPanelWidth}px 12px 24px minmax(0, 1fr)`
                       : "24px minmax(0, 1fr)",
                   }
                 : undefined
@@ -553,7 +553,6 @@ export const OrchestratorPage: React.FC = () => {
             {isDesktop && isListPanelVisible && (
               <JobListSplitter
                 onDrag={startListPanelDrag}
-                onCollapse={toggleListPanelVisible}
                 isDragging={isListPanelDragging}
                 width={listPanelWidth}
                 minWidth={LIST_PANEL_MIN_WIDTH}
@@ -561,13 +560,16 @@ export const OrchestratorPage: React.FC = () => {
               />
             )}
 
-            {isDesktop && !isListPanelVisible && (
-              <JobListRevealTab onClick={toggleListPanelVisible} />
+            {isDesktop && (
+              <JobListToggleBar
+                isVisible={isListPanelVisible}
+                onClick={toggleListPanelVisible}
+              />
             )}
 
             {/* Inspector panel: visually subordinate to list */}
             {isDesktop && (
-              <div className="min-w-0 rounded-lg border border-border/40 bg-muted/5 p-4 lg:sticky lg:top-24 lg:self-start lg:h-[calc(100vh-8rem)] lg:overflow-y-auto">
+              <div className="min-w-0 rounded-lg border border-border/40 bg-muted/5 p-4 lg:sticky lg:top-24 lg:self-start lg:h-[calc(100vh-14rem)] lg:overflow-y-auto">
                 <JobDetailPanel
                   activeTab={activeTab}
                   activeJobs={activeJobs}

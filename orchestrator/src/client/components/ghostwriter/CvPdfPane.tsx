@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 
 type CvPdfPaneProps = {
   job: Job;
+  tabSwitch?: React.ReactNode;
 };
 
 /**
@@ -12,28 +13,34 @@ type CvPdfPaneProps = {
  * automatically when the server overwrites the PDF after an accepted CV edit
  * or a re-tailor.
  */
-export const CvPdfPane: React.FC<CvPdfPaneProps> = ({ job }) => {
+export const CvPdfPane: React.FC<CvPdfPaneProps> = ({ job, tabSwitch }) => {
   const pdfHref = `/pdfs/resume_${job.id}.pdf?v=${encodeURIComponent(job.updatedAt)}`;
   const hasPdf = Boolean(job.pdfPath);
 
   if (!hasPdf) {
     return (
-      <div className="flex h-full min-h-[320px] flex-col items-center justify-center gap-2 rounded-md border border-dashed border-border/60 bg-muted/10 text-center">
-        <FileText className="h-6 w-6 text-muted-foreground" />
-        <div className="text-sm font-medium text-muted-foreground">
-          No PDF rendered yet
+      <div className="flex h-full min-h-0 flex-col">
+        {tabSwitch ? (
+          <div className="mb-2 flex items-center gap-1">{tabSwitch}</div>
+        ) : null}
+        <div className="flex h-full min-h-[320px] flex-col items-center justify-center gap-2 rounded-md border border-dashed border-border/60 bg-muted/10 text-center">
+          <FileText className="h-6 w-6 text-muted-foreground" />
+          <div className="text-sm font-medium text-muted-foreground">
+            No PDF rendered yet
+          </div>
+          <p className="max-w-[260px] text-xs text-muted-foreground/80">
+            Tailor the job to generate a CV PDF, or click "Re-tailor with
+            brief" below to retry.
+          </p>
         </div>
-        <p className="max-w-[260px] text-xs text-muted-foreground/80">
-          Tailor the job to generate a CV PDF, or click "Re-tailor with brief"
-          below to retry.
-        </p>
       </div>
     );
   }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="mb-2 flex items-center justify-between">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        {tabSwitch}
         <span className="text-xs font-medium text-muted-foreground">
           Compiled CV
         </span>
@@ -41,7 +48,7 @@ export const CvPdfPane: React.FC<CvPdfPaneProps> = ({ job }) => {
           asChild
           variant="ghost"
           size="sm"
-          className="h-7 gap-1 px-2 text-xs"
+          className="ml-auto h-7 gap-1 px-2 text-xs"
         >
           <a href={pdfHref} target="_blank" rel="noopener noreferrer">
             <ExternalLink className="h-3 w-3" />

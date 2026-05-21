@@ -107,6 +107,7 @@ export const OrchestratorHeader: React.FC<OrchestratorHeaderProps> = ({
         ) : undefined
       }
       actions={actions}
+      fullWidth
     />
   );
 };

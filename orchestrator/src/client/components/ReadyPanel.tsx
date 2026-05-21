@@ -57,8 +57,8 @@ import { buildReadyPanelGoogleDorks } from "./ready-panel-google-dorks";
 
 const TAILOR_PANEL_STORAGE_KEY = "jobops:tailorPanel:rightWidth";
 const TAILOR_PANEL_DEFAULT_WIDTH = 380;
-const TAILOR_PANEL_MIN_WIDTH = 320;
-const TAILOR_PANEL_MAX_WIDTH = 720;
+const TAILOR_PANEL_MIN_WIDTH = 200;
+const TAILOR_PANEL_MAX_WIDTH = 4000;
 
 const READY_TAB_STORAGE_KEY = "jobops:ready-tab";
 type ReadyTab = "tailor-cv" | "tailor-cover" | "details";
@@ -343,65 +343,66 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
 
   return (
     <div className="flex flex-col h-full">
+      {/* ─────────────────────────────────────────────────────────────────────
+          HEADER ROW: title + fit on the left, primary actions on the right
+      ───────────────────────────────────────────────────────────────────── */}
       <div className="pb-4 border-b border-border/40">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold leading-tight">{job.title}</h2>
-            <p className="text-sm text-muted-foreground">{job.employer}</p>
-            {job.location ? (
-              <p className="text-xs text-muted-foreground">{job.location}</p>
-            ) : null}
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="min-w-0">
+              <h2 className="text-lg font-semibold leading-tight">
+                {job.title}
+              </h2>
+              <p className="text-sm text-muted-foreground">{job.employer}</p>
+              {job.location ? (
+                <p className="text-xs text-muted-foreground">{job.location}</p>
+              ) : null}
+            </div>
+            <FitIndicator category={job.suitabilityCategory ?? null} />
           </div>
-          <FitIndicator category={job.suitabilityCategory ?? null} />
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              asChild
+              variant="outline"
+              className="h-9 gap-1 px-2 text-xs"
+            >
+              <a
+                href={pdfHref}
+                download={`${safeFilenamePart(personName || "Unknown")}_${safeFilenamePart(job.employer || "Unknown")}.pdf`}
+              >
+                <Download className="h-3.5 w-3.5 shrink-0" />
+                <span>Download PDF</span>
+                <KbdHint shortcut="d" className="ml-1" />
+              </a>
+            </Button>
+
+            <OpenJobListingButton
+              href={jobLink}
+              className="h-9 px-2 text-xs"
+              shortcut="o"
+            />
+
+            <Button
+              onClick={handleMarkApplied}
+              variant="default"
+              className="h-9 gap-1 px-2 text-xs"
+              disabled={isMarkingApplied}
+            >
+              {isMarkingApplied ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <CheckCircle2 className="h-3.5 w-3.5" />
+              )}
+              <span>Mark Applied</span>
+              <KbdHint shortcut="a" className="ml-1" />
+            </Button>
+          </div>
         </div>
       </div>
 
       <div className="py-3">
         <FitAssessment job={job} />
-      </div>
-
-      {/* ─────────────────────────────────────────────────────────────────────
-          PRIMARY ACTION CLUSTER
-          Always-visible shipping actions: download, open, mark applied.
-      ───────────────────────────────────────────────────────────────────── */}
-      <div className="pb-4 border-b border-border/40">
-        <div className="grid gap-2 sm:grid-cols-3">
-          <Button
-            asChild
-            variant="outline"
-            className="h-9 w-full gap-1 px-2 text-xs"
-          >
-            <a
-              href={pdfHref}
-              download={`${safeFilenamePart(personName || "Unknown")}_${safeFilenamePart(job.employer || "Unknown")}.pdf`}
-            >
-              <Download className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate">Download PDF</span>
-              <KbdHint shortcut="d" className="ml-auto" />
-            </a>
-          </Button>
-
-          <OpenJobListingButton
-            href={jobLink}
-            className="h-9 w-full px-2 text-xs"
-            shortcut="o"
-          />
-
-          <Button
-            onClick={handleMarkApplied}
-            variant="default"
-            className="h-9 w-full gap-1 px-2 text-xs"
-            disabled={isMarkingApplied}
-          >
-            {isMarkingApplied ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <CheckCircle2 className="h-3.5 w-3.5" />
-            )}
-            <span className="truncate">Mark Applied</span>
-            <KbdHint shortcut="a" className="ml-auto" />
-          </Button>
-        </div>
       </div>
 
       <div className="flex-1 min-h-0 py-4 flex flex-col">
