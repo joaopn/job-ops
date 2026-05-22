@@ -661,14 +661,17 @@ export async function deleteJobsByStatus(status: JobStatus): Promise<number> {
 }
 
 /**
- * Move every row in {discovered, selected, backlog} whose `discovered_at` is
- * older than `thresholdDays` into the `stale` status. Returns the total moved
- * plus a per-source-status breakdown.
+ * Move every row in {discovered, selected, backlog} whose effective age
+ * (`date_posted` when present, else `discovered_at`) is older than
+ * `thresholdDays` into the `stale` status. Returns the total moved plus a
+ * per-source-status breakdown.
  *
- * Uses `discovered_at` (always ISO) as the SQL cutoff. The client display
- * still shows `datePosted ?? discoveredAt` for human readability, but the
- * sweep predicate avoids `date_posted` (mixed-format text — jobspy stores
- * Unix-ms, others ISO) so the WHERE doesn't silently drop a swath of rows.
+ * Mirrors the client's `getJobPostedValue` (datePosted ?? discoveredAt) so
+ * the sweep matches what the user sees in the "Posted Xd" / "Found Xd"
+ * pill. `date_posted` is mixed-format text — jobspy stores Unix-ms numeric
+ * strings while every other extractor stores ISO — so the SQL CASE
+ * detects all-digit strings and routes them through `unixepoch` before
+ * comparison. Unparseable values fall back to `discovered_at` via COALESCE.
  */
 export async function sweepStaleJobs(thresholdDays: number): Promise<{
   moved: number;
@@ -677,15 +680,28 @@ export async function sweepStaleJobs(thresholdDays: number): Promise<{
   const eligibleStatuses: JobStatus[] = ["discovered", "selected", "backlog"];
   const offsetParam = `-${thresholdDays} days`;
   const cutoffClause = sql`datetime('now', ${offsetParam})`;
+  // Effective age: parse date_posted (ISO or Unix-ms numeric string) and
+  // fall back to discovered_at when null or unparseable. SQLite's
+  // datetime() returns NULL for non-parseable inputs, which COALESCE
+  // collapses to the fallback.
+  const effectiveDateClause = sql`COALESCE(
+    CASE
+      WHEN ${jobs.datePosted} IS NULL THEN NULL
+      WHEN length(${jobs.datePosted}) > 0
+        AND ${jobs.datePosted} NOT GLOB '*[^0-9]*'
+        THEN datetime(CAST(${jobs.datePosted} AS INTEGER) / 1000, 'unixepoch')
+      ELSE datetime(${jobs.datePosted})
+    END,
+    datetime(${jobs.discoveredAt})
+  )`;
+  const ageWhere = and(
+    inArray(jobs.status, eligibleStatuses),
+    sql`${effectiveDateClause} < ${cutoffClause}`,
+  );
   const rows = await db
     .select({ status: jobs.status })
     .from(jobs)
-    .where(
-      and(
-        inArray(jobs.status, eligibleStatuses),
-        sql`${jobs.discoveredAt} < ${cutoffClause}`,
-      ),
-    );
+    .where(ageWhere);
   const breakdown = { discovered: 0, selected: 0, backlog: 0 };
   for (const row of rows) {
     if (row.status === "discovered") breakdown.discovered += 1;
@@ -698,12 +714,7 @@ export async function sweepStaleJobs(thresholdDays: number): Promise<{
   await db
     .update(jobs)
     .set({ status: "stale", updatedAt: sql`(datetime('now'))` })
-    .where(
-      and(
-        inArray(jobs.status, eligibleStatuses),
-        sql`${jobs.discoveredAt} < ${cutoffClause}`,
-      ),
-    );
+    .where(ageWhere);
 
   return { moved, breakdown };
 }

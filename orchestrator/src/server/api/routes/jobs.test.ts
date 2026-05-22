@@ -327,6 +327,64 @@ describe.sequential("POST /api/jobs/actions — 5g action variants", () => {
     expect(byId["sweep-ready-old"]).toBe("ready");
   });
 
+  it("sweep-stale prefers date_posted over discovered_at and handles Unix-ms strings", async () => {
+    const { db, schema } = await import("@server/db/index");
+    const { sql } = await import("drizzle-orm");
+    // Old posting, fresh discovery (the typical repost-redeposit case) — SHOULD sweep.
+    await seedJob({ id: "sweep-posted-old-iso", status: "discovered" });
+    // Jobspy-style Unix-ms numeric string, old — SHOULD sweep.
+    await seedJob({ id: "sweep-posted-old-msec", status: "discovered" });
+    // Fresh date_posted but old discovered_at — should NOT sweep (date_posted wins).
+    await seedJob({ id: "sweep-posted-fresh", status: "discovered" });
+
+    await db
+      .update(schema.jobs)
+      .set({
+        datePosted: sql`strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-30 days')`,
+        discoveredAt: sql`datetime('now', '-2 days')`,
+      })
+      .where(sql`${schema.jobs.id} = 'sweep-posted-old-iso'`);
+
+    // Unix-ms 30 days ago, stringified.
+    const msecCutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    await db
+      .update(schema.jobs)
+      .set({
+        datePosted: String(msecCutoff),
+        discoveredAt: sql`datetime('now', '-2 days')`,
+      })
+      .where(sql`${schema.jobs.id} = 'sweep-posted-old-msec'`);
+
+    await db
+      .update(schema.jobs)
+      .set({
+        datePosted: sql`strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-3 days')`,
+        discoveredAt: sql`datetime('now', '-60 days')`,
+      })
+      .where(sql`${schema.jobs.id} = 'sweep-posted-fresh'`);
+
+    const res = await fetch(`${baseUrl}/api/jobs/sweep-stale`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ thresholdDays: 14 }),
+    });
+    expect(res.status).toBe(200);
+    const payload = (await res.json()) as {
+      ok: boolean;
+      data: { moved: number };
+    };
+    expect(payload.ok).toBe(true);
+    expect(payload.data.moved).toBe(2);
+
+    const rows = await db
+      .select({ id: schema.jobs.id, status: schema.jobs.status })
+      .from(schema.jobs);
+    const byId = Object.fromEntries(rows.map((r) => [r.id, r.status]));
+    expect(byId["sweep-posted-old-iso"]).toBe("stale");
+    expect(byId["sweep-posted-old-msec"]).toBe("stale");
+    expect(byId["sweep-posted-fresh"]).toBe("discovered");
+  });
+
   it("sweep-stale rejects invalid thresholdDays", async () => {
     const res = await fetch(`${baseUrl}/api/jobs/sweep-stale`, {
       method: "POST",
