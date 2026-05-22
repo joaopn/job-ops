@@ -1,6 +1,6 @@
 import * as api from "@client/api";
 import { ListItem } from "@client/components/layout";
-import { PipelineProgress } from "@client/components/PipelineProgress";
+import { PipelineRunBanner } from "@client/components/PipelineRunBanner";
 import { queryKeys } from "@client/lib/queryKeys";
 import { sourceLabel } from "@shared/extractors";
 import {
@@ -532,7 +532,7 @@ export const OverviewPipelineRunsSection: React.FC = () => {
 
         <CardContent className="space-y-6">
           {pipelineStatusQuery.data?.isRunning ? (
-            <PipelineProgress isRunning />
+            <PipelineRunBanner isRunning />
           ) : null}
 
           {isLoading && !latestRun && recentRuns.length === 0 ? (

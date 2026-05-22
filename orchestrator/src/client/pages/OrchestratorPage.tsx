@@ -26,7 +26,7 @@ import { JobListPanel } from "./orchestrator/JobListPanel";
 import { JobListSplitter, JobListToggleBar } from "./orchestrator/JobListSplitter";
 import { OrchestratorFilters } from "./orchestrator/OrchestratorFilters";
 import { OrchestratorHeader } from "./orchestrator/OrchestratorHeader";
-import { OrchestratorSummary } from "./orchestrator/OrchestratorSummary";
+import { PipelineRunBanner } from "@client/components/PipelineRunBanner";
 import { RunModeModal } from "./orchestrator/RunModeModal";
 import { useFilteredJobs } from "./orchestrator/useFilteredJobs";
 import { useJobSelectionActions } from "./orchestrator/useJobSelectionActions";
@@ -157,14 +157,12 @@ export const OrchestratorPage: React.FC = () => {
     [navigateWithContext, activeTab],
   );
 
-  const { settings, inboxStaleThresholdDays, inboxAgeoutThresholdDays } =
-    useSettings();
+  const { settings, inboxStaleThresholdDays } = useSettings();
   const effectiveStaleThresholdDays =
-    staleThresholdDays ?? inboxAgeoutThresholdDays;
+    staleThresholdDays ?? inboxStaleThresholdDays;
   const {
     jobs,
     selectedJob,
-    stats,
     isLoading,
     isPipelineRunning,
     setIsPipelineRunning,
@@ -475,16 +473,13 @@ export const OrchestratorPage: React.FC = () => {
         onCancelPipeline={handleCancelPipeline}
       />
 
+      <PipelineRunBanner isRunning={isPipelineRunning} />
+
       <main
         className={`space-y-6 px-4 py-6 ${
           selectedJobIds.size > 0 ? "pb-36 lg:pb-12" : "pb-12"
         }`}
       >
-        <OrchestratorSummary
-          stats={stats}
-          isPipelineRunning={isPipelineRunning}
-        />
-
         {/* Main content: tabs/filters -> list/detail */}
         <section className="space-y-4">
           <JobCommandBar

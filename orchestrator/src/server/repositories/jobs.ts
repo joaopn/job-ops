@@ -3,7 +3,12 @@
  */
 
 import { randomUUID } from "node:crypto";
+import {
+  DateNormalizationError,
+  normalizeDatePosted,
+} from "@shared/date-normalize";
 import { buildLocationEvidence } from "@shared/location-domain.js";
+import { logger } from "@infra/logger";
 import type {
   CreateJobInput,
   CreateJobNoteInput,
@@ -424,18 +429,50 @@ async function tryInsertJob(input: CreateJobInput): Promise<Job | null> {
  * active work or a final decision and shouldn't be undone by a repost.
  */
 export async function createJobs(input: CreateJobInput): Promise<Job>;
-export async function createJobs(
-  inputs: CreateJobInput[],
-): Promise<{ created: number; skipped: number; reposted: number }>;
+export async function createJobs(inputs: CreateJobInput[]): Promise<{
+  created: number;
+  skipped: number;
+  reposted: number;
+  rejected: number;
+}>;
 export async function createJobs(
   inputOrInputs: CreateJobInput | CreateJobInput[],
-): Promise<Job | { created: number; skipped: number; reposted: number }> {
+): Promise<
+  Job | { created: number; skipped: number; reposted: number; rejected: number }
+> {
   if (!Array.isArray(inputOrInputs)) {
-    const inserted = await tryInsertJob(inputOrInputs);
+    const normalized: CreateJobInput = {
+      ...inputOrInputs,
+      datePosted: normalizeDatePosted(inputOrInputs.datePosted) ?? undefined,
+    };
+    const inserted = await tryInsertJob(normalized);
     if (inserted) return inserted;
-    const existing = await getJobByUrl(inputOrInputs.jobUrl);
+    const existing = await getJobByUrl(normalized.jobUrl);
     if (existing) return existing;
     throw new Error("Failed to create or resolve existing job by URL");
+  }
+
+  let rejected = 0;
+  const normalizedInputs: CreateJobInput[] = [];
+  for (const input of inputOrInputs) {
+    try {
+      normalizedInputs.push({
+        ...input,
+        datePosted: normalizeDatePosted(input.datePosted) ?? undefined,
+      });
+    } catch (error) {
+      rejected += 1;
+      logger.error("Rejecting job ingestion: bad date_posted", {
+        source: input.source,
+        jobUrl: input.jobUrl,
+        rawDatePosted:
+          error instanceof DateNormalizationError
+            ? error.rawValue
+            : String(input.datePosted),
+        message:
+          error instanceof Error ? error.message : "unknown normalize error",
+      });
+    }
   }
 
   const byUrl = new Map<
@@ -446,7 +483,7 @@ export async function createJobs(
     }
   >();
 
-  for (const input of inputOrInputs) {
+  for (const input of normalizedInputs) {
     const existing = byUrl.get(input.jobUrl);
     if (existing) {
       existing.count += 1;
@@ -461,7 +498,7 @@ export async function createJobs(
 
   const uniqueUrls = Array.from(byUrl.keys());
   if (uniqueUrls.length === 0) {
-    return { created, skipped, reposted };
+    return { created, skipped, reposted, rejected };
   }
 
   const existingRows = await db
@@ -518,7 +555,7 @@ export async function createJobs(
     skipped += count - 1;
   }
 
-  return { created, skipped, reposted };
+  return { created, skipped, reposted, rejected };
 }
 
 /**

@@ -25,6 +25,7 @@ type DiscoveryTaskResult = {
 
 type DiscoverySourceTask = {
   source: CrawlSource;
+  platforms: string[];
   termsTotal?: number;
   detail: string;
   run: () => Promise<DiscoveryTaskResult>;
@@ -213,6 +214,7 @@ export async function discoverJobsStep(args: {
 
     sourceTasks.push({
       source: manifest.id,
+      platforms: [...grouped.sources],
       termsTotal: grouped.termsTotal,
       detail:
         grouped.sources.length > 1
@@ -289,7 +291,7 @@ export async function discoverJobsStep(args: {
     return { discoveredJobs, sourceErrors };
   }
 
-  const sourceResults = await asyncPool({
+  const sourceResults = await asyncPool<DiscoverySourceTask, DiscoveryTaskResult>({
     items: sourceTasks,
     concurrency: DISCOVERY_CONCURRENCY,
     shouldStop: args.shouldCancel,
@@ -301,12 +303,44 @@ export async function discoverJobsStep(args: {
         {
           termsTotal: sourceTask.termsTotal,
           detail: sourceTask.detail,
+          platforms: sourceTask.platforms,
         },
       );
     },
-    onTaskSettled: () => {
+    onTaskSettled: (sourceTask, _index, outcome) => {
       completedSources += 1;
       progressHelpers.completeSource(completedSources, totalSources);
+
+      if (outcome.status !== "fulfilled") {
+        const message =
+          outcome.error instanceof Error
+            ? outcome.error.message
+            : "unknown error";
+        for (const platform of sourceTask.platforms) {
+          progressHelpers.markSourceFailed(platform, message);
+        }
+        return;
+      }
+
+      const taskResult = outcome.result;
+      if (taskResult.sourceErrors.length > 0) {
+        const message = taskResult.sourceErrors.join("; ");
+        for (const platform of sourceTask.platforms) {
+          progressHelpers.markSourceFailed(platform, message);
+        }
+        return;
+      }
+
+      for (const platform of sourceTask.platforms) {
+        const platformJobs = taskResult.discoveredJobs.filter(
+          (job) => job.source === platform,
+        );
+        progressHelpers.recordSourceJobsCounts(platform, {
+          found: platformJobs.length,
+          scraped: platformJobs.length,
+        });
+        progressHelpers.markSourceCompleted(platform);
+      }
     },
     task: async (sourceTask) => {
       try {

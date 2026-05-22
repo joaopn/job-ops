@@ -87,7 +87,6 @@ export interface AppSettings {
   autoTailoringEnabled: Resolved<boolean>;
   enableJobScoring: Resolved<boolean>;
   inboxStaleThresholdDays: Resolved<number>;
-  inboxAgeoutThresholdDays: Resolved<number>;
   maxBriefChars: Resolved<number>;
   maxJobDescriptionChars: Resolved<number>;
   maxTailoredContentChars: Resolved<number>;

@@ -50,10 +50,10 @@ describe.sequential("jobs repository repost detection", () => {
       },
     ]);
 
-    expect(result).toEqual({ created: 0, skipped: 0, reposted: 1 });
+    expect(result).toEqual({ created: 0, skipped: 0, reposted: 1, rejected: 0 });
 
     const refreshed = await jobsRepo.getJobByUrl(url);
-    expect(refreshed?.datePosted).toBe("2026-04-15");
+    expect(refreshed?.datePosted).toBe("2026-04-15T00:00:00.000Z");
     expect(refreshed?.repostCount).toBe(1);
     expect(refreshed?.repostedAt).not.toBeNull();
     expect(refreshed?.status).toBe("discovered");
@@ -80,7 +80,7 @@ describe.sequential("jobs repository repost detection", () => {
         datePosted: "2026-04-15",
       },
     ]);
-    expect(sameDay).toEqual({ created: 0, skipped: 1, reposted: 0 });
+    expect(sameDay).toEqual({ created: 0, skipped: 1, reposted: 0, rejected: 0 });
 
     const older = await jobsRepo.createJobs([
       {
@@ -91,10 +91,10 @@ describe.sequential("jobs repository repost detection", () => {
         datePosted: "2026-04-01",
       },
     ]);
-    expect(older).toEqual({ created: 0, skipped: 1, reposted: 0 });
+    expect(older).toEqual({ created: 0, skipped: 1, reposted: 0, rejected: 0 });
 
     const refreshed = await jobsRepo.getJobByUrl(url);
-    expect(refreshed?.datePosted).toBe("2026-04-15");
+    expect(refreshed?.datePosted).toBe("2026-04-15T00:00:00.000Z");
     expect(refreshed?.repostCount).toBe(0);
     expect(refreshed?.repostedAt).toBeNull();
   });
@@ -233,10 +233,54 @@ describe.sequential("jobs repository repost detection", () => {
         datePosted: "2026-04-15",
       },
     ]);
-    expect(result).toEqual({ created: 0, skipped: 1, reposted: 0 });
+    expect(result).toEqual({ created: 0, skipped: 1, reposted: 0, rejected: 0 });
 
     const refreshed = await jobsRepo.getJobByUrl(url);
     expect(refreshed?.datePosted).toBeNull();
     expect(refreshed?.repostCount).toBe(0);
+  });
+
+  it("normalises Unix-ms datePosted to ISO at ingestion", async () => {
+    const url = "https://example.com/jobs/unix-ms-date";
+    await jobsRepo.createJobs([
+      {
+        source: "linkedin",
+        title: "Backend Engineer",
+        employer: "Acme",
+        jobUrl: url,
+        datePosted: "1777075200000", // jobspy-style Unix-ms
+      },
+    ]);
+
+    const refreshed = await jobsRepo.getJobByUrl(url);
+    expect(refreshed?.datePosted).toBe("2026-04-25T00:00:00.000Z");
+  });
+
+  it("rejects rows with unparseable datePosted and counts them", async () => {
+    const goodUrl = "https://example.com/jobs/good-row";
+    const badUrl = "https://example.com/jobs/bad-row";
+
+    const result = await jobsRepo.createJobs([
+      {
+        source: "linkedin",
+        title: "Backend Engineer",
+        employer: "Acme",
+        jobUrl: goodUrl,
+        datePosted: "2026-04-15",
+      },
+      {
+        source: "linkedin",
+        title: "Frontend Engineer",
+        employer: "Acme",
+        jobUrl: badUrl,
+        datePosted: "totally not a date",
+      },
+    ]);
+
+    expect(result.created).toBe(1);
+    expect(result.rejected).toBe(1);
+    expect(await jobsRepo.getJobByUrl(badUrl)).toBeNull();
+    const refreshed = await jobsRepo.getJobByUrl(goodUrl);
+    expect(refreshed?.datePosted).toBe("2026-04-15T00:00:00.000Z");
   });
 });

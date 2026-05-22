@@ -22,6 +22,7 @@
     "db:migrate:prod": "tsx src/server/db/migrate.ts",
     "db:clear": "tsx src/server/db/clear.ts",
     "db:drop": "tsx src/server/db/clear.ts --drop",
+    "db:normalize-dates": "tsx src/server/db/normalize-dates.ts",
     "pipeline:run": "tsx src/server/pipeline/run.ts",
     "test": "vitest",
     "test:run": "vitest run"

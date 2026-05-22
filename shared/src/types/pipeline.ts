@@ -106,6 +106,68 @@ export interface PipelineStatusResponse {
   nextScheduledRun: string | null;
 }
 
+export type PipelineSourceStatus =
+  | "pending"
+  | "running"
+  | "completed"
+  | "failed";
+
+export interface PipelineSourceStats {
+  id: string;
+  label: string;
+  status: PipelineSourceStatus;
+  jobsFound: number;
+  jobsScraped: number;
+  jobsImported: number;
+  jobsReposted: number;
+  startedAt?: string;
+  completedAt?: string;
+  durationMs?: number;
+  error?: string;
+}
+
+export type PipelineProgressStep =
+  | "idle"
+  | "crawling"
+  | "importing"
+  | "scoring"
+  | "processing"
+  | "completed"
+  | "cancelled"
+  | "failed";
+
+export interface PipelineProgressEvent {
+  step: PipelineProgressStep;
+  message: string;
+  detail?: string;
+  crawlingSource: string | null;
+  crawlingSourcesCompleted: number;
+  crawlingSourcesTotal: number;
+  crawlingTermsProcessed: number;
+  crawlingTermsTotal: number;
+  crawlingListPagesProcessed: number;
+  crawlingListPagesTotal: number;
+  crawlingJobCardsFound: number;
+  crawlingJobPagesEnqueued: number;
+  crawlingJobPagesSkipped: number;
+  crawlingJobPagesProcessed: number;
+  crawlingPhase?: "list" | "job";
+  crawlingCurrentUrl?: string;
+  jobsDiscovered: number;
+  jobsScored: number;
+  jobsProcessed: number;
+  totalToProcess: number;
+  currentJob?: {
+    id: string;
+    title: string;
+    employer: string;
+  };
+  error?: string;
+  startedAt?: string;
+  completedAt?: string;
+  sourceStats: PipelineSourceStats[];
+}
+
 export type PipelineMetricQuality =
   | "exact"
   | "inferred_from_timestamps"

@@ -59,7 +59,6 @@ export const PipelineSettingsSection: React.FC<
     autoTailoringEnabled,
     enableJobScoring,
     inboxStaleThresholdDays,
-    inboxAgeoutThresholdDays,
     manualJobFetchTimeoutMs,
     manualJobFetchMinExtractedChars,
     manualJobFetchBrowserSettleMs,
@@ -218,57 +217,6 @@ export const PipelineSettingsSection: React.FC<
             Current:{" "}
             <span className="font-mono">
               {inboxStaleThresholdDays.effective}
-            </span>
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <label
-            htmlFor="inboxAgeoutThresholdDays"
-            className="text-sm font-medium"
-          >
-            Inbox age-out threshold (days)
-          </label>
-          <Controller
-            name="inboxAgeoutThresholdDays"
-            control={control}
-            rules={{
-              validate: (v) =>
-                v === null ||
-                v === undefined ||
-                (Number.isInteger(v) && v >= 0 && v <= 365) ||
-                "Must be between 0 and 365",
-            }}
-            render={({ field }) => (
-              <Input
-                id="inboxAgeoutThresholdDays"
-                type="number"
-                min={0}
-                max={365}
-                step={1}
-                placeholder={String(inboxAgeoutThresholdDays.default)}
-                disabled={isLoading || isSaving}
-                value={field.value ?? ""}
-                onChange={(e) => {
-                  const value = e.target.valueAsNumber;
-                  field.onChange(Number.isFinite(value) ? value : null);
-                }}
-              />
-            )}
-          />
-          {errors.inboxAgeoutThresholdDays && (
-            <div className="text-xs text-destructive">
-              {errors.inboxAgeoutThresholdDays.message as string}
-            </div>
-          )}
-          <div className="text-xs text-muted-foreground">
-            Inbox rows older than this auto-move to Backlog at the start of the
-            next pipeline run. 0 disables auto-aging.
-          </div>
-          <div className="text-xs text-muted-foreground">
-            Current:{" "}
-            <span className="font-mono">
-              {inboxAgeoutThresholdDays.effective}
             </span>
           </div>
         </div>

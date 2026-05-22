@@ -233,7 +233,6 @@ export const createAppSettings = (
   autoTailoringEnabled: { value: false, default: false, override: null },
   enableJobScoring: { value: true, default: true, override: null },
   inboxStaleThresholdDays: { value: 7, default: 7, override: null },
-  inboxAgeoutThresholdDays: { value: 14, default: 14, override: null },
   maxBriefChars: { value: 200_000, default: 200_000, override: null },
   maxJobDescriptionChars: { value: 100_000, default: 100_000, override: null },
   maxTailoredContentChars: {

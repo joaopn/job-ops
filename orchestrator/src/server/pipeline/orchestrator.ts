@@ -26,7 +26,6 @@ import {
   updatePipelineRunResultSummary,
 } from "./run-details";
 import {
-  ageJobsStep,
   discoverJobsStep,
   importJobsStep,
   loadBriefStep,
@@ -55,13 +54,6 @@ async function resolveAutoTailoring(
   if (raw === "1" || raw === "true") return true;
   if (raw === "0" || raw === "false") return false;
   return false;
-}
-
-async function resolveInboxAgeoutDays(): Promise<number> {
-  const raw = await settingsRepo.getSetting("inboxAgeoutThresholdDays");
-  if (raw === null) return 14;
-  const parsed = parseInt(raw, 10);
-  return Number.isNaN(parsed) ? 14 : parsed;
 }
 
 // Track if pipeline is currently running
@@ -208,7 +200,9 @@ export async function runPipeline(
       });
 
       ensureNotCancelled();
-      const { created, reposted } = await importJobsStep({ discoveredJobs });
+      const { created, reposted, rejected } = await importJobsStep({
+        discoveredJobs,
+      });
       jobsDiscovered = created;
 
       await persistResultSummary({ stage: "import" });
@@ -216,13 +210,10 @@ export async function runPipeline(
         jobsDiscovered: created,
       });
 
-      ensureNotCancelled();
-      const ageoutDays = await resolveInboxAgeoutDays();
-      const { moved: agedOut } = await ageJobsStep({ ageoutDays });
-      pipelineLogger.info("Auto-aging completed", {
-        ageoutDays,
-        agedOut,
+      pipelineLogger.info("Import step finished", {
+        created,
         reposted,
+        rejected,
       });
 
       ensureNotCancelled();

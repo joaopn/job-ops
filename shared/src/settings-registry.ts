@@ -482,17 +482,6 @@ export const settingsRegistry = {
     },
     serialize: serializeNullableNumber,
   },
-  inboxAgeoutThresholdDays: {
-    kind: "typed" as const,
-    schema: z.number().int().min(0).max(365),
-    default: (): number => 14,
-    parse: (raw: string | undefined): number | null => {
-      const parsed = raw ? parseInt(raw, 10) : NaN;
-      return Number.isNaN(parsed) ? null : Math.min(365, Math.max(0, parsed));
-    },
-    serialize: serializeNullableNumber,
-  },
-
   // --- Context limits (LLM-bound character caps) ---
   // Enforced at the write boundary; exceeding a cap returns 422 with the
   // observed length rather than silently truncating into the prompt.

@@ -1,51 +1,25 @@
 import { logger } from "@infra/logger";
+import {
+  EXTRACTOR_SOURCE_METADATA,
+  isExtractorSourceId,
+  sourceLabel as resolveExtractorLabel,
+} from "@shared/extractors";
+import type {
+  PipelineProgressEvent,
+  PipelineProgressStep,
+  PipelineSourceStats,
+  PipelineSourceStatus,
+} from "@shared/types";
 
 /**
  * Pipeline progress tracking with Server-Sent Events.
  */
 
-export type PipelineStep =
-  | "idle"
-  | "crawling"
-  | "importing"
-  | "scoring"
-  | "processing"
-  | "completed"
-  | "cancelled"
-  | "failed";
+export type PipelineStep = PipelineProgressStep;
 
 export type CrawlSource = string;
 
-export interface PipelineProgress {
-  step: PipelineStep;
-  message: string;
-  detail?: string;
-  crawlingSource: CrawlSource | null;
-  crawlingSourcesCompleted: number;
-  crawlingSourcesTotal: number;
-  crawlingTermsProcessed: number;
-  crawlingTermsTotal: number;
-  crawlingListPagesProcessed: number;
-  crawlingListPagesTotal: number;
-  crawlingJobCardsFound: number;
-  crawlingJobPagesEnqueued: number;
-  crawlingJobPagesSkipped: number;
-  crawlingJobPagesProcessed: number;
-  crawlingPhase?: "list" | "job";
-  crawlingCurrentUrl?: string;
-  jobsDiscovered: number;
-  jobsScored: number;
-  jobsProcessed: number;
-  totalToProcess: number;
-  currentJob?: {
-    id: string;
-    title: string;
-    employer: string;
-  };
-  error?: string;
-  startedAt?: string;
-  completedAt?: string;
-}
+export type PipelineProgress = PipelineProgressEvent;
 
 // Event emitter for progress updates
 type ProgressListener = (progress: PipelineProgress) => void;
@@ -69,6 +43,7 @@ let currentProgress: PipelineProgress = {
   jobsScored: 0,
   jobsProcessed: 0,
   totalToProcess: 0,
+  sourceStats: [],
 };
 
 const emptyCrawlingStats = {
@@ -108,6 +83,91 @@ const emptySourceCrawlingStats = (): SourceCrawlingStats => ({
 
 const crawlingStatsBySource = new Map<CrawlSource, SourceCrawlingStats>();
 
+type SourceStatsInternal = {
+  id: string;
+  label: string;
+  status: PipelineSourceStatus;
+  jobsFound: number;
+  jobsScraped: number;
+  jobsImported: number;
+  jobsReposted: number;
+  startedAt?: string;
+  completedAt?: string;
+  durationMs?: number;
+  error?: string;
+  order: number;
+};
+
+const sourceStatsByPlatform = new Map<string, SourceStatsInternal>();
+let sourceRowFallbackCounter = 0;
+
+function resolveSourceLabel(id: string): string {
+  if (isExtractorSourceId(id)) return resolveExtractorLabel(id);
+  return id;
+}
+
+function resolveSourceOrder(id: string): number {
+  if (isExtractorSourceId(id)) {
+    return EXTRACTOR_SOURCE_METADATA[id].order;
+  }
+  sourceRowFallbackCounter += 1;
+  return 9000 + sourceRowFallbackCounter;
+}
+
+function getOrCreateSourceRow(platform: string): SourceStatsInternal {
+  const existing = sourceStatsByPlatform.get(platform);
+  if (existing) return existing;
+  const row: SourceStatsInternal = {
+    id: platform,
+    label: resolveSourceLabel(platform),
+    status: "pending",
+    jobsFound: 0,
+    jobsScraped: 0,
+    jobsImported: 0,
+    jobsReposted: 0,
+    order: resolveSourceOrder(platform),
+  };
+  sourceStatsByPlatform.set(platform, row);
+  return row;
+}
+
+function buildSourceStats(): PipelineSourceStats[] {
+  return [...sourceStatsByPlatform.values()]
+    .sort((left, right) => left.order - right.order)
+    .map((row) => ({
+      id: row.id,
+      label: row.label,
+      status: row.status,
+      jobsFound: row.jobsFound,
+      jobsScraped: row.jobsScraped,
+      jobsImported: row.jobsImported,
+      jobsReposted: row.jobsReposted,
+      startedAt: row.startedAt,
+      completedAt: row.completedAt,
+      durationMs: row.durationMs,
+      error: row.error,
+    }));
+}
+
+function markRowTerminal(
+  row: SourceStatsInternal,
+  status: "completed" | "failed",
+  error?: string,
+) {
+  const completedAt = new Date().toISOString();
+  row.status = status;
+  row.completedAt = completedAt;
+  if (row.startedAt) {
+    row.durationMs = Math.max(
+      0,
+      new Date(completedAt).getTime() - new Date(row.startedAt).getTime(),
+    );
+  }
+  if (status === "failed" && error) {
+    row.error = error;
+  }
+}
+
 function aggregateCrawlingStats() {
   let termsProcessed = 0;
   let termsTotal = 0;
@@ -145,7 +205,11 @@ function aggregateCrawlingStats() {
  * Update the current progress and notify all listeners.
  */
 export function updateProgress(update: Partial<PipelineProgress>): void {
-  currentProgress = { ...currentProgress, ...update };
+  currentProgress = {
+    ...currentProgress,
+    ...update,
+    sourceStats: buildSourceStats(),
+  };
 
   // Notify all listeners
   for (const listener of listeners) {
@@ -184,6 +248,8 @@ export function subscribeToProgress(listener: ProgressListener): () => void {
  */
 export function resetProgress(): void {
   crawlingStatsBySource.clear();
+  sourceStatsByPlatform.clear();
+  sourceRowFallbackCounter = 0;
   currentProgress = {
     step: "idle",
     message: "Ready",
@@ -195,6 +261,7 @@ export function resetProgress(): void {
     jobsScored: 0,
     jobsProcessed: 0,
     totalToProcess: 0,
+    sourceStats: [],
   };
 }
 
@@ -205,6 +272,8 @@ export const progressHelpers = {
   startCrawling: (sourcesTotal = 0) =>
     (() => {
       crawlingStatsBySource.clear();
+      sourceStatsByPlatform.clear();
+      sourceRowFallbackCounter = 0;
       updateProgress({
         step: "crawling",
         message: "Fetching jobs from sources...",
@@ -225,7 +294,7 @@ export const progressHelpers = {
     source: CrawlSource,
     sourcesCompleted: number,
     sourcesTotal: number,
-    options?: { termsTotal?: number; detail?: string },
+    options?: { termsTotal?: number; detail?: string; platforms?: string[] },
   ) => {
     const existing =
       crawlingStatsBySource.get(source) ?? emptySourceCrawlingStats();
@@ -234,6 +303,16 @@ export const progressHelpers = {
       termsTotal: options?.termsTotal ?? existing.termsTotal,
     });
     const aggregated = aggregateCrawlingStats();
+
+    const platforms = options?.platforms ?? [source];
+    const startedAt = new Date().toISOString();
+    for (const platform of platforms) {
+      const row = getOrCreateSourceRow(platform);
+      if (row.status === "pending" || row.status === "running") {
+        row.status = "running";
+        row.startedAt = row.startedAt ?? startedAt;
+      }
+    }
 
     updateProgress({
       step: "crawling",
@@ -253,6 +332,42 @@ export const progressHelpers = {
       crawlingPhase: undefined,
       crawlingCurrentUrl: undefined,
     });
+  },
+
+  markSourceCompleted: (platform: string) => {
+    const row = sourceStatsByPlatform.get(platform);
+    if (!row) return;
+    if (row.status !== "running" && row.status !== "pending") return;
+    markRowTerminal(row, "completed");
+    updateProgress({});
+  },
+
+  markSourceFailed: (platform: string, error: string) => {
+    const row = getOrCreateSourceRow(platform);
+    if (row.status === "completed" || row.status === "failed") return;
+    markRowTerminal(row, "failed", error);
+    updateProgress({});
+  },
+
+  recordSourceJobsCounts: (
+    platform: string,
+    counts: { found?: number; scraped?: number },
+  ) => {
+    const row = sourceStatsByPlatform.get(platform);
+    if (!row) return;
+    if (counts.found !== undefined) row.jobsFound = counts.found;
+    if (counts.scraped !== undefined) row.jobsScraped = counts.scraped;
+    updateProgress({});
+  },
+
+  recordSourceJobsImported: (
+    platform: string,
+    counts: { imported: number; reposted: number },
+  ) => {
+    const row = getOrCreateSourceRow(platform);
+    row.jobsImported = counts.imported;
+    row.jobsReposted = counts.reposted;
+    updateProgress({});
   },
 
   completeSource: (sourcesCompleted: number, sourcesTotal: number) =>
@@ -293,6 +408,19 @@ export const progressHelpers = {
           update.jobPagesProcessed ?? existing.jobPagesProcessed,
       };
       crawlingStatsBySource.set(update.source, nextForSource);
+
+      // Mirror live counters into the matching platform row, if one exists.
+      // For 1:1 extractors (hiringcafe, workingnomads, …) source-key equals
+      // the platform id, so the table updates live. For jobspy (source-key
+      // "jobspy") no row matches and this is a no-op.
+      const platformRow = sourceStatsByPlatform.get(update.source);
+      if (
+        platformRow &&
+        (platformRow.status === "pending" || platformRow.status === "running")
+      ) {
+        platformRow.jobsFound = nextForSource.jobPagesEnqueued;
+        platformRow.jobsScraped = nextForSource.jobPagesProcessed;
+      }
     }
 
     const aggregated = aggregateCrawlingStats();
@@ -437,30 +565,47 @@ export const progressHelpers = {
       detail: `Completed ${index}/${total} jobs`,
     }),
 
-  complete: (discovered: number, processed: number) =>
+  complete: (discovered: number, processed: number) => {
+    sweepInFlightRows("completed");
     updateProgress({
       step: "completed",
       message: `Pipeline complete! Discovered ${discovered} jobs, processed ${processed}.`,
       detail: "Ready for review",
       completedAt: new Date().toISOString(),
       currentJob: undefined,
-    }),
+    });
+  },
 
-  cancelled: (reason: string) =>
+  cancelled: (reason: string) => {
+    sweepInFlightRows("failed", reason);
     updateProgress({
       step: "cancelled",
       message: "Pipeline cancelled",
       detail: reason,
       completedAt: new Date().toISOString(),
       currentJob: undefined,
-    }),
+    });
+  },
 
-  failed: (error: string) =>
+  failed: (error: string) => {
+    sweepInFlightRows("failed", error);
     updateProgress({
       step: "failed",
       message: "Pipeline failed",
       detail: error,
       error,
       completedAt: new Date().toISOString(),
-    }),
+    });
+  },
 };
+
+function sweepInFlightRows(
+  status: "completed" | "failed",
+  error?: string,
+): void {
+  for (const row of sourceStatsByPlatform.values()) {
+    if (row.status === "pending" || row.status === "running") {
+      markRowTerminal(row, status, error);
+    }
+  }
+}
