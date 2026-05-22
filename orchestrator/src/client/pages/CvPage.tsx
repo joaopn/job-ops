@@ -2,6 +2,7 @@ import * as api from "@client/api";
 import { ApiClientError } from "@client/api";
 import { CompileLogViewer, AttemptLogViewer } from "@client/components/cv/CompileLogViewer";
 import { PageHeader } from "@client/components/layout";
+import { ActivityLogButton } from "@client/components/ActivityLogButton";
 import { LlmStatusButton } from "@client/components/LlmStatusButton";
 import { queryKeys } from "@client/lib/queryKeys";
 import type {
@@ -29,7 +30,7 @@ import {
   Upload,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@client/lib/toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -105,7 +106,12 @@ export function CvPage() {
         icon={FileText}
         title="My CV"
         subtitle="Upload your LaTeX CV; the server flattens, extracts, and renders it for per-job tailoring."
-        actions={<LlmStatusButton />}
+        actions={
+          <div className="flex items-center gap-2">
+            <ActivityLogButton />
+            <LlmStatusButton />
+          </div>
+        }
       />
       <main className="container mx-auto px-4 py-6 pb-12">
         {summariesQuery.isLoading ? (

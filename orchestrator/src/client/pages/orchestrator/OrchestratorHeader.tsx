@@ -1,3 +1,4 @@
+import { ActivityLogButton } from "@client/components/ActivityLogButton";
 import { PageHeader, StatusIndicator } from "@client/components/layout";
 import type { JobSource } from "@shared/types.js";
 import { Activity, Link as LinkIcon, Loader2, Play, Square } from "lucide-react";
@@ -53,6 +54,7 @@ export const OrchestratorHeader: React.FC<OrchestratorHeaderProps> = ({
 
   const actions = isPipelineRunning ? (
     <div className="flex items-center gap-2">
+      <ActivityLogButton />
       {queueButton}
       <Button
         size="sm"
@@ -75,6 +77,7 @@ export const OrchestratorHeader: React.FC<OrchestratorHeaderProps> = ({
     </div>
   ) : (
     <div className="flex items-center gap-2">
+      <ActivityLogButton />
       {queueButton}
       <Button
         size="sm"

@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@client/lib/toast";
 import { JobDescriptionMarkdown } from "@/client/components/JobDescriptionMarkdown";
 import { getRenderableJobDescription } from "@/client/lib/jobDescription";
 import { Button } from "@/components/ui/button";

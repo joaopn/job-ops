@@ -7,7 +7,7 @@ import type {
 import { useMutation } from "@tanstack/react-query";
 import { Check, Loader2, RefreshCcw, X } from "lucide-react";
 import type React from "react";
-import { toast } from "sonner";
+import { toast } from "@client/lib/toast";
 import { Button } from "@/components/ui/button";
 
 type EditDiffCardProps = {

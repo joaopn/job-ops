@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@client/lib/toast";
 import { useRescoreJobMutation } from "@/client/hooks/queries/useJobMutations";
 
 export function useRescoreJob(onJobUpdated: () => void | Promise<void>) {

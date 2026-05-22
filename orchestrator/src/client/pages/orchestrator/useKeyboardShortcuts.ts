@@ -8,7 +8,7 @@ import { useActiveCv } from "@client/hooks/useActiveCv";
 import { SHORTCUTS, isShortcutInScope } from "@client/lib/shortcut-map";
 import type { JobAction, JobListItem } from "@shared/types.js";
 import { useCallback, useRef } from "react";
-import { toast } from "sonner";
+import { toast } from "@client/lib/toast";
 import { safeFilenamePart } from "@/lib/utils";
 import type { FilterTab } from "./constants";
 import { tabs } from "./constants";

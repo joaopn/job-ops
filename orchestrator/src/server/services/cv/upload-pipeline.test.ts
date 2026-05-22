@@ -50,6 +50,18 @@ vi.mock("@infra/logger", () => ({
   },
 }));
 
+// The `importActual` factories above evaluate real modules that transitively
+// import `repositories/settings` → `db/index`, which opens SQLite at module
+// load. Under parallel vitest workers this races with other server tests on
+// the shared `data/jobs.db` file and surfaces as SQLITE_BUSY. The test never
+// exercises any DB path (everything is mocked at the LLM / tectonic / diff
+// boundary), so we short-circuit the open with an empty stub.
+vi.mock("@server/db/index", () => ({
+  db: {},
+  schema: {},
+  closeDb: vi.fn(),
+}));
+
 import { FlattenInputError } from "./flatten-input";
 import { TemplateExtractError } from "./llm-template-extract";
 import { RunTectonicError } from "./run-tectonic";

@@ -9,7 +9,7 @@ import { Settings2 } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { toast } from "sonner";
+import { toast } from "@client/lib/toast";
 import {
   AlertDialog,
   AlertDialogAction,

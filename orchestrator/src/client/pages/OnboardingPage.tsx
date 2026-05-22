@@ -1,4 +1,6 @@
+import { ActivityLogButton } from "@client/components/ActivityLogButton";
 import { PageHeader, PageMain } from "@client/components/layout";
+import { LlmStatusButton } from "@client/components/LlmStatusButton";
 import { useOnboardingRequirement } from "@client/hooks/useOnboardingRequirement";
 import { ArrowLeft, ArrowRight, Sparkles } from "lucide-react";
 import type React from "react";
@@ -30,6 +32,12 @@ export const OnboardingPage: React.FC = () => {
         icon={Sparkles}
         title="Onboarding"
         subtitle="Connect your workspace before the pipeline starts running."
+        actions={
+          <div className="flex items-center gap-2">
+            <ActivityLogButton />
+            <LlmStatusButton />
+          </div>
+        }
       />
 
       <PageMain className="space-y-4">

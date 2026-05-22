@@ -4,7 +4,7 @@ import { useRescoreJob } from "@client/hooks/useRescoreJob";
 import type { Job } from "@shared/types.js";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@client/lib/toast";
 import { JobDetailsEditDrawer } from "../JobDetailsEditDrawer";
 import { DecideMode } from "./DecideMode";
 import { EmptyState } from "./EmptyState";

@@ -3,7 +3,7 @@ import type { BatchUrlImportItemResult } from "@shared/types";
 import { CheckCircle2, Copy, Link as LinkIcon, Loader2, XCircle } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@client/lib/toast";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";

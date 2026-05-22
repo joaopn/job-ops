@@ -2,7 +2,7 @@ import type { Job } from "@shared/types.js";
 import { Loader2, Save } from "lucide-react";
 import type React from "react";
 import { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@client/lib/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {

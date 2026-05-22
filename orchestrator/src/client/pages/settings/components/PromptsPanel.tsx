@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, FileText, Loader2, RefreshCw } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@client/lib/toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 

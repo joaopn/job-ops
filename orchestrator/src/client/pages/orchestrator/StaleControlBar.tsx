@@ -1,7 +1,7 @@
 import * as api from "@client/api";
 import { Loader2 } from "lucide-react";
 import { type FormEvent, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@client/lib/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 

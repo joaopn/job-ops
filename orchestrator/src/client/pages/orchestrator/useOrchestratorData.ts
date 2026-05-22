@@ -3,7 +3,7 @@ import { subscribeToEventSource } from "@client/lib/sse";
 import type { Job, JobListItem, JobStatus } from "@shared/types";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@client/lib/toast";
 import { queryKeys } from "@/client/lib/queryKeys";
 
 const initialStats: Record<JobStatus, number> = {

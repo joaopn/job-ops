@@ -1,5 +1,7 @@
 import * as api from "@client/api";
+import { ActivityLogButton } from "@client/components/ActivityLogButton";
 import { PageHeader } from "@client/components/layout";
+import { LlmStatusButton } from "@client/components/LlmStatusButton";
 import { useUpdateSettingsMutation } from "@client/hooks/queries/useSettingsMutation";
 import { ChatSettingsSection } from "@client/pages/settings/components/ChatSettingsSection";
 import { ContextLimitsSection } from "@client/pages/settings/components/ContextLimitsSection";
@@ -30,7 +32,7 @@ import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { FormProvider, type Resolver, useForm } from "react-hook-form";
 import { useLocation } from "react-router-dom";
-import { toast } from "sonner";
+import { toast } from "@client/lib/toast";
 import { useQueryErrorToast } from "@/client/hooks/useQueryErrorToast";
 import { queryKeys } from "@/client/lib/queryKeys";
 import {
@@ -1051,6 +1053,12 @@ export const SettingsPage: React.FC = () => {
         icon={Settings}
         title="Settings"
         subtitle="Configure AI, scoring, integrations, and recovery from one focused workspace."
+        actions={
+          <div className="flex items-center gap-2">
+            <ActivityLogButton />
+            <LlmStatusButton />
+          </div>
+        }
       />
 
       <main className="container mx-auto px-4 py-6 pb-12">

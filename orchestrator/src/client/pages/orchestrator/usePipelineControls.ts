@@ -10,7 +10,7 @@ import type {
   SuitabilityCategory,
 } from "@shared/types.js";
 import { useCallback, useEffect, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@client/lib/toast";
 import type { AutomaticRunValues } from "./automatic-run";
 import {
   deriveExtractorLimits,

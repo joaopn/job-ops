@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { toast } from "sonner";
+import { toast } from "@client/lib/toast";
 
 /**
  * Shows a toast when a React Query `error` becomes non-null.

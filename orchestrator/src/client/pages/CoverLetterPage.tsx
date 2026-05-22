@@ -5,6 +5,7 @@ import {
   CompileLogViewer,
 } from "@client/components/cv/CompileLogViewer";
 import { PageHeader } from "@client/components/layout";
+import { ActivityLogButton } from "@client/components/ActivityLogButton";
 import { LlmStatusButton } from "@client/components/LlmStatusButton";
 import { queryKeys } from "@client/lib/queryKeys";
 import type {
@@ -31,7 +32,7 @@ import {
   Upload,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@client/lib/toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -97,7 +98,12 @@ export function CoverLetterPage() {
         icon={Mail}
         title="My Cover Letter"
         subtitle="Upload your LaTeX cover letter; the server flattens, extracts, and renders it. Use it as the per-job draft template."
-        actions={<LlmStatusButton />}
+        actions={
+          <div className="flex items-center gap-2">
+            <ActivityLogButton />
+            <LlmStatusButton />
+          </div>
+        }
       />
       <main className="container mx-auto px-4 py-6 pb-12">
         {summariesQuery.isLoading ? (
