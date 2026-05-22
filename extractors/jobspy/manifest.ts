@@ -1,8 +1,51 @@
 import type {
   ExtractorManifest,
   ExtractorRuntimeContext,
-} from "@shared/types/extractors";
+  SourceConfigSchema,
+} from "@shared/types";
 import { runJobSpy } from "./src/run";
+
+const jobspyConfigSchema: SourceConfigSchema = {
+  fields: [
+    {
+      key: "max_jobs_per_term",
+      label: "Max jobs per term",
+      type: "number",
+      default: "20",
+    },
+    {
+      key: "country_indeed",
+      label: "Country (Indeed)",
+      type: "text",
+      default: "",
+      description: "Region for Indeed sub-source.",
+    },
+    {
+      key: "location_override",
+      label: "Location override",
+      type: "text",
+      default: "",
+      description: "Used when the Run modal's city mapping is disabled.",
+    },
+  ],
+  globalMappings: [
+    {
+      globalField: "city",
+      sourceField: "searchCities",
+      enabledByDefault: true,
+    },
+    {
+      globalField: "country",
+      sourceField: "jobspyCountryIndeed",
+      enabledByDefault: true,
+    },
+    {
+      globalField: "workplaceTypes",
+      sourceField: "workplaceTypes",
+      enabledByDefault: true,
+    },
+  ],
+};
 
 type JobSpySite = NonNullable<Parameters<typeof runJobSpy>[0]["sites"]>[number];
 
@@ -17,6 +60,7 @@ export const manifest: ExtractorManifest = {
   displayName: "JobSpy",
   providesSources: ["indeed", "linkedin", "glassdoor"],
   capabilities: { locationEvidence: true },
+  configSchema: jobspyConfigSchema,
   async run(context: ExtractorRuntimeContext) {
     if (context.shouldCancel?.()) {
       return { success: true, jobs: [] };

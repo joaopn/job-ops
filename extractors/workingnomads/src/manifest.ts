@@ -2,8 +2,39 @@ import { resolveSearchCities } from "@shared/search-cities.js";
 import type {
   ExtractorManifest,
   ExtractorProgressEvent,
-} from "@shared/types/extractors";
+  SourceConfigSchema,
+} from "@shared/types";
 import { runWorkingNomads } from "./run";
+
+const workingnomadsConfigSchema: SourceConfigSchema = {
+  fields: [
+    {
+      key: "max_jobs_per_term",
+      label: "Max jobs per term",
+      type: "number",
+      default: "50",
+    },
+    {
+      key: "location_override",
+      label: "Location override",
+      type: "text",
+      default: "",
+      description: "Used when the Run modal's city mapping is disabled.",
+    },
+  ],
+  globalMappings: [
+    {
+      globalField: "city",
+      sourceField: "searchCities",
+      enabledByDefault: true,
+    },
+    {
+      globalField: "workplaceTypes",
+      sourceField: "workplaceTypes",
+      enabledByDefault: true,
+    },
+  ],
+};
 
 function toProgress(event: {
   type: string;
@@ -38,6 +69,7 @@ export const manifest: ExtractorManifest = {
   displayName: "Working Nomads",
   providesSources: ["workingnomads"],
   capabilities: { locationEvidence: true },
+  configSchema: workingnomadsConfigSchema,
   async run(context) {
     if (context.shouldCancel?.()) {
       return { success: true, jobs: [] };

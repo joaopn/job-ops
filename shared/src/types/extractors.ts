@@ -1,5 +1,6 @@
 import type { CreateJobInput } from "./jobs";
 import type { LocationIntent, SourceLocationPlan } from "./location";
+import type { SourceConfigSchema } from "./source-config";
 
 export interface ExtractorProgressEvent {
   phase?: "list" | "job";
@@ -44,5 +45,6 @@ export interface ExtractorManifest {
   providesSources: readonly string[];
   requiredEnvVars?: readonly string[];
   capabilities?: ExtractorCapabilities;
+  configSchema?: SourceConfigSchema;
   run: (context: ExtractorRuntimeContext) => Promise<ExtractorRunResult>;
 }

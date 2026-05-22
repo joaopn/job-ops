@@ -329,6 +329,18 @@ export const settings = sqliteTable("settings", {
   updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
 });
 
+export const sourceConfigs = sqliteTable("source_configs", {
+  sourceId: text("source_id").primaryKey(),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(false),
+  configJson: text("config_json", { mode: "json" })
+    .notNull()
+    .default(sql`('{}')`),
+  mappingsJson: text("mappings_json", { mode: "json" })
+    .notNull()
+    .default(sql`('{}')`),
+  updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+});
+
 export const authSessions = sqliteTable(
   "auth_sessions",
   {
@@ -363,5 +375,7 @@ export type JobChatRunRow = typeof jobChatRuns.$inferSelect;
 export type NewJobChatRunRow = typeof jobChatRuns.$inferInsert;
 export type SettingsRow = typeof settings.$inferSelect;
 export type NewSettingsRow = typeof settings.$inferInsert;
+export type SourceConfigDbRow = typeof sourceConfigs.$inferSelect;
+export type NewSourceConfigDbRow = typeof sourceConfigs.$inferInsert;
 export type CvDocumentRow = typeof cvDocuments.$inferSelect;
 export type NewCvDocumentRow = typeof cvDocuments.$inferInsert;

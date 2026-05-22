@@ -2,8 +2,39 @@ import { resolveSearchCities } from "job-ops-shared/search-cities";
 import type {
   ExtractorManifest,
   ExtractorProgressEvent,
-} from "job-ops-shared/types/extractors";
+  SourceConfigSchema,
+} from "job-ops-shared/types";
 import { runGolangJobs } from "./run";
+
+const golangjobsConfigSchema: SourceConfigSchema = {
+  fields: [
+    {
+      key: "max_jobs_per_term",
+      label: "Max jobs per term",
+      type: "number",
+      default: "50",
+    },
+    {
+      key: "location_override",
+      label: "Location override",
+      type: "text",
+      default: "",
+      description: "Used when the Run modal's city mapping is disabled.",
+    },
+  ],
+  globalMappings: [
+    {
+      globalField: "city",
+      sourceField: "searchCities",
+      enabledByDefault: true,
+    },
+    {
+      globalField: "workplaceTypes",
+      sourceField: "workplaceTypes",
+      enabledByDefault: true,
+    },
+  ],
+};
 
 function toProgress(event: {
   type: string;
@@ -37,6 +68,7 @@ export const manifest: ExtractorManifest = {
   id: "golangjobs",
   displayName: "Golang Jobs",
   providesSources: ["golangjobs"],
+  configSchema: golangjobsConfigSchema,
   async run(context) {
     if (context.shouldCancel?.()) {
       return { success: true, jobs: [] };

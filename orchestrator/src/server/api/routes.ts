@@ -16,6 +16,7 @@ import { onboardingRouter } from "./routes/onboarding";
 import { pipelineRouter } from "./routes/pipeline";
 import { promptsRouter } from "./routes/prompts";
 import { settingsRouter } from "./routes/settings";
+import { sourceConfigsRouter } from "./routes/source-configs";
 
 export const apiRouter = Router();
 
@@ -31,4 +32,5 @@ apiRouter.use("/database", databaseRouter);
 apiRouter.use("/onboarding", onboardingRouter);
 apiRouter.use("/prompts", promptsRouter);
 apiRouter.use("/auth", authRouter);
+apiRouter.use("/source-configs", sourceConfigsRouter);
 apiRouter.use("/", extractorHealthRouter);

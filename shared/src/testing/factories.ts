@@ -4,6 +4,7 @@ import type {
   CoverLetterDocument,
   Job,
   PipelineRun,
+  SourceConfigRow,
   StageEvent,
 } from "../types";
 
@@ -120,6 +121,17 @@ export const createApplicationTask = (
   dueDate: null,
   isCompleted: false,
   notes: null,
+  ...overrides,
+});
+
+export const createSourceConfigRow = (
+  overrides: Partial<SourceConfigRow> = {},
+): SourceConfigRow => ({
+  sourceId: "hiringcafe",
+  enabled: true,
+  config: {},
+  mappings: {},
+  updatedAt: "2025-01-01T00:00:00Z",
   ...overrides,
 });
 

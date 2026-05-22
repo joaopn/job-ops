@@ -498,6 +498,15 @@ const migrations: string[] = [
      'pipelineWebhookUrl'
    )`,
 
+  // Per-source configuration. One row per pipeline source. Populated by a
+  // JS-driven backfill below that reads legacy AppSettings keys.
+  `CREATE TABLE IF NOT EXISTS source_configs (
+     source_id TEXT PRIMARY KEY,
+     enabled INTEGER NOT NULL DEFAULT 0,
+     config_json TEXT NOT NULL DEFAULT '{}',
+     mappings_json TEXT NOT NULL DEFAULT '{}',
+     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+   )`,
 ];
 
 console.log("🔧 Running database migrations...");
@@ -519,6 +528,65 @@ for (const migration of migrations) {
     console.error("❌ Migration failed:", error);
     process.exit(1);
   }
+}
+
+// Source-configs backfill. Idempotent via INSERT OR IGNORE on the
+// source_id PK — re-running on an existing DB never clobbers user edits.
+//
+// `jobspyResultsWanted` is the de-facto shared max-per-term default for
+// every extractor today; it fans out to each row's `max_jobs_per_term`.
+// `startupjobsMaxJobsPerTerm` overrides on startupjobs. `jobspyCountryIndeed`
+// and `jobspyLocation` are jobspy-only.
+try {
+  const PIPELINE_SOURCE_IDS = [
+    "indeed",
+    "linkedin",
+    "glassdoor",
+    "hiringcafe",
+    "startupjobs",
+    "workingnomads",
+    "golangjobs",
+  ];
+  const JOBSPY_SUB_SOURCES = new Set(["indeed", "linkedin", "glassdoor"]);
+
+  const getSetting = sqlite.prepare(
+    "SELECT value FROM settings WHERE key = ?",
+  );
+  const readSetting = (key: string): string | null => {
+    const row = getSetting.get(key) as { value: string } | undefined;
+    return row?.value ?? null;
+  };
+
+  const sharedMaxPerTerm = readSetting("jobspyResultsWanted");
+  const jobspyCountryIndeed = readSetting("jobspyCountryIndeed");
+  const jobspyLocation = readSetting("jobspyLocation");
+  const searchCities = readSetting("searchCities");
+  const startupjobsMaxJobsPerTerm = readSetting("startupjobsMaxJobsPerTerm");
+
+  const insertRow = sqlite.prepare(
+    `INSERT OR IGNORE INTO source_configs
+       (source_id, enabled, config_json, mappings_json, updated_at)
+     VALUES (?, ?, ?, ?, datetime('now'))`,
+  );
+
+  for (const sourceId of PIPELINE_SOURCE_IDS) {
+    const config: Record<string, string> = {};
+    if (sharedMaxPerTerm) config.max_jobs_per_term = sharedMaxPerTerm;
+    if (JOBSPY_SUB_SOURCES.has(sourceId)) {
+      if (jobspyCountryIndeed) config.country_indeed = jobspyCountryIndeed;
+      if (jobspyLocation && jobspyLocation !== searchCities) {
+        config.location_override = jobspyLocation;
+      }
+    }
+    if (sourceId === "startupjobs" && startupjobsMaxJobsPerTerm) {
+      config.max_jobs_per_term = startupjobsMaxJobsPerTerm;
+    }
+    insertRow.run(sourceId, 1, JSON.stringify(config), "{}");
+  }
+  console.log("✅ source_configs backfill applied");
+} catch (error) {
+  console.error("❌ source_configs backfill failed:", error);
+  process.exit(1);
 }
 
 sqlite.close();
