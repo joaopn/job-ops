@@ -74,6 +74,10 @@ export function useJobSelectionActions({
     null,
   );
   const previousActiveTabRef = useRef<FilterTab>(activeTab);
+  // Anchor for shift-click range selection. Tracks the last single-toggled
+  // row; the next shift-click extends the selection from the anchor to the
+  // target (additive — never deselects).
+  const rangeAnchorRef = useRef<string | null>(null);
 
   const selectedJobs = useMemo(
     () => activeJobs.filter((job) => selectedJobIds.has(job.id)),
@@ -122,6 +126,7 @@ export function useJobSelectionActions({
     if (previousActiveTabRef.current === activeTab) return;
     previousActiveTabRef.current = activeTab;
     setSelectedJobIds(new Set());
+    rangeAnchorRef.current = null;
   }, [activeTab]);
 
   useEffect(() => {
@@ -135,17 +140,45 @@ export function useJobSelectionActions({
     });
   }, [activeJobs]);
 
-  const toggleSelectJob = useCallback((jobId: string) => {
-    setSelectedJobIds((previous) => {
-      const next = new Set(previous);
-      if (next.has(jobId)) {
-        next.delete(jobId);
-      } else {
-        next.add(jobId);
+  const toggleSelectJob = useCallback(
+    (jobId: string, options?: { range?: boolean }) => {
+      const anchor = rangeAnchorRef.current;
+      const canRange = options?.range === true && anchor !== null;
+      if (canRange) {
+        const ids = activeJobs.map((job) => job.id);
+        const anchorIndex = ids.indexOf(anchor as string);
+        const targetIndex = ids.indexOf(jobId);
+        if (anchorIndex !== -1 && targetIndex !== -1) {
+          const [lo, hi] =
+            anchorIndex < targetIndex
+              ? [anchorIndex, targetIndex]
+              : [targetIndex, anchorIndex];
+          const sliceIds = ids.slice(lo, hi + 1);
+          setSelectedJobIds((previous) => {
+            const next = new Set(previous);
+            for (const id of sliceIds) next.add(id);
+            return next;
+          });
+          // Keep the anchor where it was so successive shift-clicks extend
+          // from the original starting point, matching Gmail / Finder UX.
+          return;
+        }
+        // Anchor no longer in the active view — fall through to single toggle.
       }
-      return next;
-    });
-  }, []);
+
+      setSelectedJobIds((previous) => {
+        const next = new Set(previous);
+        if (next.has(jobId)) {
+          next.delete(jobId);
+        } else {
+          next.add(jobId);
+        }
+        return next;
+      });
+      rangeAnchorRef.current = jobId;
+    },
+    [activeJobs],
+  );
 
   const toggleSelectAll = useCallback(
     (checked: boolean) => {
@@ -196,6 +229,7 @@ export function useJobSelectionActions({
 
   const clearSelection = useCallback(() => {
     setSelectedJobIds(new Set());
+    rangeAnchorRef.current = null;
   }, []);
 
   const runStreamingAction = useCallback(

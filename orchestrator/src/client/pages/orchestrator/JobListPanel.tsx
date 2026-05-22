@@ -40,7 +40,7 @@ interface JobListPanelProps {
   selectedJobIds: Set<string>;
   activeTab: FilterTab;
   onSelectJob: (jobId: string) => void;
-  onToggleSelectJob: (jobId: string) => void;
+  onToggleSelectJob: (jobId: string, options?: { range?: boolean }) => void;
   onToggleSelectAll: (checked: boolean) => void;
   onSelectAllByCategory?: (category: SuitabilityCategory) => void;
   primaryEmptyStateAction?: EmptyStateAction;
@@ -79,6 +79,9 @@ export const JobListPanel = forwardRef<VirtualListHandle, JobListPanelProps>(
     const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(
       null,
     );
+    // Captures shiftKey from the checkbox's onClick so onCheckedChange (which
+    // doesn't receive the event) can forward it to the range-aware toggle.
+    const lastCheckboxShiftRef = useRef(false);
 
     const virtualizer = useVirtualizedList({
       count: activeJobs.length,
@@ -269,8 +272,25 @@ export const JobListPanel = forwardRef<VirtualListHandle, JobListPanelProps>(
                     />
                     <Checkbox
                       checked={isChecked}
-                      onCheckedChange={() => onToggleSelectJob(job.id)}
-                      onClick={(event) => event.stopPropagation()}
+                      onCheckedChange={() => {
+                        // Consume + reset the shift flag so a keyboard-space
+                        // toggle (which doesn't fire onClick) can't inherit a
+                        // stale shiftKey from an earlier mouse click. Only
+                        // pass options when shift is actually held so plain
+                        // clicks satisfy `toHaveBeenCalledWith(id)` matchers
+                        // and avoid the extra-arg footgun.
+                        const range = lastCheckboxShiftRef.current;
+                        lastCheckboxShiftRef.current = false;
+                        if (range) {
+                          onToggleSelectJob(job.id, { range: true });
+                        } else {
+                          onToggleSelectJob(job.id);
+                        }
+                      }}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        lastCheckboxShiftRef.current = event.shiftKey;
+                      }}
                       aria-label={`Select ${job.title}`}
                       className={cn(
                         "absolute inset-0 m-0 border-border/80 cursor-pointer text-muted-foreground/70 transition-opacity duration-150 ease-out",
@@ -284,7 +304,26 @@ export const JobListPanel = forwardRef<VirtualListHandle, JobListPanelProps>(
                   </div>
                   <button
                     type="button"
-                    onClick={() => onSelectJob(job.id)}
+                    onClick={(event) => {
+                      if (event.shiftKey) {
+                        // Shift-click anywhere on the row extends the range
+                        // selection (or single-toggles when no anchor is
+                        // set). preventDefault to avoid accidental text
+                        // selection from the shift modifier.
+                        event.preventDefault();
+                        onToggleSelectJob(job.id, { range: true });
+                        return;
+                      }
+                      if (event.ctrlKey || event.metaKey) {
+                        // Ctrl/Cmd-click toggles this row in the checkbox
+                        // selection without opening detail. Anchor moves to
+                        // this row so a following shift-click extends from
+                        // here. Matches Gmail / Finder UX.
+                        onToggleSelectJob(job.id);
+                        return;
+                      }
+                      onSelectJob(job.id);
+                    }}
                     data-testid={`select-${job.id}`}
                     className="flex min-w-0 flex-1 cursor-pointer text-left"
                     aria-pressed={isSelected}

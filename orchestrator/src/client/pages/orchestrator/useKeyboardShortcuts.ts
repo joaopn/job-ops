@@ -29,7 +29,7 @@ type UseKeyboardShortcutsArgs = {
   setIsCommandBarOpen: (open: boolean) => void;
   setIsHelpDialogOpen: (updater: (prev: boolean) => boolean) => void;
   clearSelection: () => void;
-  toggleSelectJob: (id: string) => void;
+  toggleSelectJob: (id: string, options?: { range?: boolean }) => void;
   runJobAction: (action: Exclude<JobAction, "mark_closed">) => Promise<void>;
   loadJobs: () => Promise<void>;
 };
