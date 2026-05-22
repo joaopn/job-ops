@@ -5,6 +5,7 @@ import type {
   ClosedSubFilter,
   DateFilterDimension,
   DateFilterPreset,
+  FitFilterValue,
   JobDateFilter,
   JobSort,
   SalaryFilter,
@@ -15,6 +16,7 @@ import {
   ALLOWED_CLOSED_SUB_FILTERS,
   DEFAULT_SORT,
   dateFilterDimensionOrder,
+  FIT_FILTER_VALUES,
 } from "./constants";
 
 const allowedSponsorFilters: SponsorFilter[] = [
@@ -264,6 +266,32 @@ export const useOrchestratorFilters = () => {
     [setSearchParams],
   );
 
+  const fitFilter = useMemo((): FitFilterValue[] => {
+    const raw = searchParams.get("fit");
+    if (!raw) return [];
+    const seen = new Set<FitFilterValue>();
+    for (const token of raw.split(",")) {
+      if (FIT_FILTER_VALUES.includes(token as FitFilterValue)) {
+        seen.add(token as FitFilterValue);
+      }
+    }
+    return FIT_FILTER_VALUES.filter((value) => seen.has(value));
+  }, [searchParams]);
+
+  const setFitFilter = useCallback(
+    (value: FitFilterValue[]) => {
+      setSearchParams(
+        (prev) => {
+          if (value.length === 0) prev.delete("fit");
+          else prev.set("fit", value.join(","));
+          return prev;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
   const closedSubFilter = useMemo((): ClosedSubFilter => {
     const raw = searchParams.get("closedFilter") ?? "all";
     return ALLOWED_CLOSED_SUB_FILTERS.includes(raw as ClosedSubFilter)
@@ -326,6 +354,7 @@ export const useOrchestratorFilters = () => {
         prev.delete("maxAge");
         prev.delete("closedFilter");
         prev.delete("staleThreshold");
+        prev.delete("fit");
         return prev;
       },
       { replace: true },
@@ -350,6 +379,8 @@ export const useOrchestratorFilters = () => {
     setClosedSubFilter,
     staleThresholdDays,
     setStaleThresholdDays,
+    fitFilter,
+    setFitFilter,
     resetFilters,
   };
 };

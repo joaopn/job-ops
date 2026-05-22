@@ -4,6 +4,7 @@ import type {
   ClosedSubFilter,
   DateFilterDimension,
   FilterTab,
+  FitFilterValue,
   JobDateFilter,
   JobSort,
   SalaryFilter,
@@ -33,6 +34,7 @@ export const useFilteredJobs = (
   sort: JobSort,
   maxAgeDays: number | null,
   closedSubFilter: ClosedSubFilter,
+  fitFilter: FitFilterValue[],
 ) =>
   useMemo(() => {
     let filtered = [...jobs];
@@ -89,6 +91,14 @@ export const useFilteredJobs = (
 
     if (sourceFilter !== "all") {
       filtered = filtered.filter((job) => job.source === sourceFilter);
+    }
+
+    if (fitFilter.length > 0) {
+      const set = new Set(fitFilter);
+      filtered = filtered.filter((job) => {
+        if (job.suitabilityCategory == null) return set.has("unscored");
+        return set.has(job.suitabilityCategory);
+      });
     }
 
     if (maxAgeDays != null && maxAgeDays > 0) {
@@ -153,6 +163,7 @@ export const useFilteredJobs = (
     sort,
     maxAgeDays,
     closedSubFilter,
+    fitFilter,
   ]);
 
 const matchesDateDimension = (

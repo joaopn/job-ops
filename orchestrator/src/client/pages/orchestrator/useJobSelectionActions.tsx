@@ -1,13 +1,10 @@
 import * as api from "@client/api";
-import {
-  SUITABILITY_CATEGORY_LABELS,
-  SUITABILITY_CATEGORY_RANK,
-  type JobAction,
-  type JobActionRequest,
-  type JobActionResponse,
-  type JobListItem,
-  type JobOutcome,
-  type SuitabilityCategory,
+import type {
+  JobAction,
+  JobActionRequest,
+  JobActionResponse,
+  JobListItem,
+  JobOutcome,
 } from "@shared/types.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@client/lib/toast";
@@ -35,7 +32,7 @@ const jobActionLabel: Record<JobAction, string> = {
   skip: "Skipping selected jobs...",
   rescore: "Calculating match scores...",
   move_to_selected: "Moving to Selected...",
-  unselect: "Unselecting...",
+  unselect: "Moving to Inbox...",
   move_to_backlog: "Moving to Backlog...",
   move_to_stale: "Moving to Stale...",
   move_to_inbox: "Moving to Inbox...",
@@ -48,7 +45,7 @@ const jobActionSuccessLabel: Record<JobAction, string> = {
   skip: "jobs skipped",
   rescore: "matches recalculated",
   move_to_selected: "jobs moved to Selected",
-  unselect: "jobs unselected",
+  unselect: "jobs moved to Inbox",
   move_to_backlog: "jobs moved to Backlog",
   move_to_stale: "jobs moved to Stale",
   move_to_inbox: "jobs moved to Inbox",
@@ -193,36 +190,6 @@ export function useJobSelectionActions({
         );
         return new Set(allIds.slice(0, MAX_JOB_ACTION_JOB_IDS));
       });
-    },
-    [activeJobs],
-  );
-
-  const selectAllByCategory = useCallback(
-    (category: SuitabilityCategory) => {
-      const minRank = SUITABILITY_CATEGORY_RANK[category];
-      const matchingIds = activeJobs
-        .filter(
-          (job) =>
-            job.suitabilityCategory != null &&
-            SUITABILITY_CATEGORY_RANK[job.suitabilityCategory] >= minRank,
-        )
-        .map((job) => job.id);
-      if (matchingIds.length === 0) {
-        toast.message(
-          `No "${SUITABILITY_CATEGORY_LABELS[category]}" or better jobs in this view.`,
-        );
-        return;
-      }
-      if (matchingIds.length > MAX_JOB_ACTION_JOB_IDS) {
-        toast.error(
-          `Select all is limited to ${MAX_JOB_ACTION_JOB_IDS} jobs per action.`,
-        );
-        setSelectedJobIds(
-          new Set(matchingIds.slice(0, MAX_JOB_ACTION_JOB_IDS)),
-        );
-        return;
-      }
-      setSelectedJobIds(new Set(matchingIds));
     },
     [activeJobs],
   );
@@ -417,7 +384,6 @@ export function useJobSelectionActions({
     jobActionInFlight,
     toggleSelectJob,
     toggleSelectAll,
-    selectAllByCategory,
     clearSelection,
     runJobAction,
     runMarkClosedAction,

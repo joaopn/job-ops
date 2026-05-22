@@ -63,6 +63,8 @@ export const OrchestratorPage: React.FC = () => {
     setClosedSubFilter,
     staleThresholdDays,
     setStaleThresholdDays,
+    fitFilter,
+    setFitFilter,
     resetFilters,
   } = useOrchestratorFilters();
 
@@ -200,6 +202,7 @@ export const OrchestratorPage: React.FC = () => {
     sort,
     maxAgeDays,
     closedSubFilter,
+    fitFilter,
   );
   const setActiveTab = useCallback(
     (newTab: FilterTab) => {
@@ -248,7 +251,6 @@ export const OrchestratorPage: React.FC = () => {
     jobActionInFlight,
     toggleSelectJob,
     toggleSelectAll,
-    selectAllByCategory,
     clearSelection,
     runJobAction,
     runMarkClosedAction,
@@ -539,7 +541,8 @@ export const OrchestratorPage: React.FC = () => {
                 onSelectJob={handleSelectJob}
                 onToggleSelectJob={toggleSelectJob}
                 onToggleSelectAll={toggleSelectAll}
-                onSelectAllByCategory={selectAllByCategory}
+                fitFilter={fitFilter}
+                onFitFilterChange={setFitFilter}
                 primaryEmptyStateAction={primaryEmptyStateAction}
                 secondaryEmptyStateAction={secondaryEmptyStateAction}
                 emptyStateMessage={emptyStateMessage}

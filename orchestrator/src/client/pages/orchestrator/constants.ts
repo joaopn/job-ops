@@ -3,7 +3,58 @@ import {
   EXTRACTOR_SOURCE_METADATA,
   PIPELINE_EXTRACTOR_SOURCE_IDS,
 } from "@shared/extractors";
-import type { JobSource, JobStatus } from "@shared/types";
+import {
+  type JobSource,
+  type JobStatus,
+  SUITABILITY_CATEGORIES,
+  SUITABILITY_CATEGORY_LABELS,
+} from "@shared/types";
+
+export const FIT_FILTER_VALUES = [
+  ...SUITABILITY_CATEGORIES,
+  "unscored",
+] as const;
+export type FitFilterValue = (typeof FIT_FILTER_VALUES)[number];
+export const FIT_FILTER_LABELS: Record<FitFilterValue, string> = {
+  ...SUITABILITY_CATEGORY_LABELS,
+  unscored: "Unscored",
+};
+
+/**
+ * Per-category classes for the inline fit-filter chip buttons.
+ * The first entry is for the active (selected) state — saturated background
+ * + readable text + matching border. The second is for the inactive state
+ * — subtle text colour, ghost background, hover lift.
+ */
+export const FIT_FILTER_CHIP_CLASS: Record<
+  FitFilterValue,
+  { active: string; inactive: string }
+> = {
+  very_good_fit: {
+    active:
+      "bg-emerald-500/20 text-emerald-200 border border-emerald-500/40 hover:bg-emerald-500/25",
+    inactive:
+      "text-emerald-300/80 hover:bg-emerald-500/10 hover:text-emerald-200 border border-transparent",
+  },
+  good_fit: {
+    active:
+      "bg-sky-500/20 text-sky-200 border border-sky-500/40 hover:bg-sky-500/25",
+    inactive:
+      "text-sky-300/80 hover:bg-sky-500/10 hover:text-sky-200 border border-transparent",
+  },
+  bad_fit: {
+    active:
+      "bg-muted/60 text-foreground border border-border hover:bg-muted/70",
+    inactive:
+      "text-muted-foreground hover:bg-muted/40 hover:text-foreground border border-transparent",
+  },
+  unscored: {
+    active:
+      "bg-amber-500/20 text-amber-200 border border-amber-500/40 hover:bg-amber-500/25",
+    inactive:
+      "text-amber-300/80 hover:bg-amber-500/10 hover:text-amber-200 border border-transparent",
+  },
+};
 
 export const DEFAULT_PIPELINE_SOURCES: JobSource[] = ["indeed", "linkedin"];
 export const PIPELINE_SOURCES_STORAGE_KEY = "jobops.pipeline.sources";
@@ -136,7 +187,7 @@ export interface JobDateFilter {
   preset: DateFilterPreset | null;
 }
 
-export const DEFAULT_SORT: JobSort = { key: "score", direction: "desc" };
+export const DEFAULT_SORT: JobSort = { key: "posted", direction: "desc" };
 export const DEFAULT_DATE_FILTER: JobDateFilter = {
   dimensions: [],
   startDate: null,

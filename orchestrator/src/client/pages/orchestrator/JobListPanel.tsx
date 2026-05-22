@@ -1,8 +1,4 @@
-import {
-  SUITABILITY_CATEGORY_LABELS,
-  type JobListItem,
-  type SuitabilityCategory,
-} from "@shared/types.js";
+import type { JobListItem } from "@shared/types.js";
 import { Loader2 } from "lucide-react";
 import {
   type ReactNode,
@@ -18,11 +14,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
-import type { FilterTab } from "./constants";
+import type { FilterTab, FitFilterValue } from "./constants";
 import {
   appliedDuplicateIndicator,
   defaultStatusToken,
   emptyStateCopy,
+  FIT_FILTER_CHIP_CLASS,
+  FIT_FILTER_LABELS,
+  FIT_FILTER_VALUES,
   statusTokens,
 } from "./constants";
 import { JobRowContent } from "./JobRowContent";
@@ -42,7 +41,8 @@ interface JobListPanelProps {
   onSelectJob: (jobId: string) => void;
   onToggleSelectJob: (jobId: string, options?: { range?: boolean }) => void;
   onToggleSelectAll: (checked: boolean) => void;
-  onSelectAllByCategory?: (category: SuitabilityCategory) => void;
+  fitFilter?: FitFilterValue[];
+  onFitFilterChange?: (value: FitFilterValue[]) => void;
   primaryEmptyStateAction?: EmptyStateAction;
   secondaryEmptyStateAction?: EmptyStateAction;
   emptyStateMessage?: string;
@@ -65,7 +65,8 @@ export const JobListPanel = forwardRef<VirtualListHandle, JobListPanelProps>(
       onSelectJob,
       onToggleSelectJob,
       onToggleSelectAll,
-      onSelectAllByCategory,
+      fitFilter,
+      onFitFilterChange,
       primaryEmptyStateAction,
       secondaryEmptyStateAction,
       emptyStateMessage,
@@ -115,33 +116,109 @@ export const JobListPanel = forwardRef<VirtualListHandle, JobListPanelProps>(
       );
     }
 
+    const allSelected =
+      activeJobs.length > 0 &&
+      activeJobs.every((job) => selectedJobIds.has(job.id));
+    const showFitChips =
+      activeTab === "inbox" && !!fitFilter && !!onFitFilterChange;
+
+    const listHeader = (
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/40 px-4 py-2">
+        <Checkbox
+          id="job-list-select-all"
+          checked={allSelected}
+          onCheckedChange={() => onToggleSelectAll(!allSelected)}
+          disabled={activeJobs.length === 0}
+          aria-label="Select all filtered jobs"
+        />
+        {showFitChips && fitFilter && onFitFilterChange ? (
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+            {FIT_FILTER_VALUES.map((value) => {
+              const active = fitFilter.includes(value);
+              const classes = FIT_FILTER_CHIP_CLASS[value];
+              return (
+                <Button
+                  key={value}
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className={cn(
+                    "h-7 px-2 text-xs font-medium",
+                    active ? classes.active : classes.inactive,
+                  )}
+                  aria-pressed={active}
+                  onClick={() =>
+                    onFitFilterChange(
+                      active
+                        ? fitFilter.filter((entry) => entry !== value)
+                        : FIT_FILTER_VALUES.filter(
+                            (entry) =>
+                              fitFilter.includes(entry) || entry === value,
+                          ),
+                    )
+                  }
+                >
+                  {FIT_FILTER_LABELS[value]}
+                </Button>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="flex-1" />
+        )}
+        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+          {selectedJobIds.size} selected
+        </span>
+      </div>
+    );
+
     if (activeJobs.length === 0) {
+      const fitFilterActive = !!fitFilter && fitFilter.length > 0;
       return (
-        <div className="min-w-0 rounded-xl border border-border bg-card shadow-sm">
-          {closedFilterChips}
-          {staleControlBar}
+        <div className="flex min-w-0 flex-col rounded-xl border border-border bg-card shadow-sm">
+          {closedFilterChips ? (
+            <div className="shrink-0 border-b border-border/40">
+              {closedFilterChips}
+            </div>
+          ) : null}
+          {staleControlBar ? (
+            <div className="shrink-0">{staleControlBar}</div>
+          ) : null}
+          {listHeader}
           <div className="flex flex-col items-center justify-center gap-4 px-6 py-12 text-center">
             <div className="text-base font-semibold">No jobs found</div>
             <p className="max-w-md text-sm text-muted-foreground">
-              {emptyStateMessage ?? emptyStateCopy[activeTab]}
+              {fitFilterActive
+                ? "No jobs match the active fit filter. Click a highlighted chip above to clear it."
+                : (emptyStateMessage ?? emptyStateCopy[activeTab])}
             </p>
-            {(primaryEmptyStateAction || secondaryEmptyStateAction) && (
-              <div className="flex flex-col items-center justify-center gap-2 sm:flex-row">
-                {primaryEmptyStateAction && (
-                  <Button size="sm" onClick={primaryEmptyStateAction.onClick}>
-                    {primaryEmptyStateAction.label}
-                  </Button>
-                )}
-                {secondaryEmptyStateAction && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={secondaryEmptyStateAction.onClick}
-                  >
-                    {secondaryEmptyStateAction.label}
-                  </Button>
-                )}
-              </div>
+            {fitFilterActive && onFitFilterChange ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => onFitFilterChange([])}
+              >
+                Clear fit filter
+              </Button>
+            ) : (
+              (primaryEmptyStateAction || secondaryEmptyStateAction) && (
+                <div className="flex flex-col items-center justify-center gap-2 sm:flex-row">
+                  {primaryEmptyStateAction && (
+                    <Button size="sm" onClick={primaryEmptyStateAction.onClick}>
+                      {primaryEmptyStateAction.label}
+                    </Button>
+                  )}
+                  {secondaryEmptyStateAction && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={secondaryEmptyStateAction.onClick}
+                    >
+                      {secondaryEmptyStateAction.label}
+                    </Button>
+                  )}
+                </div>
+              )
             )}
           </div>
         </div>
@@ -161,55 +238,7 @@ export const JobListPanel = forwardRef<VirtualListHandle, JobListPanelProps>(
           <div className="shrink-0">{staleControlBar}</div>
         ) : null}
         <div className="flex min-h-0 flex-1 flex-col">
-          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/40 px-4 py-2 opacity-100 transition-opacity sm:opacity-50 sm:hover:opacity-100">
-            <label
-              htmlFor="job-list-select-all"
-              className="flex items-center gap-2 text-xs text-muted-foreground"
-            >
-              <Checkbox
-                id="job-list-select-all"
-                checked={
-                  activeJobs.length > 0 &&
-                  activeJobs.every((job) => selectedJobIds.has(job.id))
-                }
-                onCheckedChange={() => {
-                  const allSelected =
-                    activeJobs.length > 0 &&
-                    activeJobs.every((job) => selectedJobIds.has(job.id));
-                  onToggleSelectAll(!allSelected);
-                }}
-                aria-label="Select all filtered jobs"
-              />
-              Select all filtered
-            </label>
-            <div className="flex items-center gap-2">
-              {onSelectAllByCategory && activeTab === "inbox" && (
-                <div className="hidden gap-1 sm:flex">
-                  {(
-                    ["very_good_fit", "good_fit"] as const satisfies readonly [
-                      SuitabilityCategory,
-                      SuitabilityCategory,
-                    ]
-                  ).map((category) => (
-                    <Button
-                      key={category}
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 px-2 text-xs"
-                      onClick={() => onSelectAllByCategory(category)}
-                      title={`Select ${SUITABILITY_CATEGORY_LABELS[category]} or better`}
-                    >
-                      ≥ {SUITABILITY_CATEGORY_LABELS[category]}
-                    </Button>
-                  ))}
-                </div>
-              )}
-              <span className="text-xs text-muted-foreground tabular-nums">
-                {selectedJobIds.size} selected
-              </span>
-            </div>
-          </div>
+          {listHeader}
           <div
             ref={(el) => {
               scrollRef.current = el;
