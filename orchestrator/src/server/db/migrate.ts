@@ -503,7 +503,7 @@ const migrations: string[] = [
    )`,
 
   // Per-extractor configuration. One row per *extractor* (manifest.id):
-  // jobspy / hiringcafe / startupjobs / workingnomads / golangjobs. The
+  // jobspy / hiringcafe / startupjobs / workingnomads. The
   // original phase-10 schema keyed on `source_id` (per-platform: indeed /
   // linkedin / glassdoor / hiringcafe / ...). The collapse from per-platform
   // to per-extractor happens in the JS-driven rebuild below — it merges
@@ -566,7 +566,6 @@ try {
     hiringcafe: "hiringcafe",
     workingnomads: "workingnomads",
     startupjobs: "startupjobs",
-    golangjobs: "golangjobs",
     manual: "manual",
   };
   // Mirrors EXTRACTOR_SOURCE_METADATA[*].order in shared/extractors. Inlined
@@ -579,7 +578,6 @@ try {
     hiringcafe: 70,
     startupjobs: 80,
     workingnomads: 90,
-    golangjobs: 100,
     manual: 110,
   };
   const PIPELINE_EXTRACTOR_IDS = [
@@ -587,7 +585,6 @@ try {
     "hiringcafe",
     "startupjobs",
     "workingnomads",
-    "golangjobs",
   ];
 
   const tableCols = sqlite
@@ -754,6 +751,22 @@ try {
     )
     .run();
   console.log("✅ legacy settings keys dropped");
+
+  // Drop the golangjobs extractor. Idempotent — re-runs are no-ops once
+  // the rows are gone. The jobs delete cascades to dependent rows via
+  // the existing ON DELETE CASCADE on tasks / interviews / job_notes /
+  // job_chat_*.
+  const removedSourceConfig = sqlite
+    .prepare(`DELETE FROM source_configs WHERE extractor_id = 'golangjobs'`)
+    .run();
+  const removedJobs = sqlite
+    .prepare(`DELETE FROM jobs WHERE source = 'golangjobs'`)
+    .run();
+  if (removedSourceConfig.changes > 0 || removedJobs.changes > 0) {
+    console.log(
+      `✅ golangjobs dropped (source_configs rows: ${removedSourceConfig.changes}, jobs rows: ${removedJobs.changes})`,
+    );
+  }
 } catch (error) {
   console.error("❌ source_configs backfill failed:", error);
   process.exit(1);

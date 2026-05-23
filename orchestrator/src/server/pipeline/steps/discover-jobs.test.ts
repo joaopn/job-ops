@@ -17,7 +17,6 @@ vi.mock("@server/repositories/source-configs", () => ({
     { extractorId: "hiringcafe", enabled: true, config: {}, mappings: {}, updatedAt: "" },
     { extractorId: "startupjobs", enabled: true, config: {}, mappings: {}, updatedAt: "" },
     { extractorId: "workingnomads", enabled: true, config: {}, mappings: {}, updatedAt: "" },
-    { extractorId: "golangjobs", enabled: true, config: {}, mappings: {}, updatedAt: "" },
   ]),
 }));
 
@@ -258,26 +257,26 @@ describe("discoverJobsStep", () => {
     const settingsRepo = await import("@server/repositories/settings");
     const registryModule = await import("@server/extractors/registry");
 
-    const golangjobsManifest = {
-      id: "golangjobs",
-      displayName: "Golang Jobs",
-      providesSources: ["golangjobs"],
+    const workingnomadsManifest = {
+      id: "workingnomads",
+      displayName: "Working Nomads",
+      providesSources: ["workingnomads"],
       run: vi.fn().mockResolvedValue({
         success: true,
         jobs: [
           {
-            source: "golangjobs",
+            source: "workingnomads",
             title: "Engineer - Leeds",
             employer: "ACME",
             location: "Leeds, England, UK",
-            jobUrl: "https://example.com/grad-1",
+            jobUrl: "https://example.com/wn-1",
           },
           {
-            source: "golangjobs",
+            source: "workingnomads",
             title: "Engineer - London",
             employer: "ACME",
             location: "London, England, UK",
-            jobUrl: "https://example.com/grad-2",
+            jobUrl: "https://example.com/wn-2",
           },
         ],
       }),
@@ -308,20 +307,20 @@ describe("discoverJobsStep", () => {
 
     vi.mocked(registryModule.getExtractorRegistry).mockResolvedValue({
       manifests: new Map([
-        ["golangjobs", golangjobsManifest as any],
+        ["workingnomads", workingnomadsManifest as any],
         ["hiringcafe", ukvisaManifest as any],
       ]),
       manifestBySource: new Map([
-        ["golangjobs", golangjobsManifest as any],
+        ["workingnomads", workingnomadsManifest as any],
         ["hiringcafe", ukvisaManifest as any],
       ]),
-      availableSources: ["golangjobs", "hiringcafe"],
+      availableSources: ["workingnomads", "hiringcafe"],
     } as any);
 
     const result = await discoverJobsStep({
       mergedConfig: {
         ...baseConfig,
-        sources: ["golangjobs", "hiringcafe"],
+        sources: ["workingnomads", "hiringcafe"],
       },
     });
 
@@ -576,10 +575,10 @@ describe("discoverJobsStep", () => {
       providesSources: ["indeed", "linkedin", "glassdoor"],
       run: vi.fn().mockResolvedValue({ success: true, jobs: [] }),
     };
-    const golangjobsManifest = {
-      id: "golangjobs",
-      displayName: "Golang Jobs",
-      providesSources: ["golangjobs"],
+    const workingnomadsManifest = {
+      id: "workingnomads",
+      displayName: "Working Nomads",
+      providesSources: ["workingnomads"],
       run: vi.fn().mockResolvedValue({ success: true, jobs: [] }),
     };
     const ukvisaManifest = {
@@ -600,21 +599,21 @@ describe("discoverJobsStep", () => {
     vi.mocked(registryModule.getExtractorRegistry).mockResolvedValue({
       manifests: new Map([
         ["jobspy", jobspyManifest as any],
-        ["golangjobs", golangjobsManifest as any],
+        ["workingnomads", workingnomadsManifest as any],
         ["hiringcafe", ukvisaManifest as any],
       ]),
       manifestBySource: new Map([
         ["indeed", jobspyManifest as any],
         ["linkedin", jobspyManifest as any],
         ["glassdoor", jobspyManifest as any],
-        ["golangjobs", golangjobsManifest as any],
+        ["workingnomads", workingnomadsManifest as any],
         ["hiringcafe", ukvisaManifest as any],
       ]),
       availableSources: [
         "indeed",
         "linkedin",
         "glassdoor",
-        "golangjobs",
+        "workingnomads",
         "hiringcafe",
       ],
     } as any);
@@ -622,20 +621,20 @@ describe("discoverJobsStep", () => {
     await discoverJobsStep({
       mergedConfig: {
         ...baseConfig,
-        sources: ["linkedin", "golangjobs", "hiringcafe"],
+        sources: ["linkedin", "workingnomads", "hiringcafe"],
       },
     });
 
     const progress = getProgress();
     expect(progress.crawlingSourcesTotal).toBe(3);
     expect(progress.crawlingSourcesCompleted).toBe(3);
-    expect(golangjobsManifest.run).toHaveBeenCalledWith(
+    expect(workingnomadsManifest.run).toHaveBeenCalledWith(
       expect.objectContaining({
         getExistingJobUrls: expect.any(Function),
       }),
     );
 
-    const [{ getExistingJobUrls }] = golangjobsManifest.run.mock.calls[0] as [
+    const [{ getExistingJobUrls }] = workingnomadsManifest.run.mock.calls[0] as [
       { getExistingJobUrls: () => Promise<string[]> },
     ];
     await expect(getExistingJobUrls()).resolves.toEqual([

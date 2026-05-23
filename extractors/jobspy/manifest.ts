@@ -12,6 +12,8 @@ const jobspyConfigSchema: SourceConfigSchema = {
       label: "Max jobs per term",
       type: "number",
       default: "20",
+      description:
+        "JobSpy joins all search terms into one boolean-OR query, so this cap applies to the joined result set per location, not per individual term.",
     },
     {
       key: "country_indeed",
@@ -73,7 +75,7 @@ export const manifest: ExtractorManifest = {
   id: "jobspy",
   displayName: "JobSpy",
   providesSources: ["indeed", "linkedin", "glassdoor"],
-  capabilities: { locationEvidence: true },
+  capabilities: { locationEvidence: true, joinedTerms: true },
   configSchema: jobspyConfigSchema,
   async run(context: ExtractorRuntimeContext) {
     if (context.shouldCancel?.()) {

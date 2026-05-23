@@ -233,133 +233,138 @@ export async function runJobSpy(
     return { success: true, jobs: [] };
   }
 
+  // Join all search terms into one boolean-OR query. LinkedIn / Indeed /
+  // Glassdoor honor quoted boolean OR. Composing here cuts the per-location
+  // request count by N (one Python subprocess per location, not per term ×
+  // location). max_jobs_per_term now caps the joined-query result set, not
+  // per individual term — documented on the manifest's schema field.
+  const composedQuery = composeJobSpyQuery(searchTerms);
+
   try {
     const jobs: CreateJobInput[] = [];
     const seenJobUrls = new Set<string>();
-    const totalRuns = searchTerms.length * runLocations.length;
+    const totalRuns = runLocations.length;
     let runIndex = 0;
 
-    for (const searchTerm of searchTerms) {
-      for (const location of runLocations) {
-        runIndex += 1;
-        const locationToken = location ?? countryIndeed ?? "anywhere";
-        const suffix = `${runIndex}_${slugForFilename(searchTerm)}_${slugForFilename(locationToken)}`;
-        const outputCsv = join(OUTPUT_DIR, `jobspy_jobs_${suffix}.csv`);
-        const outputJson = join(OUTPUT_DIR, `jobspy_jobs_${suffix}.json`);
-        const siteLocations = resolveJobSpySiteLocations({
-          location,
-          countryIndeed,
+    for (const location of runLocations) {
+      runIndex += 1;
+      const locationToken = location ?? countryIndeed ?? "anywhere";
+      const suffix = `${runIndex}_joined_${slugForFilename(locationToken)}`;
+      const outputCsv = join(OUTPUT_DIR, `jobspy_jobs_${suffix}.csv`);
+      const outputJson = join(OUTPUT_DIR, `jobspy_jobs_${suffix}.json`);
+      const siteLocations = resolveJobSpySiteLocations({
+        location,
+        countryIndeed,
+      });
+
+      await new Promise<void>((resolve, reject) => {
+        // Auto-detect venv if present, so contributors don't need to set
+        // PYTHON_PATH manually. The venv is created once with:
+        //   python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+        // In Docker, PYTHON_PATH is set explicitly to /usr/bin/python3.
+        const venvPython = join(
+          EXTRACTOR_DIR,
+          ".venv",
+          process.platform === "win32" ? "Scripts/python.exe" : "bin/python3",
+        );
+        const pythonPath = process.env.PYTHON_PATH
+          ? process.env.PYTHON_PATH
+          : existsSync(venvPython)
+            ? venvPython
+            : process.platform === "win32"
+              ? "python"
+              : "python3";
+
+        const child = spawn(pythonPath, [JOBSPY_SCRIPT], {
+          cwd: EXTRACTOR_DIR,
+          shell: false,
+          stdio: ["ignore", "pipe", "pipe"],
+          env: {
+            ...process.env,
+            JOBSPY_SITES: sites || "indeed,linkedin,glassdoor",
+            JOBSPY_SEARCH_TERM: composedQuery,
+            JOBSPY_TERM_INDEX: String(runIndex),
+            JOBSPY_TERM_TOTAL: String(totalRuns),
+            JOBSPY_RESULTS_WANTED: String(
+              options.resultsWanted ??
+                process.env.JOBSPY_RESULTS_WANTED ??
+                200,
+            ),
+            JOBSPY_HOURS_OLD: String(
+              options.hoursOld ?? process.env.JOBSPY_HOURS_OLD ?? 72,
+            ),
+            JOBSPY_LINKEDIN_FETCH_DESCRIPTION: String(
+              options.linkedinFetchDescription ??
+                process.env.JOBSPY_LINKEDIN_FETCH_DESCRIPTION ??
+                "1",
+            ),
+            JOBSPY_IS_REMOTE: String(
+              options.isRemote ??
+                deriveIsRemoteFlag(options.workplaceTypes) ??
+                process.env.JOBSPY_IS_REMOTE ??
+                "0",
+            ),
+            JOBSPY_OUTPUT_CSV: outputCsv,
+            JOBSPY_OUTPUT_JSON: outputJson,
+            ...(location ? { JOBSPY_LOCATION: location } : {}),
+            ...(siteLocations.linkedinLocation
+              ? { JOBSPY_LINKEDIN_LOCATION: siteLocations.linkedinLocation }
+              : {}),
+            ...(siteLocations.indeedLocation
+              ? { JOBSPY_INDEED_LOCATION: siteLocations.indeedLocation }
+              : {}),
+            ...(siteLocations.glassdoorLocation
+              ? { JOBSPY_GLASSDOOR_LOCATION: siteLocations.glassdoorLocation }
+              : {}),
+            ...(countryIndeed
+              ? { JOBSPY_COUNTRY_INDEED: countryIndeed }
+              : {}),
+          },
         });
 
-        await new Promise<void>((resolve, reject) => {
-          // Auto-detect venv if present, so contributors don't need to set
-          // PYTHON_PATH manually. The venv is created once with:
-          //   python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-          // In Docker, PYTHON_PATH is set explicitly to /usr/bin/python3.
-          const venvPython = join(
-            EXTRACTOR_DIR,
-            ".venv",
-            process.platform === "win32" ? "Scripts/python.exe" : "bin/python3",
-          );
-          const pythonPath = process.env.PYTHON_PATH
-            ? process.env.PYTHON_PATH
-            : existsSync(venvPython)
-              ? venvPython
-              : process.platform === "win32"
-                ? "python"
-                : "python3";
+        const handleLine = (line: string, stream: NodeJS.WriteStream) => {
+          const event = parseJobSpyProgressLine(line);
+          if (event) {
+            options.onProgress?.(event);
+            return;
+          }
+          stream.write(`${line}\n`);
+        };
 
-          const child = spawn(pythonPath, [JOBSPY_SCRIPT], {
-            cwd: EXTRACTOR_DIR,
-            shell: false,
-            stdio: ["ignore", "pipe", "pipe"],
-            env: {
-              ...process.env,
-              JOBSPY_SITES: sites || "indeed,linkedin,glassdoor",
-              JOBSPY_SEARCH_TERM: searchTerm,
-              JOBSPY_TERM_INDEX: String(runIndex),
-              JOBSPY_TERM_TOTAL: String(totalRuns),
-              JOBSPY_RESULTS_WANTED: String(
-                options.resultsWanted ??
-                  process.env.JOBSPY_RESULTS_WANTED ??
-                  200,
-              ),
-              JOBSPY_HOURS_OLD: String(
-                options.hoursOld ?? process.env.JOBSPY_HOURS_OLD ?? 72,
-              ),
-              JOBSPY_LINKEDIN_FETCH_DESCRIPTION: String(
-                options.linkedinFetchDescription ??
-                  process.env.JOBSPY_LINKEDIN_FETCH_DESCRIPTION ??
-                  "1",
-              ),
-              JOBSPY_IS_REMOTE: String(
-                options.isRemote ??
-                  deriveIsRemoteFlag(options.workplaceTypes) ??
-                  process.env.JOBSPY_IS_REMOTE ??
-                  "0",
-              ),
-              JOBSPY_OUTPUT_CSV: outputCsv,
-              JOBSPY_OUTPUT_JSON: outputJson,
-              ...(location ? { JOBSPY_LOCATION: location } : {}),
-              ...(siteLocations.linkedinLocation
-                ? { JOBSPY_LINKEDIN_LOCATION: siteLocations.linkedinLocation }
-                : {}),
-              ...(siteLocations.indeedLocation
-                ? { JOBSPY_INDEED_LOCATION: siteLocations.indeedLocation }
-                : {}),
-              ...(siteLocations.glassdoorLocation
-                ? { JOBSPY_GLASSDOOR_LOCATION: siteLocations.glassdoorLocation }
-                : {}),
-              ...(countryIndeed
-                ? { JOBSPY_COUNTRY_INDEED: countryIndeed }
-                : {}),
-            },
-          });
+        const stdoutRl = child.stdout
+          ? createInterface({ input: child.stdout })
+          : null;
+        const stderrRl = child.stderr
+          ? createInterface({ input: child.stderr })
+          : null;
 
-          const handleLine = (line: string, stream: NodeJS.WriteStream) => {
-            const event = parseJobSpyProgressLine(line);
-            if (event) {
-              options.onProgress?.(event);
-              return;
-            }
-            stream.write(`${line}\n`);
-          };
+        stdoutRl?.on("line", (line) => handleLine(line, process.stdout));
+        stderrRl?.on("line", (line) => handleLine(line, process.stderr));
 
-          const stdoutRl = child.stdout
-            ? createInterface({ input: child.stdout })
-            : null;
-          const stderrRl = child.stderr
-            ? createInterface({ input: child.stderr })
-            : null;
-
-          stdoutRl?.on("line", (line) => handleLine(line, process.stdout));
-          stderrRl?.on("line", (line) => handleLine(line, process.stderr));
-
-          child.on("close", (code) => {
-            stdoutRl?.close();
-            stderrRl?.close();
-            if (code === 0) resolve();
-            else reject(new Error(`JobSpy exited with code ${code}`));
-          });
-          child.on("error", reject);
+        child.on("close", (code) => {
+          stdoutRl?.close();
+          stderrRl?.close();
+          if (code === 0) resolve();
+          else reject(new Error(`JobSpy exited with code ${code}`));
         });
+        child.on("error", reject);
+      });
 
-        const raw = await readFile(outputJson, "utf-8");
-        const parsed = JSON.parse(raw) as Array<Record<string, unknown>>;
-        const filtered = mapJobSpyRows(parsed);
+      const raw = await readFile(outputJson, "utf-8");
+      const parsed = JSON.parse(raw) as Array<Record<string, unknown>>;
+      const filtered = mapJobSpyRows(parsed);
 
-        for (const job of filtered) {
-          if (seenJobUrls.has(job.jobUrl)) continue;
-          seenJobUrls.add(job.jobUrl);
-          jobs.push(job);
-        }
+      for (const job of filtered) {
+        if (seenJobUrls.has(job.jobUrl)) continue;
+        seenJobUrls.add(job.jobUrl);
+        jobs.push(job);
+      }
 
-        try {
-          await unlink(outputJson);
-          await unlink(outputCsv);
-        } catch {
-          // ignore cleanup errors
-        }
+      try {
+        await unlink(outputJson);
+        await unlink(outputCsv);
+      } catch {
+        // ignore cleanup errors
       }
     }
 
@@ -368,6 +373,13 @@ export async function runJobSpy(
     const message = error instanceof Error ? error.message : "Unknown error";
     return { success: false, jobs: [], error: message };
   }
+}
+
+function composeJobSpyQuery(terms: string[]): string {
+  if (terms.length === 1) return terms[0];
+  return terms
+    .map((term) => `"${term.replace(/"/g, '\\"')}"`)
+    .join(" OR ");
 }
 
 function resolveSearchTerms(options: RunJobSpyOptions): string[] {

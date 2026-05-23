@@ -78,13 +78,6 @@ const HEALTH_PROBE_CONFIG_BY_SOURCE: Record<
       max_jobs_per_term: "1",
     },
   },
-  golangjobs: {
-    searchTerm: DEFAULT_HEALTH_SEARCH_TERM,
-    selectedCountry: DEFAULT_HEALTH_SELECTED_COUNTRY,
-    settings: {
-      max_jobs_per_term: "1",
-    },
-  },
   manual: {
     searchTerm: DEFAULT_HEALTH_SEARCH_TERM,
     selectedCountry: DEFAULT_HEALTH_SELECTED_COUNTRY,

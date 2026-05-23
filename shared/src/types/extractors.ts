@@ -18,6 +18,15 @@ export interface ExtractorProgressEvent {
 
 export interface ExtractorCapabilities {
   locationEvidence?: boolean;
+  /**
+   * When true, the extractor's run() composes all searchTerms[] into a
+   * single boolean-OR query per location and fires one request per
+   * (joined-query, location) pair. When false (default) the runner loops
+   * per term. Switching to true changes max_jobs_per_term from
+   * "per term × location" to "per query × location" — the cap now
+   * applies to the joined result set.
+   */
+  joinedTerms?: boolean;
 }
 
 export interface ExtractorRuntimeContext {

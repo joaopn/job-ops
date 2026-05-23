@@ -250,23 +250,4 @@ describe("automatic-run utilities", () => {
     expect(estimate.discovered.cap).toBeLessThanOrEqual(120);
   });
 
-  it("includes golangjobs in estimate caps using the shared term budget", () => {
-    const estimate = calculateAutomaticEstimate({
-      values: {
-        topN: 10,
-        minSuitabilityCategory: "good_fit",
-        searchTerms: ["backend", "platform"],
-        runBudget: 120,
-        country: "united kingdom",
-        cityLocations: [],
-        workplaceTypes: ["remote", "hybrid", "onsite"],
-        searchScope: "selected_only",
-        matchStrictness: "exact_only",
-      },
-      sources: ["golangjobs"],
-    });
-
-    expect(estimate.discovered.cap).toBeGreaterThan(0);
-    expect(estimate.discovered.cap).toBeLessThanOrEqual(120);
-  });
 });

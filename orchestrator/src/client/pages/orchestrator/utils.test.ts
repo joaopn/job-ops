@@ -11,10 +11,6 @@ describe("orchestrator utils", () => {
     expect(getEnabledSources(createAppSettings())).toContain("workingnomads");
   });
 
-  it("enables golangjobs without credentials", () => {
-    expect(getEnabledSources(createAppSettings())).toContain("golangjobs");
-  });
-
   it("groups jobs by tab including the `discovered` alias and `stale` bucket", () => {
     const jobs = [
       createJob({ id: "ready", status: "ready", closedAt: null }),

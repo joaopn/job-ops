@@ -135,31 +135,29 @@ function escapeQueryString(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
-function buildQueryString(searchTerm: string): string {
-  const trimmed = searchTerm.trim();
-  if (!trimmed) return "";
-
-  if (/\s+AND\s+/i.test(trimmed)) {
-    return trimmed
+function buildSingleTermClause(term: string): string {
+  if (/\s+AND\s+/i.test(term)) {
+    return term
       .split(/\s+AND\s+/i)
       .map((part) => `"${escapeQueryString(part.trim())}"`)
       .join(" AND ");
   }
-
-  return `"${escapeQueryString(trimmed)}"`;
+  return `"${escapeQueryString(term)}"`;
 }
 
-function matchesSearchTerm(
-  job: WorkingNomadsSearchJob,
-  searchTerm: string,
-): boolean {
-  const normalizedTerm = searchTerm
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (!normalizedTerm) return true;
+function buildQueryString(searchTerms: string[]): string {
+  const clauses = searchTerms
+    .map((term) => term.trim())
+    .filter((term) => term.length > 0)
+    .map(buildSingleTermClause);
+  if (clauses.length === 0) return "";
+  if (clauses.length === 1) return clauses[0];
+  // Wrap each clause in parens so AND-bearing terms compose correctly
+  // when OR'd against simple-phrase clauses.
+  return clauses.map((clause) => `(${clause})`).join(" OR ");
+}
 
+function buildJobHaystack(job: WorkingNomadsSearchJob): string {
   const tags = Array.isArray(job.tags)
     ? job.tags.filter((value): value is string => typeof value === "string")
     : typeof job.tags === "string"
@@ -175,7 +173,7 @@ function matchesSearchTerm(
     : typeof job.location === "string"
       ? [job.location]
       : [];
-  const haystack = [
+  return [
     typeof job.title === "string" ? job.title : "",
     typeof job.description === "string" ? job.description : "",
     typeof job.company === "string"
@@ -193,14 +191,27 @@ function matchesSearchTerm(
     .replace(/[^a-z0-9]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
 
+function matchesAnySearchTerm(
+  job: WorkingNomadsSearchJob,
+  searchTerms: string[],
+): boolean {
+  const haystack = buildJobHaystack(job);
   if (!haystack) return false;
-  if (haystack.includes(normalizedTerm)) return true;
-
-  return normalizedTerm
-    .split(" ")
-    .filter(Boolean)
-    .every((token) => haystack.includes(token));
+  return searchTerms.some((searchTerm) => {
+    const normalizedTerm = searchTerm
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!normalizedTerm) return false;
+    if (haystack.includes(normalizedTerm)) return true;
+    return normalizedTerm
+      .split(" ")
+      .filter(Boolean)
+      .every((token) => haystack.includes(token));
+  });
 }
 
 function isCountryLikeLocation(
@@ -403,7 +414,7 @@ function matchesRequestedLocation(
 }
 
 function buildSearchRequest(args: {
-  searchTerm: string;
+  searchTerms: string[];
   locationTokens: string[];
   maxJobsPerTerm: number;
 }): Record<string, unknown> {
@@ -434,7 +445,7 @@ function buildSearchRequest(args: {
     filters.push({ terms: { locations: args.locationTokens } });
   }
 
-  const queryString = buildQueryString(args.searchTerm);
+  const queryString = buildQueryString(args.searchTerms);
   if (!queryString && filters.length === 0) {
     return request;
   }
@@ -461,7 +472,7 @@ function buildSearchRequest(args: {
 
 async function fetchWorkingNomadsJobs(args: {
   fetchImpl: typeof fetch;
-  searchTerm: string;
+  searchTerms: string[];
   locationTokens: string[];
   maxJobsPerTerm: number;
 }): Promise<WorkingNomadsSearchJob[]> {
@@ -473,7 +484,7 @@ async function fetchWorkingNomadsJobs(args: {
     },
     body: JSON.stringify(
       buildSearchRequest({
-        searchTerm: args.searchTerm,
+        searchTerms: args.searchTerms,
         locationTokens: args.locationTokens,
         maxJobsPerTerm: args.maxJobsPerTerm,
       }),
@@ -621,64 +632,66 @@ export async function runWorkingNomads(
     const jobs: CreateJobInput[] = [];
     const seen = new Set<string>();
 
-    for (const [index, searchTerm] of searchTerms.entries()) {
+    if (options.shouldCancel?.()) {
+      return { success: true, jobs };
+    }
+
+    // Joined-terms mode: one Elasticsearch query for the OR-composed set,
+    // one progress cycle. The displayed "search term" is the composed
+    // query so logs remain self-explanatory.
+    const composedQuery = searchTerms.join(" OR ");
+    options.onProgress?.({
+      type: "term_start",
+      termIndex: 1,
+      termTotal: 1,
+      searchTerm: composedQuery,
+    });
+
+    const fetchedJobs = await fetchWorkingNomadsJobs({
+      fetchImpl,
+      searchTerms,
+      locationTokens,
+      maxJobsPerTerm,
+    });
+
+    let jobsFoundTerm = 0;
+    for (const job of fetchedJobs) {
       if (options.shouldCancel?.()) {
         return { success: true, jobs };
       }
-
-      options.onProgress?.({
-        type: "term_start",
-        termIndex: index + 1,
-        termTotal: searchTerms.length,
-        searchTerm,
-      });
-
-      const fetchedJobs = await fetchWorkingNomadsJobs({
-        fetchImpl,
-        searchTerm,
-        locationTokens,
-        maxJobsPerTerm,
-      });
-
-      let jobsFoundTerm = 0;
-      for (const job of fetchedJobs) {
-        if (options.shouldCancel?.()) {
-          return { success: true, jobs };
-        }
-        if (jobsFoundTerm >= maxJobsPerTerm) {
-          break;
-        }
-        if (!matchesSearchTerm(job, searchTerm)) {
-          continue;
-        }
-
-        const mapped = mapWorkingNomadsJob(job);
-        if (!mapped) continue;
-        if (
-          explicitLocations.length > 0 &&
-          !explicitLocations.some((location) =>
-            matchesRequestedLocation(mapped.location, location),
-          )
-        ) {
-          continue;
-        }
-
-        const dedupeKey = mapped.sourceJobId || mapped.jobUrl;
-        if (seen.has(dedupeKey)) continue;
-
-        seen.add(dedupeKey);
-        jobs.push(mapped);
-        jobsFoundTerm += 1;
+      if (jobsFoundTerm >= maxJobsPerTerm) {
+        break;
+      }
+      if (!matchesAnySearchTerm(job, searchTerms)) {
+        continue;
       }
 
-      options.onProgress?.({
-        type: "term_complete",
-        termIndex: index + 1,
-        termTotal: searchTerms.length,
-        searchTerm,
-        jobsFoundTerm,
-      });
+      const mapped = mapWorkingNomadsJob(job);
+      if (!mapped) continue;
+      if (
+        explicitLocations.length > 0 &&
+        !explicitLocations.some((location) =>
+          matchesRequestedLocation(mapped.location, location),
+        )
+      ) {
+        continue;
+      }
+
+      const dedupeKey = mapped.sourceJobId || mapped.jobUrl;
+      if (seen.has(dedupeKey)) continue;
+
+      seen.add(dedupeKey);
+      jobs.push(mapped);
+      jobsFoundTerm += 1;
     }
+
+    options.onProgress?.({
+      type: "term_complete",
+      termIndex: 1,
+      termTotal: 1,
+      searchTerm: composedQuery,
+      jobsFoundTerm,
+    });
 
     return {
       success: true,

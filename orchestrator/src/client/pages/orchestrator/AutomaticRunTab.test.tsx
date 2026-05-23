@@ -101,7 +101,7 @@ describe("AutomaticRunTab", () => {
       <AutomaticRunTab
         open
         settings={createAppSettings()}
-        enabledSources={["linkedin", "hiringcafe", "golangjobs"]}
+        enabledSources={["linkedin", "hiringcafe", "workingnomads"]}
         isPipelineRunning={false}
         onSaveAndRun={vi.fn().mockResolvedValue(undefined)}
       />,
@@ -123,7 +123,7 @@ describe("AutomaticRunTab", () => {
       <AutomaticRunTab
         open
         settings={createAppSettings()}
-        enabledSources={["linkedin", "hiringcafe", "golangjobs"]}
+        enabledSources={["linkedin", "hiringcafe", "workingnomads"]}
         isPipelineRunning={false}
         onSaveAndRun={vi.fn().mockResolvedValue(undefined)}
       />,
@@ -175,7 +175,7 @@ describe("AutomaticRunTab", () => {
           },
           searchCities: { value: "", default: "", override: null },
         })}
-        enabledSources={["linkedin", "hiringcafe", "golangjobs"]}
+        enabledSources={["linkedin", "hiringcafe", "workingnomads"]}
         isPipelineRunning={false}
         onSaveAndRun={vi.fn().mockResolvedValue(undefined)}
       />,

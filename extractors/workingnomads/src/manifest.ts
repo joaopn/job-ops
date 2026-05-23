@@ -13,6 +13,8 @@ const workingnomadsConfigSchema: SourceConfigSchema = {
       label: "Max jobs per term",
       type: "number",
       default: "50",
+      description:
+        "Working Nomads joins all search terms into one boolean-OR Elasticsearch query, so this cap applies to the joined result set, not per individual term.",
     },
     {
       key: "searchCities",
@@ -82,7 +84,7 @@ export const manifest: ExtractorManifest = {
   id: "workingnomads",
   displayName: "Working Nomads",
   providesSources: ["workingnomads"],
-  capabilities: { locationEvidence: true },
+  capabilities: { locationEvidence: true, joinedTerms: true },
   configSchema: workingnomadsConfigSchema,
   async run(context) {
     if (context.shouldCancel?.()) {

@@ -63,7 +63,6 @@ COPY orchestrator/package*.json ./orchestrator/
 COPY extractors/hiringcafe/package*.json ./extractors/hiringcafe/
 COPY extractors/startupjobs/package*.json ./extractors/startupjobs/
 COPY extractors/workingnomads/package*.json ./extractors/workingnomads/
-COPY extractors/golangjobs/package*.json ./extractors/golangjobs/
 
 # Install Node dependencies with npm cache (dev deps needed for build).
 RUN --mount=type=cache,target=/root/.npm \
@@ -89,7 +88,6 @@ COPY extractors/hiringcafe ./extractors/hiringcafe
 COPY extractors/jobspy ./extractors/jobspy
 COPY extractors/startupjobs ./extractors/startupjobs
 COPY extractors/workingnomads ./extractors/workingnomads
-COPY extractors/golangjobs ./extractors/golangjobs
 
 # ============================================================================
 # PARALLEL BUILD STAGES
@@ -111,7 +109,6 @@ COPY orchestrator/package*.json ./orchestrator/
 COPY extractors/hiringcafe/package*.json ./extractors/hiringcafe/
 COPY extractors/startupjobs/package*.json ./extractors/startupjobs/
 COPY extractors/workingnomads/package*.json ./extractors/workingnomads/
-COPY extractors/golangjobs/package*.json ./extractors/golangjobs/
 
 # Install production Node dependencies only.
 RUN --mount=type=cache,target=/root/.npm \
@@ -163,7 +160,6 @@ COPY extractors/hiringcafe ./extractors/hiringcafe
 COPY extractors/jobspy ./extractors/jobspy
 COPY extractors/startupjobs ./extractors/startupjobs
 COPY extractors/workingnomads ./extractors/workingnomads
-COPY extractors/golangjobs ./extractors/golangjobs
 
 # Bake user-editable prompt YAMLs into the image as a fallback so a fresh
 # `docker compose up` works even before the host-side bind mount is wired.
