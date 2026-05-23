@@ -86,6 +86,7 @@ const updateJobSchema = z.object({
   coverLetterPdfPath: z.string().nullable().optional(),
   cvFieldLocks: z.array(z.string().min(1)).optional(),
   tailoredFields: z.record(z.string(), z.string()).optional(),
+  tailoringFailureReason: z.string().nullable().optional(),
 });
 
 function isJobUrlConflictError(error: unknown): boolean {

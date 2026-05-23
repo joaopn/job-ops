@@ -311,8 +311,19 @@ export function useJobSelectionActions({
         if (result.failed === 0) {
           toast.success(`${result.succeeded} ${successLabel}`);
         } else {
+          const firstFailure = result.results.find(
+            (entry): entry is Extract<typeof entry, { ok: false }> =>
+              entry.ok === false,
+          );
+          const detail = firstFailure?.error?.message?.trim();
+          const truncated =
+            detail && detail.length > 200
+              ? `${detail.slice(0, 200)}…`
+              : detail;
           toast.error(
-            `${result.succeeded} succeeded, ${result.failed} failed.`,
+            `${result.succeeded} succeeded, ${result.failed} failed.${
+              truncated ? ` First error: ${truncated}` : ""
+            }`,
           );
         }
 

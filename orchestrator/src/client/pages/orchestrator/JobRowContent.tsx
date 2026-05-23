@@ -103,7 +103,10 @@ export const JobRowContent = ({
             <span className="before:content-['_in_']">{job.location}</span>
           )}
         </div>
-        {(age || repostCount > 0 || job.salary?.trim()) && (
+        {(age ||
+          repostCount > 0 ||
+          job.salary?.trim() ||
+          job.tailoringFailureReason) && (
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
             {age && (
               <span
@@ -121,6 +124,14 @@ export const JobRowContent = ({
                 title={`Repost #${repostCount}`}
               >
                 Reposted {repostCount > 9 ? "9+" : repostCount}×
+              </span>
+            )}
+            {job.tailoringFailureReason && (
+              <span
+                className="rounded border border-rose-500/30 bg-rose-500/10 px-1.5 py-px text-[10px] font-medium text-rose-200"
+                title={job.tailoringFailureReason}
+              >
+                Tailor failed
               </span>
             )}
             {job.salary?.trim() && (

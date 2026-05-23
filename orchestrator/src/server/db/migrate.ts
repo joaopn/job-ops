@@ -487,6 +487,10 @@ const migrations: string[] = [
   // Empty value means "use the server default at extraction time".
   `ALTER TABLE cv_documents ADD COLUMN extraction_prompt TEXT NOT NULL DEFAULT ''`,
 
+  // Tailoring failure reason. Set on any failed processJob, cleared on the
+  // next successful summarizeJob. Nullable; null = "no recorded failure".
+  `ALTER TABLE jobs ADD COLUMN tailoring_failure_reason TEXT`,
+
   // Drop legacy settings keys that are no longer read by the app.
   `DELETE FROM settings WHERE key IN (
      'jobspyHoursOld',

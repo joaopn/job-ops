@@ -37,6 +37,7 @@ export const createJob = (overrides: Partial<Job> = {}): Job => ({
   cvFieldLocks: [],
   tailoringMatched: null,
   tailoringSkipped: null,
+  tailoringFailureReason: null,
   cvDocumentId: null,
   pdfPath: null,
   coverLetterDraft: "",

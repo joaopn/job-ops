@@ -441,6 +441,7 @@ export async function summarizeJob(
         tailoredFields: overrides,
         tailoringMatched: adjust.matched,
         tailoringSkipped: adjust.skipped,
+        tailoringFailureReason: null,
       });
 
       return { success: true };
@@ -537,6 +538,26 @@ export async function processJob(
   success: boolean;
   error?: string;
 }> {
+  const result = await runProcessJob(jobId, options);
+  if (!result.success) {
+    try {
+      await jobsRepo.updateJob(jobId, {
+        tailoringFailureReason: result.error ?? "Unknown error",
+      });
+    } catch (writeError) {
+      logger.warn("Failed to persist tailoring failure reason", {
+        jobId,
+        error: writeError,
+      });
+    }
+  }
+  return result;
+}
+
+async function runProcessJob(
+  jobId: string,
+  options?: ProcessJobOptions,
+): Promise<{ success: boolean; error?: string }> {
   try {
     // Step 1: Summarize & Select Projects
     const sumResult = await summarizeJob(jobId, options);

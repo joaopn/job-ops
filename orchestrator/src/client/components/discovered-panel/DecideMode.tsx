@@ -1,6 +1,7 @@
 import { useSettings } from "@client/hooks/useSettings";
 import type { Job } from "@shared/types.js";
 import {
+  AlertTriangle,
   Archive,
   ChevronUp,
   Edit2,
@@ -88,6 +89,18 @@ export const DecideMode: React.FC<DecideModeProps> = ({
         </div>
 
         <FitAssessment job={job} />
+
+        {job.tailoringFailureReason ? (
+          <div className="rounded-md border border-rose-500/40 bg-rose-500/5 px-3 py-2 text-xs">
+            <div className="flex items-center gap-1.5 font-semibold text-rose-200">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              Last tailoring attempt failed
+            </div>
+            <p className="mt-1 whitespace-pre-wrap text-rose-200/90">
+              {job.tailoringFailureReason}
+            </p>
+          </div>
+        ) : null}
 
         <div className="flex flex-col gap-2.5 pt-2 sm:flex-row">
           {jobLink ? (

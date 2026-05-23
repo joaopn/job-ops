@@ -205,6 +205,7 @@ export interface Job {
   cvFieldLocks: string[]; // Field ids the LLM tailoring + chat accept-edit paths must not modify
   tailoringMatched: string[] | null; // ATS keywords surfaced in tailoredFields
   tailoringSkipped: string[] | null; // JD keywords dropped for lack of evidence
+  tailoringFailureReason: string | null; // Last processJob error; null = no recorded failure
   cvDocumentId: string | null; // FK to cv_documents.id; pins which CV was tailored
   pdfPath: string | null; // Path to generated PDF
   coverLetterDraft: string; // Legacy plain-text draft, kept until the field-overrides path fully replaces it
@@ -268,6 +269,7 @@ export type JobListItem = Pick<
   | "outcome"
   | "closedAt"
   | "suitabilityCategory"
+  | "tailoringFailureReason"
   | "appliedDuplicateMatch"
   | "jobType"
   | "jobFunction"
@@ -374,6 +376,7 @@ export interface UpdateJobInput {
   cvFieldLocks?: string[];
   tailoringMatched?: string[] | null;
   tailoringSkipped?: string[] | null;
+  tailoringFailureReason?: string | null;
   cvDocumentId?: string | null;
   pdfPath?: string;
   coverLetterDraft?: string;
