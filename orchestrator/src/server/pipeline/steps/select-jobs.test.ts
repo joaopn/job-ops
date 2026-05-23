@@ -94,7 +94,7 @@ describe("selectJobsStep", () => {
     const settingsRepo = await import("@server/repositories/settings");
     vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
       locationSearchScope: "remote_worldwide_prioritize_selected",
-      jobspyCountryIndeed: "croatia",
+      searchCountry: "croatia",
       searchCities: "Zagreb",
     } as any);
 

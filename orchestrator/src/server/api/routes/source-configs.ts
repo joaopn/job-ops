@@ -1,5 +1,6 @@
 import { notFound, toAppError } from "@infra/errors";
 import { fail, ok } from "@infra/http";
+import { getExtractorRegistry } from "@server/extractors/registry";
 import * as repo from "@server/repositories/source-configs";
 import {
   EXTRACTOR_SOURCE_METADATA,
@@ -7,7 +8,10 @@ import {
   isExtractorSourceId,
   PIPELINE_EXTRACTOR_SOURCE_IDS,
 } from "@shared/extractors";
-import { SOURCE_CONFIG_GLOBAL_FIELDS } from "@shared/types";
+import {
+  SOURCE_CONFIG_GLOBAL_FIELDS,
+  type SourceConfigSchema,
+} from "@shared/types";
 import type { Request, Response } from "express";
 import { Router } from "express";
 import { z } from "zod";
@@ -26,7 +30,10 @@ const upsertSchema = z.object({
 
 sourceConfigsRouter.get("/", async (_req: Request, res: Response) => {
   try {
-    const rows = await repo.getAllSourceConfigs();
+    const [rows, registry] = await Promise.all([
+      repo.getAllSourceConfigs(),
+      getExtractorRegistry(),
+    ]);
     const rowsBySource = new Map<ExtractorSourceId, (typeof rows)[number]>();
     for (const row of rows) rowsBySource.set(row.sourceId, row);
 
@@ -42,6 +49,11 @@ sourceConfigsRouter.get("/", async (_req: Request, res: Response) => {
         }
       );
     });
+    const schemas: Record<string, SourceConfigSchema | null> = {};
+    for (const sourceId of PIPELINE_EXTRACTOR_SOURCE_IDS) {
+      const manifest = registry.manifestBySource.get(sourceId);
+      schemas[sourceId] = manifest?.configSchema ?? null;
+    }
     ok(res, {
       rows: data,
       metadata: Object.fromEntries(
@@ -50,6 +62,7 @@ sourceConfigsRouter.get("/", async (_req: Request, res: Response) => {
           EXTRACTOR_SOURCE_METADATA[sourceId],
         ]),
       ),
+      schemas,
     });
   } catch (error) {
     fail(res, toAppError(error));

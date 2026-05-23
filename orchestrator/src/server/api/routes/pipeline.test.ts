@@ -85,8 +85,7 @@ describe.sequential("Pipeline API routes", () => {
         skippedSources: [],
         blockedCompanyKeywordsCount: 1,
         sourceLimits: {
-          startupjobsMaxJobsPerTerm: 50,
-          jobspyResultsWanted: 20,
+          maxJobsPerTerm: null,
         },
         autoSkipCategory: "bad_fit",
         pdfRenderer: "rxresume",

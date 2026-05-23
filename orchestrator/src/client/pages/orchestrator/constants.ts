@@ -56,9 +56,6 @@ export const FIT_FILTER_CHIP_CLASS: Record<
   },
 };
 
-export const DEFAULT_PIPELINE_SOURCES: JobSource[] = ["indeed", "linkedin"];
-export const PIPELINE_SOURCES_STORAGE_KEY = "jobops.pipeline.sources";
-
 export const orderedSources: JobSource[] = [
   ...PIPELINE_EXTRACTOR_SOURCE_IDS,
 ].sort(

@@ -22,7 +22,7 @@ describe("workingnomads manifest", () => {
       source: "workingnomads",
       selectedSources: ["workingnomads"],
       settings: {
-        jobspyResultsWanted: "70",
+        max_jobs_per_term: "70",
         workplaceTypes: '["remote","hybrid"]',
         searchCities: "Berlin",
       },

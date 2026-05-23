@@ -9,7 +9,8 @@ import type { LocationIntent } from "./location";
 export interface PipelineConfig {
   topN: number; // Number of top jobs to process
   minSuitabilityCategory: SuitabilityCategory; // Minimum category to auto-process
-  sources: ExtractorSourceId[]; // Job sources to crawl
+  sources?: ExtractorSourceId[]; // Optional per-run override; otherwise uses enabled sources from source_configs
+  maxJobsPerTerm?: number; // Per-run cap that overrides each source's stored max_jobs_per_term
   outputDir: string; // Directory for generated PDFs
   locationIntent?: LocationIntent;
   enableCrawling?: boolean;
@@ -57,8 +58,7 @@ export interface PipelineRunRequestedConfig {
 }
 
 export interface PipelineRunSourceLimitSnapshot {
-  startupjobsMaxJobsPerTerm: number;
-  jobspyResultsWanted: number;
+  maxJobsPerTerm: number | null;
 }
 
 export interface PipelineRunModelSnapshot {

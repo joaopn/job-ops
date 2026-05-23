@@ -86,8 +86,8 @@ async function resolveLocationIntent(
 
   const settings = await settingsRepo.getAllSettings();
   return createLocationIntentFromLegacyInputs({
-    selectedCountry: settings.jobspyCountryIndeed ?? "",
-    searchCities: settings.searchCities ?? settings.jobspyLocation ?? "",
+    selectedCountry: settings.searchCountry ?? "",
+    searchCities: settings.searchCities ?? "",
     workplaceTypes: parseWorkplaceTypes(settings.workplaceTypes),
     searchScope: settings.locationSearchScope,
     matchStrictness: settings.locationMatchStrictness,
@@ -144,7 +144,7 @@ export async function runPipeline(
   const configSnapshot = {
     topN: mergedConfig.topN,
     minSuitabilityCategory: mergedConfig.minSuitabilityCategory,
-    sources: mergedConfig.sources,
+    sources: mergedConfig.sources ?? [],
     locationIntent,
   } as const;
 

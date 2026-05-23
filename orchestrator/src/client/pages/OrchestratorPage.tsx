@@ -34,7 +34,6 @@ import { useKeyboardShortcuts } from "./orchestrator/useKeyboardShortcuts";
 import { useOrchestratorData } from "./orchestrator/useOrchestratorData";
 import { useOrchestratorFilters } from "./orchestrator/useOrchestratorFilters";
 import { usePipelineControls } from "./orchestrator/usePipelineControls";
-import { usePipelineSources } from "./orchestrator/usePipelineSources";
 import { useScrollToJobItem } from "./orchestrator/useScrollToJobItem";
 import {
   getEnabledSources,
@@ -176,8 +175,6 @@ export const OrchestratorPage: React.FC = () => {
     () => getEnabledSources(settings ?? null),
     [settings],
   );
-  const { pipelineSources, setPipelineSources, toggleSource } =
-    usePipelineSources(enabledSources);
 
   const {
     isRunModeModalOpen,
@@ -190,7 +187,7 @@ export const OrchestratorPage: React.FC = () => {
     isPipelineRunning,
     setIsPipelineRunning,
     pipelineTerminalEvent,
-    pipelineSources,
+    pipelineSources: enabledSources,
   });
 
   const activeJobs = useFilteredJobs(
@@ -467,7 +464,7 @@ export const OrchestratorPage: React.FC = () => {
         onNavOpenChange={setNavOpen}
         isPipelineRunning={isPipelineRunning}
         isCancelling={isCancelling}
-        pipelineSources={pipelineSources}
+        pipelineSources={enabledSources}
         onOpenAutomaticRun={() => openRunMode()}
         onOpenBatchUrlImport={() => setIsBatchUrlImportOpen(true)}
         onOpenLlmQueue={() => setIsLlmQueueOpen(true)}
@@ -634,9 +631,6 @@ export const OrchestratorPage: React.FC = () => {
         open={isRunModeModalOpen}
         settings={settings ?? null}
         enabledSources={enabledSources}
-        pipelineSources={pipelineSources}
-        onToggleSource={toggleSource}
-        onSetPipelineSources={setPipelineSources}
         isPipelineRunning={isPipelineRunning}
         onOpenChange={setIsRunModeModalOpen}
         onSaveAndRunAutomatic={handleSaveAndRunAutomatic}

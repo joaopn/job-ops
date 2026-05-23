@@ -9,7 +9,7 @@ describe("startupjobs manifest", () => {
     vi.clearAllMocks();
   });
 
-  it("prefers startupjobsMaxJobsPerTerm when provided", async () => {
+  it("passes max_jobs_per_term through to the runner", async () => {
     const { manifest } = await import("../src/manifest");
     const { runStartupJobs } = await import("../src/run");
     const runStartupJobsMock = vi.mocked(runStartupJobs);
@@ -22,8 +22,7 @@ describe("startupjobs manifest", () => {
       source: "startupjobs",
       selectedSources: ["startupjobs"],
       settings: {
-        startupjobsMaxJobsPerTerm: "70",
-        jobspyResultsWanted: "30",
+        max_jobs_per_term: "70",
       },
       searchTerms: ["software engineer"],
       selectedCountry: "united kingdom",

@@ -154,7 +154,7 @@ const runPipelineSchema = z.object({
     )
     .min(1)
     .optional(),
-  runBudget: z.number().min(50).max(1000).optional(),
+  maxJobsPerTerm: z.number().int().min(1).max(10_000).optional(),
   searchTerms: z.array(z.string().trim().min(1)).optional(),
   country: z.string().trim().optional(),
   cityLocations: z.array(z.string().trim().min(1)).optional(),
@@ -238,6 +238,7 @@ pipelineRouter.post("/run", async (req: Request, res: Response) => {
         topN: config.topN,
         minSuitabilityCategory: config.minSuitabilityCategory,
         sources: config.sources,
+        maxJobsPerTerm: config.maxJobsPerTerm,
         locationIntent,
         enableAutoTailoring: config.enableAutoTailoring,
       }).catch((error) => {

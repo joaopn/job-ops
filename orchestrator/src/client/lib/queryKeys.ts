@@ -45,4 +45,8 @@ export const queryKeys = {
     all: ["prompts"] as const,
     list: () => [...queryKeys.prompts.all, "list"] as const,
   },
+  sourceConfigs: {
+    all: ["source-configs"] as const,
+    list: () => [...queryKeys.sourceConfigs.all, "list"] as const,
+  },
 } as const;

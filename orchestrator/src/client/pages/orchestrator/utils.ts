@@ -5,11 +5,7 @@ import {
   type JobSource,
 } from "@shared/types";
 import type { DateFilterDimension, FilterTab, JobSort } from "./constants";
-import {
-  DEFAULT_PIPELINE_SOURCES,
-  orderedFilterSources,
-  orderedSources,
-} from "./constants";
+import { orderedFilterSources, orderedSources } from "./constants";
 
 const dateValue = (value: string | null) => {
   if (!value) return null;
@@ -248,37 +244,5 @@ export const getSourcesWithJobs = (jobs: JobListItem[]): JobSource[] => {
 };
 
 export const getEnabledSources = (
-  settings: AppSettings | null,
-): JobSource[] => {
-  if (!settings) return [...orderedSources];
-
-  const enabled: JobSource[] = [];
-
-  for (const source of orderedSources) {
-    if (source === "hiringcafe") {
-      enabled.push(source);
-      continue;
-    }
-    if (source === "startupjobs") {
-      enabled.push(source);
-      continue;
-    }
-    if (source === "workingnomads") {
-      enabled.push(source);
-      continue;
-    }
-    if (source === "golangjobs") {
-      enabled.push(source);
-      continue;
-    }
-    if (
-      source === "indeed" ||
-      source === "linkedin" ||
-      source === "glassdoor"
-    ) {
-      enabled.push(source);
-    }
-  }
-
-  return enabled.length > 0 ? enabled : [...DEFAULT_PIPELINE_SOURCES];
-};
+  _settings: AppSettings | null,
+): JobSource[] => [...orderedSources];

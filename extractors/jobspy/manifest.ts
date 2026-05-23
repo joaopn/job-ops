@@ -36,12 +36,17 @@ const jobspyConfigSchema: SourceConfigSchema = {
     },
     {
       globalField: "country",
-      sourceField: "jobspyCountryIndeed",
+      sourceField: "country_indeed",
       enabledByDefault: true,
     },
     {
       globalField: "workplaceTypes",
       sourceField: "workplaceTypes",
+      enabledByDefault: true,
+    },
+    {
+      globalField: "maxJobsPerTerm",
+      sourceField: "max_jobs_per_term",
       enabledByDefault: true,
     },
   ],
@@ -71,12 +76,11 @@ export const manifest: ExtractorManifest = {
     const result = await runJobSpy({
       sites,
       searchTerms: context.searchTerms,
-      location:
-        context.settings.searchCities ?? context.settings.jobspyLocation,
-      resultsWanted: context.settings.jobspyResultsWanted
-        ? parseInt(context.settings.jobspyResultsWanted, 10)
+      location: context.settings.searchCities,
+      resultsWanted: context.settings.max_jobs_per_term
+        ? parseInt(context.settings.max_jobs_per_term, 10)
         : undefined,
-      countryIndeed: context.settings.jobspyCountryIndeed,
+      countryIndeed: context.settings.country_indeed,
       workplaceTypes: context.settings.workplaceTypes
         ? JSON.parse(context.settings.workplaceTypes)
         : undefined,

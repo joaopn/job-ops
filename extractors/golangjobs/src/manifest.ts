@@ -33,6 +33,11 @@ const golangjobsConfigSchema: SourceConfigSchema = {
       sourceField: "workplaceTypes",
       enabledByDefault: true,
     },
+    {
+      globalField: "maxJobsPerTerm",
+      sourceField: "max_jobs_per_term",
+      enabledByDefault: true,
+    },
   ],
 };
 
@@ -74,8 +79,8 @@ export const manifest: ExtractorManifest = {
       return { success: true, jobs: [] };
     }
 
-    const parsedMaxJobsPerTerm = context.settings.jobspyResultsWanted
-      ? Number.parseInt(context.settings.jobspyResultsWanted, 10)
+    const parsedMaxJobsPerTerm = context.settings.max_jobs_per_term
+      ? Number.parseInt(context.settings.max_jobs_per_term, 10)
       : Number.NaN;
     const maxJobsPerTerm = Number.isFinite(parsedMaxJobsPerTerm)
       ? Math.max(1, parsedMaxJobsPerTerm)
@@ -85,8 +90,7 @@ export const manifest: ExtractorManifest = {
       selectedCountry: context.selectedCountry,
       searchTerms: context.searchTerms,
       locations: resolveSearchCities({
-        single:
-          context.settings.searchCities ?? context.settings.jobspyLocation,
+        single: context.settings.searchCities,
       }),
       workplaceTypes: context.settings.workplaceTypes
         ? JSON.parse(context.settings.workplaceTypes)

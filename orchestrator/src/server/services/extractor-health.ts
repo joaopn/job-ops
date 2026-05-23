@@ -37,52 +37,52 @@ const HEALTH_PROBE_CONFIG_BY_SOURCE: Record<
     searchTerm: DEFAULT_HEALTH_SEARCH_TERM,
     selectedCountry: DEFAULT_HEALTH_SELECTED_COUNTRY,
     settings: {
-      jobspyCountryIndeed: "UK",
-      jobspyResultsWanted: "1",
+      country_indeed: "UK",
+      max_jobs_per_term: "1",
     },
   },
   linkedin: {
     searchTerm: DEFAULT_HEALTH_SEARCH_TERM,
     selectedCountry: DEFAULT_HEALTH_SELECTED_COUNTRY,
     settings: {
-      jobspyCountryIndeed: "UK",
-      jobspyResultsWanted: "1",
+      country_indeed: "UK",
+      max_jobs_per_term: "1",
     },
   },
   glassdoor: {
     searchTerm: DEFAULT_HEALTH_SEARCH_TERM,
     selectedCountry: DEFAULT_HEALTH_SELECTED_COUNTRY,
     settings: {
-      jobspyCountryIndeed: "UK",
-      jobspyResultsWanted: "1",
+      country_indeed: "UK",
+      max_jobs_per_term: "1",
     },
   },
   hiringcafe: {
     searchTerm: DEFAULT_HEALTH_SEARCH_TERM,
     selectedCountry: DEFAULT_HEALTH_SELECTED_COUNTRY,
     settings: {
-      jobspyResultsWanted: "1",
+      max_jobs_per_term: "1",
     },
   },
   startupjobs: {
     searchTerm: DEFAULT_HEALTH_SEARCH_TERM,
     selectedCountry: DEFAULT_HEALTH_SELECTED_COUNTRY,
     settings: {
-      startupjobsMaxJobsPerTerm: "1",
+      max_jobs_per_term: "1",
     },
   },
   workingnomads: {
     searchTerm: DEFAULT_HEALTH_SEARCH_TERM,
     selectedCountry: DEFAULT_HEALTH_SELECTED_COUNTRY,
     settings: {
-      jobspyResultsWanted: "1",
+      max_jobs_per_term: "1",
     },
   },
   golangjobs: {
     searchTerm: DEFAULT_HEALTH_SEARCH_TERM,
     selectedCountry: DEFAULT_HEALTH_SELECTED_COUNTRY,
     settings: {
-      jobspyResultsWanted: "1",
+      max_jobs_per_term: "1",
     },
   },
   manual: {

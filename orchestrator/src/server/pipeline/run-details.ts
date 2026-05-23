@@ -24,7 +24,7 @@ function resolveLocationIntentSnapshot(args: {
   return (
     args.config.locationIntent ??
     createLocationIntentFromLegacyInputs({
-      country: args.settings.jobspyCountryIndeed.value,
+      country: args.settings.searchCountry.value,
       searchCities: parseSearchCitiesSetting(args.settings.searchCities.value),
       workplaceTypes: args.settings.workplaceTypes.value,
       searchScope: args.settings.locationSearchScope.value,
@@ -39,7 +39,7 @@ export function buildRequestedConfigSnapshot(
   return {
     topN: config.topN,
     minSuitabilityCategory: config.minSuitabilityCategory,
-    sources: [...config.sources],
+    sources: [...(config.sources ?? [])],
     enableCrawling: config.enableCrawling !== false,
     enableScoring: config.enableScoring !== false,
     enableImporting: config.enableImporting !== false,
@@ -49,6 +49,7 @@ export function buildRequestedConfigSnapshot(
 
 function buildEffectiveConfigSnapshot(args: {
   requestedConfig: PipelineRunRequestedConfig;
+  config: PipelineConfig;
   settings: AppSettings;
   locationIntent: SnapshotLocationIntent;
 }): PipelineRunEffectiveConfig {
@@ -83,8 +84,7 @@ function buildEffectiveConfigSnapshot(args: {
     blockedCompanyKeywordsCount:
       args.settings.blockedCompanyKeywords.value.length,
     sourceLimits: {
-      startupjobsMaxJobsPerTerm: args.settings.startupjobsMaxJobsPerTerm.value,
-      jobspyResultsWanted: args.settings.jobspyResultsWanted.value,
+      maxJobsPerTerm: args.config.maxJobsPerTerm ?? null,
     },
     autoSkipCategory: args.settings.autoSkipCategory.value,
     models: {
@@ -105,6 +105,7 @@ export async function buildPipelineRunSavedDetails(
     requestedConfig,
     effectiveConfig: buildEffectiveConfigSnapshot({
       requestedConfig,
+      config,
       settings,
       locationIntent,
     }),

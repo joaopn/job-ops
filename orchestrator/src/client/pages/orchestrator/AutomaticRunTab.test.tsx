@@ -1,5 +1,4 @@
 import { createAppSettings } from "@shared/testing/factories.js";
-import type { JobSource } from "@shared/types";
 import {
   fireEvent,
   render,
@@ -8,7 +7,6 @@ import {
   within,
 } from "@testing-library/react";
 import type React from "react";
-import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AutomaticRunTab } from "./AutomaticRunTab";
 import { AUTOMATIC_PRESETS, RUN_MEMORY_STORAGE_KEY } from "./automatic-run";
@@ -89,14 +87,6 @@ describe("AutomaticRunTab", () => {
     }
   };
 
-  const openSourcePicker = () => {
-    const trigger = screen.getByRole("button", {
-      name: "Review and edit sources",
-    });
-    if (trigger.getAttribute("aria-expanded") !== "true") {
-      fireEvent.click(trigger);
-    }
-  };
 
   beforeEach(() => {
     getDetectedCountryKeyMock.mockReset();
@@ -112,9 +102,6 @@ describe("AutomaticRunTab", () => {
         open
         settings={createAppSettings()}
         enabledSources={["linkedin", "hiringcafe", "golangjobs"]}
-        pipelineSources={["linkedin"]}
-        onToggleSource={vi.fn()}
-        onSetPipelineSources={vi.fn()}
         isPipelineRunning={false}
         onSaveAndRun={vi.fn().mockResolvedValue(undefined)}
       />,
@@ -137,9 +124,6 @@ describe("AutomaticRunTab", () => {
         open
         settings={createAppSettings()}
         enabledSources={["linkedin", "hiringcafe", "golangjobs"]}
-        pipelineSources={["linkedin"]}
-        onToggleSource={vi.fn()}
-        onSetPipelineSources={vi.fn()}
         isPipelineRunning={false}
         onSaveAndRun={vi.fn().mockResolvedValue(undefined)}
       />,
@@ -161,9 +145,6 @@ describe("AutomaticRunTab", () => {
         open
         settings={createAppSettings()}
         enabledSources={["linkedin"]}
-        pipelineSources={["linkedin"]}
-        onToggleSource={vi.fn()}
-        onSetPipelineSources={vi.fn()}
         isPipelineRunning={false}
         onSaveAndRun={vi.fn().mockResolvedValue(undefined)}
       />,
@@ -187,7 +168,7 @@ describe("AutomaticRunTab", () => {
             default: ["backend engineer"],
             override: null,
           },
-          jobspyCountryIndeed: {
+          searchCountry: {
             value: "us",
             default: "united kingdom",
             override: "us",
@@ -195,9 +176,6 @@ describe("AutomaticRunTab", () => {
           searchCities: { value: "", default: "", override: null },
         })}
         enabledSources={["linkedin", "hiringcafe", "golangjobs"]}
-        pipelineSources={["linkedin"]}
-        onToggleSource={vi.fn()}
-        onSetPipelineSources={vi.fn()}
         isPipelineRunning={false}
         onSaveAndRun={vi.fn().mockResolvedValue(undefined)}
       />,
@@ -218,7 +196,7 @@ describe("AutomaticRunTab", () => {
             default: ["backend engineer"],
             override: null,
           },
-          jobspyCountryIndeed: {
+          searchCountry: {
             value: "usa/ca",
             default: "united kingdom",
             override: "usa/ca",
@@ -226,9 +204,6 @@ describe("AutomaticRunTab", () => {
           searchCities: { value: "", default: "", override: null },
         })}
         enabledSources={["linkedin"]}
-        pipelineSources={["linkedin"]}
-        onToggleSource={vi.fn()}
-        onSetPipelineSources={vi.fn()}
         isPipelineRunning={false}
         onSaveAndRun={vi.fn().mockResolvedValue(undefined)}
       />,
@@ -239,158 +214,12 @@ describe("AutomaticRunTab", () => {
     ).toBeInTheDocument();
   });
 
-  it("moves a deselected source to the end of the ready list", async () => {
-    const StatefulTab = () => {
-      const [pipelineSources, setPipelineSources] = useState<JobSource[]>([
-        "linkedin",
-        "indeed",
-      ]);
-
-      return (
-        <AutomaticRunTab
-          open
-          settings={createAppSettings({
-            jobspyCountryIndeed: {
-              value: "united kingdom",
-              default: "united kingdom",
-              override: "united kingdom",
-            },
-            searchCities: {
-              value: "London",
-              default: "",
-              override: "London",
-            },
-          })}
-          enabledSources={["linkedin", "indeed", "glassdoor"]}
-          pipelineSources={pipelineSources}
-          onToggleSource={(source, checked) => {
-            setPipelineSources((current) =>
-              checked
-                ? [...current.filter((value) => value !== source), source]
-                : current.filter((value) => value !== source),
-            );
-          }}
-          onSetPipelineSources={vi.fn()}
-          isPipelineRunning={false}
-          onSaveAndRun={vi.fn().mockResolvedValue(undefined)}
-        />
-      );
-    };
-
-    render(<StatefulTab />);
-
-    openSourcePicker();
-    fireEvent.click(screen.getByRole("button", { name: "LinkedIn" }));
-
-    await waitFor(() => {
-      expect(
-        screen.getAllByRole("button", {
-          name: /^(Indeed|Glassdoor|LinkedIn)$/,
-        }),
-      ).toHaveLength(3);
-    });
-
-    expect(
-      screen
-        .getAllByRole("button", {
-          name: /^(Indeed|Glassdoor|LinkedIn)$/,
-        })
-        .map((button) => button.getAttribute("aria-label")),
-    ).toEqual(["Indeed", "Glassdoor", "LinkedIn"]);
-  });
-
-  it("disables glassdoor for unsupported countries with guidance copy", async () => {
-    const onSetPipelineSources = vi.fn();
-
-    render(
-      <AutomaticRunTab
-        open
-        settings={createAppSettings({
-          searchTerms: {
-            value: ["backend engineer"],
-            default: ["backend engineer"],
-            override: null,
-          },
-          jobspyCountryIndeed: {
-            value: "japan",
-            default: "united kingdom",
-            override: "japan",
-          },
-          searchCities: { value: "", default: "", override: null },
-        })}
-        enabledSources={["linkedin", "glassdoor"]}
-        pipelineSources={["linkedin", "glassdoor"]}
-        onToggleSource={vi.fn()}
-        onSetPipelineSources={onSetPipelineSources}
-        isPipelineRunning={false}
-        onSaveAndRun={vi.fn().mockResolvedValue(undefined)}
-      />,
-    );
-
-    await waitFor(() => {
-      expect(onSetPipelineSources).toHaveBeenCalledWith(["linkedin"]);
-    });
-
-    openSourcePicker();
-
-    const glassdoorButton = screen.getByRole("button", { name: "Glassdoor" });
-    expect(glassdoorButton).toBeDisabled();
-    expect(glassdoorButton.getAttribute("title")).toContain(
-      "Glassdoor is not available for the selected country.",
-    );
-  });
-
-  it("disables glassdoor for supported countries until city is provided", async () => {
-    const onSetPipelineSources = vi.fn();
-
-    render(
-      <AutomaticRunTab
-        open
-        settings={createAppSettings({
-          searchTerms: {
-            value: ["backend engineer"],
-            default: ["backend engineer"],
-            override: null,
-          },
-          jobspyCountryIndeed: {
-            value: "united kingdom",
-            default: "united kingdom",
-            override: "united kingdom",
-          },
-          searchCities: {
-            value: "United Kingdom",
-            default: "United Kingdom",
-            override: "United Kingdom",
-          },
-        })}
-        enabledSources={["linkedin", "glassdoor"]}
-        pipelineSources={["linkedin", "glassdoor"]}
-        onToggleSource={vi.fn()}
-        onSetPipelineSources={onSetPipelineSources}
-        isPipelineRunning={false}
-        onSaveAndRun={vi.fn().mockResolvedValue(undefined)}
-      />,
-    );
-
-    await waitFor(() => {
-      expect(onSetPipelineSources).toHaveBeenCalledWith(["linkedin"]);
-    });
-
-    openSourcePicker();
-
-    const glassdoorButton = screen.getByRole("button", { name: "Glassdoor" });
-    expect(glassdoorButton).toBeDisabled();
-    expect(glassdoorButton.getAttribute("title")).toContain(
-      "Add at least one city in Location preferences to enable Glassdoor.",
-    );
-  });
-
   it("does not show legacy country-only city defaults as selected cities", () => {
     render(
       <AutomaticRunTab
         open
         settings={createAppSettings({
-          jobspyCountryIndeed: {
+          searchCountry: {
             value: "united kingdom",
             default: "united kingdom",
             override: "united kingdom",
@@ -402,9 +231,6 @@ describe("AutomaticRunTab", () => {
           },
         })}
         enabledSources={["linkedin"]}
-        pipelineSources={["linkedin"]}
-        onToggleSource={vi.fn()}
-        onSetPipelineSources={vi.fn()}
         isPipelineRunning={false}
         onSaveAndRun={vi.fn().mockResolvedValue(undefined)}
       />,
@@ -427,7 +253,7 @@ describe("AutomaticRunTab", () => {
             default: ["backend engineer", "frontend engineer"],
             override: null,
           },
-          jobspyCountryIndeed: {
+          searchCountry: {
             value: "united kingdom",
             default: "united kingdom",
             override: "united kingdom",
@@ -435,9 +261,6 @@ describe("AutomaticRunTab", () => {
           searchCities: { value: "", default: "", override: null },
         })}
         enabledSources={["linkedin"]}
-        pipelineSources={["linkedin"]}
-        onToggleSource={vi.fn()}
-        onSetPipelineSources={vi.fn()}
         isPipelineRunning={false}
         onSaveAndRun={vi.fn().mockResolvedValue(undefined)}
       />,
@@ -465,7 +288,7 @@ describe("AutomaticRunTab", () => {
             default: ["backend engineer"],
             override: null,
           },
-          jobspyCountryIndeed: {
+          searchCountry: {
             value: "united kingdom",
             default: "united kingdom",
             override: "united kingdom",
@@ -477,9 +300,6 @@ describe("AutomaticRunTab", () => {
           },
         })}
         enabledSources={["linkedin", "glassdoor"]}
-        pipelineSources={["linkedin", "glassdoor"]}
-        onToggleSource={vi.fn()}
-        onSetPipelineSources={vi.fn()}
         isPipelineRunning={false}
         onSaveAndRun={vi.fn().mockResolvedValue(undefined)}
       />,
@@ -495,7 +315,6 @@ describe("AutomaticRunTab", () => {
     ).not.toBeInTheDocument();
 
     fireEvent.focus(screen.getByLabelText("Cities"));
-    openSourcePicker();
 
     expect(
       screen.getByRole("button", { name: "Remove city London" }),
@@ -503,7 +322,6 @@ describe("AutomaticRunTab", () => {
     expect(
       screen.getByRole("button", { name: "Remove city Manchester" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Glassdoor" })).toBeEnabled();
   });
 
   it("loads saved workplace types from settings", () => {
@@ -518,9 +336,6 @@ describe("AutomaticRunTab", () => {
           },
         })}
         enabledSources={["linkedin"]}
-        pipelineSources={["linkedin"]}
-        onToggleSource={vi.fn()}
-        onSetPipelineSources={vi.fn()}
         isPipelineRunning={false}
         onSaveAndRun={vi.fn().mockResolvedValue(undefined)}
       />,
@@ -532,51 +347,18 @@ describe("AutomaticRunTab", () => {
     expect(screen.getByLabelText("Hybrid")).not.toBeChecked();
   });
 
-  it("normalizes saved max jobs discovered values below 50 in the UI", () => {
-    render(
-      <AutomaticRunTab
-        open
-        settings={createAppSettings({
-          jobspyCountryIndeed: {
-            value: "croatia",
-            default: "",
-            override: "croatia",
-          },
-          jobspyResultsWanted: {
-            value: 25,
-            default: 200,
-            override: 25,
-          },
-        })}
-        enabledSources={["linkedin"]}
-        pipelineSources={["linkedin"]}
-        onToggleSource={vi.fn()}
-        onSetPipelineSources={vi.fn()}
-        isPipelineRunning={false}
-        onSaveAndRun={vi.fn().mockResolvedValue(undefined)}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "Run settings" }));
-
-    expect(screen.getByLabelText("Max jobs discovered")).toHaveValue(50);
-  });
-
   it("requires at least one workplace type", async () => {
     render(
       <AutomaticRunTab
         open
         settings={createAppSettings({
-          jobspyCountryIndeed: {
+          searchCountry: {
             value: "croatia",
             default: "",
             override: "croatia",
           },
         })}
         enabledSources={["linkedin"]}
-        pipelineSources={["linkedin"]}
-        onToggleSource={vi.fn()}
-        onSetPipelineSources={vi.fn()}
         isPipelineRunning={false}
         onSaveAndRun={vi.fn().mockResolvedValue(undefined)}
       />,
@@ -607,9 +389,6 @@ describe("AutomaticRunTab", () => {
           },
         })}
         enabledSources={["linkedin"]}
-        pipelineSources={["linkedin"]}
-        onToggleSource={vi.fn()}
-        onSetPipelineSources={vi.fn()}
         isPipelineRunning={false}
         onSaveAndRun={vi.fn().mockResolvedValue(undefined)}
       />,
@@ -629,16 +408,13 @@ describe("AutomaticRunTab", () => {
       <AutomaticRunTab
         open
         settings={createAppSettings({
-          jobspyCountryIndeed: {
+          searchCountry: {
             value: "croatia",
             default: "",
             override: "croatia",
           },
         })}
         enabledSources={["linkedin"]}
-        pipelineSources={["linkedin"]}
-        onToggleSource={vi.fn()}
-        onSetPipelineSources={vi.fn()}
         isPipelineRunning={false}
         onSaveAndRun={onSaveAndRun}
       />,
@@ -665,16 +441,13 @@ describe("AutomaticRunTab", () => {
       <AutomaticRunTab
         open
         settings={createAppSettings({
-          jobspyCountryIndeed: {
+          searchCountry: {
             value: "croatia",
             default: "",
             override: "croatia",
           },
         })}
         enabledSources={["linkedin"]}
-        pipelineSources={["linkedin"]}
-        onToggleSource={vi.fn()}
-        onSetPipelineSources={vi.fn()}
         isPipelineRunning={false}
         onSaveAndRun={onSaveAndRun}
       />,
@@ -702,21 +475,13 @@ describe("AutomaticRunTab", () => {
       <AutomaticRunTab
         open
         settings={createAppSettings({
-          jobspyCountryIndeed: {
+          searchCountry: {
             value: "croatia",
             default: "",
             override: "croatia",
           },
-          jobspyResultsWanted: {
-            value: 80,
-            default: 20,
-            override: 80,
-          },
         })}
         enabledSources={["linkedin"]}
-        pipelineSources={["linkedin"]}
-        onToggleSource={vi.fn()}
-        onSetPipelineSources={vi.fn()}
         isPipelineRunning={false}
         onSaveAndRun={onSaveAndRun}
       />,
@@ -744,21 +509,13 @@ describe("AutomaticRunTab", () => {
       <AutomaticRunTab
         open
         settings={createAppSettings({
-          jobspyCountryIndeed: {
+          searchCountry: {
             value: "croatia",
             default: "",
             override: "croatia",
           },
-          jobspyResultsWanted: {
-            value: 90,
-            default: 20,
-            override: 90,
-          },
         })}
         enabledSources={["linkedin"]}
-        pipelineSources={["linkedin"]}
-        onToggleSource={vi.fn()}
-        onSetPipelineSources={vi.fn()}
         isPipelineRunning={false}
         onSaveAndRun={vi.fn().mockResolvedValue(undefined)}
       />,
@@ -785,21 +542,13 @@ describe("AutomaticRunTab", () => {
       <AutomaticRunTab
         open
         settings={createAppSettings({
-          jobspyCountryIndeed: {
+          searchCountry: {
             value: "croatia",
             default: "",
             override: "croatia",
           },
-          jobspyResultsWanted: {
-            value: 80,
-            default: 20,
-            override: 80,
-          },
         })}
         enabledSources={["linkedin"]}
-        pipelineSources={["linkedin"]}
-        onToggleSource={vi.fn()}
-        onSetPipelineSources={vi.fn()}
         isPipelineRunning={false}
         onSaveAndRun={onSaveAndRun}
       />,
@@ -828,21 +577,13 @@ describe("AutomaticRunTab", () => {
       <AutomaticRunTab
         open
         settings={createAppSettings({
-          jobspyCountryIndeed: {
+          searchCountry: {
             value: "croatia",
             default: "",
             override: "croatia",
           },
-          jobspyResultsWanted: {
-            value: 90,
-            default: 20,
-            override: 90,
-          },
         })}
         enabledSources={["linkedin"]}
-        pipelineSources={["linkedin"]}
-        onToggleSource={vi.fn()}
-        onSetPipelineSources={vi.fn()}
         isPipelineRunning={false}
         onSaveAndRun={vi.fn().mockResolvedValue(undefined)}
       />,
@@ -867,7 +608,7 @@ describe("AutomaticRunTab", () => {
       <AutomaticRunTab
         open
         settings={createAppSettings({
-          jobspyCountryIndeed: {
+          searchCountry: {
             value: "croatia",
             default: "",
             override: "croatia",
@@ -894,9 +635,6 @@ describe("AutomaticRunTab", () => {
           },
         })}
         enabledSources={["linkedin"]}
-        pipelineSources={["linkedin"]}
-        onToggleSource={vi.fn()}
-        onSetPipelineSources={vi.fn()}
         isPipelineRunning={false}
         onSaveAndRun={vi.fn().mockResolvedValue(undefined)}
       />,

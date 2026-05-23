@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   AUTOMATIC_PRESETS,
   calculateAutomaticEstimate,
-  deriveExtractorLimits,
+  deriveMaxJobsPerTerm,
   inferAutomaticPresetSelection,
   loadAutomaticRunMemory,
   parseSearchTermsInput,
@@ -93,26 +93,26 @@ describe("automatic-run utilities", () => {
   });
 
   it("keeps discovered cap under budget regardless of search-term count", () => {
-    const limits = deriveExtractorLimits({
+    const { maxJobsPerTerm } = deriveMaxJobsPerTerm({
       budget: 750,
       searchTerms: ["a", "b", "c"],
       sources: ["indeed", "linkedin", "glassdoor"],
     });
 
-    const cap = 3 * limits.jobspyResultsWanted * 3;
+    const cap = 3 * maxJobsPerTerm * 3;
 
     expect(cap).toBeLessThanOrEqual(750);
   });
 
-  it("assigns a dedicated startupjobs max-jobs limit", () => {
-    const limits = deriveExtractorLimits({
+  it("derives a positive per-term cap from a small budget", () => {
+    const { maxJobsPerTerm } = deriveMaxJobsPerTerm({
       budget: 120,
       searchTerms: ["backend", "platform"],
       sources: ["startupjobs"],
     });
 
-    expect(limits.startupjobsMaxJobsPerTerm).toBeGreaterThan(0);
-    expect(limits.startupjobsMaxJobsPerTerm).toBeLessThanOrEqual(120);
+    expect(maxJobsPerTerm).toBeGreaterThan(0);
+    expect(maxJobsPerTerm).toBeLessThanOrEqual(120);
   });
 
   it("infers the balanced preset from legacy memory without an explicit preset id", () => {

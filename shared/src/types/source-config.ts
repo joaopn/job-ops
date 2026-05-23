@@ -5,6 +5,7 @@ export const SOURCE_CONFIG_GLOBAL_FIELDS = [
   "city",
   "workplaceTypes",
   "country",
+  "maxJobsPerTerm",
 ] as const;
 
 export type SourceConfigGlobalField =

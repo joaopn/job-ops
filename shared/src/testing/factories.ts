@@ -161,7 +161,6 @@ export const createAppSettings = (
     override: null,
   },
   onboardingBasicAuthDecision: null,
-  startupjobsMaxJobsPerTerm: { value: 50, default: 50, override: null },
   searchTerms: {
     value: ["Software Engineer"],
     default: ["Software Engineer"],
@@ -197,8 +196,7 @@ export const createAppSettings = (
     default: "exact_only",
     override: null,
   },
-  jobspyResultsWanted: { value: 20, default: 20, override: null },
-  jobspyCountryIndeed: {
+  searchCountry: {
     value: "",
     default: "",
     override: null,

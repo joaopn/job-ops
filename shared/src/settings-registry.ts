@@ -199,19 +199,6 @@ export const settingsRegistry = {
     serialize: (value: string | null | undefined): string | null =>
       value ?? null,
   },
-  startupjobsMaxJobsPerTerm: {
-    kind: "typed" as const,
-    schema: z.number().int().min(1).max(1000),
-    default: (): number =>
-      parseInt(
-        typeof process !== "undefined"
-          ? process.env.STARTUPJOBS_MAX_RESULTS || "50"
-          : "50",
-        10,
-      ),
-    parse: parseIntOrNull,
-    serialize: serializeNullableNumber,
-  },
   searchTerms: {
     kind: "typed" as const,
     schema: z.array(z.string().trim().min(1).max(200)).max(100),
@@ -281,25 +268,14 @@ export const settingsRegistry = {
     serialize: (value: string | null | undefined): string | null =>
       value ?? null,
   },
-  jobspyResultsWanted: {
-    kind: "typed" as const,
-    schema: z.number().int().min(1).max(1000),
-    default: (): number =>
-      parseInt(
-        typeof process !== "undefined"
-          ? process.env.JOBSPY_RESULTS_WANTED || "200"
-          : "200",
-        10,
-      ),
-    parse: parseIntOrNull,
-    serialize: serializeNullableNumber,
-  },
-  jobspyCountryIndeed: {
+  searchCountry: {
     kind: "typed" as const,
     schema: z.string().trim().max(100),
     default: (): string =>
       typeof process !== "undefined"
-        ? process.env.JOBSPY_COUNTRY_INDEED || ""
+        ? process.env.SEARCH_COUNTRY ||
+          process.env.JOBSPY_COUNTRY_INDEED ||
+          ""
         : "",
     parse: parseNonEmptyStringOrNull,
     serialize: (value: string | null | undefined): string | null =>
@@ -615,13 +591,6 @@ export const settingsRegistry = {
     kind: "secret" as const,
     envKey: "BASIC_AUTH_PASSWORD",
     schema: z.string().trim().max(2000),
-  },
-
-  // --- Aliases ---
-  jobspyLocation: {
-    kind: "alias" as const,
-    schema: z.string().trim().max(100),
-    target: "searchCities" as const,
   },
 
   // --- Virtual ---

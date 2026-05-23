@@ -20,6 +20,7 @@ import { CvPage } from "./pages/CvPage";
 import { OnboardingPage } from "./pages/OnboardingPage";
 import { OrchestratorPage } from "./pages/OrchestratorPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { SourcesPage } from "./pages/SourcesPage";
 import { SignInPage } from "./pages/SignInPage";
 
 /** Backwards-compatibility redirects: old URL paths -> new URL paths */
@@ -101,6 +102,7 @@ export const App: React.FC = () => {
                   path="/cover-letter"
                   element={<CoverLetterPage />}
                 />
+                <Route path="/sources" element={<SourcesPage />} />
                 <Route path="/jobs/:tab" element={<OrchestratorPage />} />
                 <Route
                   path="/jobs/:tab/:jobId"

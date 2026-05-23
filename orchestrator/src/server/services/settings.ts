@@ -94,10 +94,7 @@ export async function getEffectiveSettings(): Promise<AppSettings> {
 
   for (const [key, def] of Object.entries(settingsRegistry)) {
     if (def.kind === "typed") {
-      let rawOverride = overrides[key as settingsRepo.SettingKey];
-      if (key === "searchCities" && !rawOverride) {
-        rawOverride = overrides.jobspyLocation; // legacy fallback
-      }
+      const rawOverride = overrides[key as settingsRepo.SettingKey];
 
       let override = def.parse(rawOverride);
       let defaultValue = def.default();

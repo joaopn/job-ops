@@ -143,10 +143,9 @@ export function normalizeWorkplaceTypes(
   return out.length > 0 ? out : [...WORKPLACE_TYPE_OPTIONS];
 }
 
-export interface ExtractorLimits {
-  jobspyResultsWanted: number;
-  startupjobsMaxJobsPerTerm: number;
-  workingnomadsMaxJobsPerTerm: number;
+export interface MaxJobsPerTermOverride {
+  /** Per-source per-term cap derived from the Run modal's budget. */
+  maxJobsPerTerm: number;
 }
 
 export function inferAutomaticPresetSelection(args: {
@@ -186,45 +185,16 @@ export function inferAutomaticPresetSelection(args: {
   return "custom";
 }
 
-export function deriveExtractorLimits(args: {
+export function deriveMaxJobsPerTerm(args: {
   budget: number;
   searchTerms: string[];
   sources: JobSource[];
-}): ExtractorLimits {
+}): MaxJobsPerTermOverride {
   const budget = Math.max(1, Math.round(args.budget));
   const termCount = Math.max(1, args.searchTerms.length);
-  const includesIndeed = args.sources.includes("indeed");
-  const includesLinkedIn = args.sources.includes("linkedin");
-  const includesGlassdoor = args.sources.includes("glassdoor");
-  const includesHiringCafe = args.sources.includes("hiringcafe");
-  const includesStartupJobs = args.sources.includes("startupjobs");
-  const includesWorkingNomads = args.sources.includes("workingnomads");
-  const includesGolangJobs = args.sources.includes("golangjobs");
-
-  const weightedContributors =
-    (includesIndeed ? termCount : 0) +
-    (includesLinkedIn ? termCount : 0) +
-    (includesGlassdoor ? termCount : 0) +
-    (includesHiringCafe ? termCount : 0) +
-    (includesStartupJobs ? termCount : 0) +
-    (includesWorkingNomads ? termCount : 0) +
-    (includesGolangJobs ? termCount : 0);
-
-  if (weightedContributors <= 0) {
-    return {
-      jobspyResultsWanted: budget,
-      startupjobsMaxJobsPerTerm: budget,
-      workingnomadsMaxJobsPerTerm: budget,
-    };
-  }
-
-  const perUnit = Math.max(1, Math.floor(budget / weightedContributors));
-
-  return {
-    jobspyResultsWanted: perUnit,
-    startupjobsMaxJobsPerTerm: perUnit,
-    workingnomadsMaxJobsPerTerm: perUnit,
-  };
+  const sourceCount = Math.max(1, args.sources.length);
+  const perUnit = Math.max(1, Math.floor(budget / (termCount * sourceCount)));
+  return { maxJobsPerTerm: perUnit };
 }
 
 export function parseSearchTermsInput(input: string): string[] {
@@ -285,57 +255,14 @@ export function calculateAutomaticEstimate(args: {
   sources: JobSource[];
 }): AutomaticEstimate {
   const { values, sources } = args;
-  if (values.searchTerms.length === 0) {
+  if (values.searchTerms.length === 0 || sources.length === 0) {
     return {
-      discovered: {
-        min: 0,
-        max: 0,
-        cap: 0,
-      },
-      processed: {
-        min: 0,
-        max: 0,
-      },
+      discovered: { min: 0, max: 0, cap: 0 },
+      processed: { min: 0, max: 0 },
     };
   }
 
-  const termCount = values.searchTerms.length;
-  const hasIndeed = sources.includes("indeed");
-  const hasLinkedIn = sources.includes("linkedin");
-  const hasGlassdoor = sources.includes("glassdoor");
-  const hasHiringCafe = sources.includes("hiringcafe");
-  const hasStartupJobs = sources.includes("startupjobs");
-  const hasWorkingNomads = sources.includes("workingnomads");
-  const hasGolangJobs = sources.includes("golangjobs");
-  const limits = deriveExtractorLimits({
-    budget: values.runBudget,
-    searchTerms: values.searchTerms,
-    sources,
-  });
-
-  const jobspySitesCount = [hasIndeed, hasLinkedIn, hasGlassdoor].filter(
-    Boolean,
-  ).length;
-  const jobspyCap = jobspySitesCount * limits.jobspyResultsWanted * termCount;
-  const hiringCafeCap = hasHiringCafe
-    ? limits.jobspyResultsWanted * termCount
-    : 0;
-  const startupJobsCap = hasStartupJobs
-    ? limits.startupjobsMaxJobsPerTerm * termCount
-    : 0;
-  const workingNomadsCap = hasWorkingNomads
-    ? limits.workingnomadsMaxJobsPerTerm * termCount
-    : 0;
-  const golangJobsCap = hasGolangJobs
-    ? limits.jobspyResultsWanted * termCount
-    : 0;
-
-  const discoveredCap =
-    jobspyCap +
-    hiringCafeCap +
-    startupJobsCap +
-    workingNomadsCap +
-    golangJobsCap;
+  const discoveredCap = Math.max(1, Math.round(values.runBudget));
   const discoveredMin = Math.round(discoveredCap * 0.35);
   const discoveredMax = Math.round(discoveredCap * 0.75);
   const processedMin = Math.min(values.topN, discoveredMin);

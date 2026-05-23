@@ -15,9 +15,6 @@ interface RunModeModalProps {
   open: boolean;
   settings: AppSettings | null;
   enabledSources: JobSource[];
-  pipelineSources: JobSource[];
-  onToggleSource: (source: JobSource, checked: boolean) => void;
-  onSetPipelineSources: (sources: JobSource[]) => void;
   isPipelineRunning: boolean;
   onOpenChange: (open: boolean) => void;
   onSaveAndRunAutomatic: (values: AutomaticRunValues) => Promise<void>;
@@ -27,9 +24,6 @@ export const RunModeModal: React.FC<RunModeModalProps> = ({
   open,
   settings,
   enabledSources,
-  pipelineSources,
-  onToggleSource,
-  onSetPipelineSources,
   isPipelineRunning,
   onOpenChange,
   onSaveAndRunAutomatic,
@@ -54,9 +48,6 @@ export const RunModeModal: React.FC<RunModeModalProps> = ({
               open={open}
               settings={settings}
               enabledSources={enabledSources}
-              pipelineSources={pipelineSources}
-              onToggleSource={onToggleSource}
-              onSetPipelineSources={onSetPipelineSources}
               isPipelineRunning={isPipelineRunning}
               onSaveAndRun={onSaveAndRunAutomatic}
             />

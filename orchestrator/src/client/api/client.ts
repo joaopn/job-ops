@@ -1135,7 +1135,7 @@ export async function runPipeline(config?: {
   topN?: number;
   minSuitabilityCategory?: SuitabilityCategory;
   sources?: JobSource[];
-  runBudget?: number;
+  maxJobsPerTerm?: number;
   searchTerms?: string[];
   country?: string;
   cityLocations?: string[];
@@ -1462,6 +1462,34 @@ export async function updateSettings(
   return fetchApi<AppSettings>("/settings", {
     method: "PATCH",
     body: JSON.stringify(update),
+  });
+}
+
+// Source-configs API
+import type { ExtractorSourceMetadata } from "@shared/extractors";
+import type {
+  SourceConfigRow,
+  SourceConfigSchema,
+  UpsertSourceConfigInput,
+} from "@shared/types";
+
+export interface SourceConfigsResponse {
+  rows: SourceConfigRow[];
+  metadata: Record<string, ExtractorSourceMetadata>;
+  schemas: Record<string, SourceConfigSchema | null>;
+}
+
+export async function getSourceConfigs(): Promise<SourceConfigsResponse> {
+  return fetchApi<SourceConfigsResponse>("/source-configs");
+}
+
+export async function upsertSourceConfig(
+  sourceId: string,
+  patch: UpsertSourceConfigInput,
+): Promise<SourceConfigRow> {
+  return fetchApi<SourceConfigRow>(`/source-configs/${sourceId}`, {
+    method: "PUT",
+    body: JSON.stringify(patch),
   });
 }
 

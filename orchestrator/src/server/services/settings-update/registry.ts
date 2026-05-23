@@ -31,9 +31,7 @@ export type SettingsUpdatePlan = Record<string, never>;
 
 const LEGACY_SETTINGS_TO_CLEAR_ON_UPDATE: Partial<
   Record<SettingKey, SettingKey[]>
-> = {
-  searchCities: ["jobspyLocation"],
-};
+> = {};
 
 function result(
   args: {
@@ -66,8 +64,7 @@ export const settingsUpdateRegistry: Partial<{
 for (const [key, def] of Object.entries(settingsRegistry)) {
   if (def.kind === "virtual") continue;
 
-  const targetKey =
-    def.kind === "alias" ? (def.target as SettingKey) : (key as SettingKey);
+  const targetKey = key as SettingKey;
   const hasEnvKey = "envKey" in def && !!def.envKey;
 
   settingsUpdateRegistry[key as keyof UpdateSettingsInput] = ({ value }) => {

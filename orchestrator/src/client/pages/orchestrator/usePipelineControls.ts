@@ -13,7 +13,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "@client/lib/toast";
 import type { AutomaticRunValues } from "./automatic-run";
 import {
-  deriveExtractorLimits,
+  deriveMaxJobsPerTerm,
   serializeCityLocationsSetting,
 } from "./automatic-run";
 
@@ -76,7 +76,7 @@ export function usePipelineControls(
       topN: number;
       minSuitabilityCategory: SuitabilityCategory;
       sources: JobSource[];
-      runBudget: number;
+      maxJobsPerTerm: number;
       searchTerms: string[];
       country: string;
       cityLocations: string[];
@@ -91,7 +91,7 @@ export function usePipelineControls(
           topN: config.topN,
           minSuitabilityCategory: config.minSuitabilityCategory,
           sources: config.sources,
-          runBudget: config.runBudget,
+          maxJobsPerTerm: config.maxJobsPerTerm,
           searchTerms: config.searchTerms,
           country: config.country,
           cityLocations: config.cityLocations,
@@ -159,7 +159,7 @@ export function usePipelineControls(
         return;
       }
 
-      const limits = deriveExtractorLimits({
+      const { maxJobsPerTerm } = deriveMaxJobsPerTerm({
         budget: values.runBudget,
         searchTerms: values.searchTerms,
         sources: compatibleSources,
@@ -170,15 +170,14 @@ export function usePipelineControls(
         workplaceTypes: values.workplaceTypes,
         locationSearchScope: values.searchScope,
         locationMatchStrictness: values.matchStrictness,
-        jobspyResultsWanted: limits.jobspyResultsWanted,
-        startupjobsMaxJobsPerTerm: limits.startupjobsMaxJobsPerTerm,
-        jobspyCountryIndeed: values.country,
+        searchCountry: values.country,
         searchCities,
       });
       await refreshSettings();
       await startPipelineRun({
         ...values,
         sources: compatibleSources,
+        maxJobsPerTerm,
         topN: values.topN,
         minSuitabilityCategory: values.minSuitabilityCategory,
       });

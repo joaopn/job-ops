@@ -1,7 +1,5 @@
-import { EXTRACTOR_SOURCE_METADATA } from "@shared/extractors";
 import {
   createLocationIntent,
-  type LocationSourcePlan,
   planLocationSources,
 } from "@shared/location-intelligence.js";
 import type {
@@ -19,7 +17,6 @@ import {
   type JobSource,
   type SuitabilityCategory,
 } from "@shared/types";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Info, Loader2, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -65,9 +62,6 @@ interface AutomaticRunTabProps {
   open: boolean;
   settings: AppSettings | null;
   enabledSources: JobSource[];
-  pipelineSources: JobSource[];
-  onToggleSource: (source: JobSource, checked: boolean) => void;
-  onSetPipelineSources: (sources: JobSource[]) => void;
   isPipelineRunning: boolean;
   onSaveAndRun: (values: AutomaticRunValues) => Promise<void>;
 }
@@ -98,14 +92,9 @@ interface AutomaticRunFormValues {
   searchTermDraft: string;
 }
 
-const GLASSDOOR_COUNTRY_REASON =
-  "Glassdoor is not available for the selected country.";
-const GLASSDOOR_LOCATION_REASON =
-  "Add at least one city in Location preferences to enable Glassdoor.";
 const HIDDEN_COUNTRY_KEYS = new Set(["usa/ca"]);
 const MIN_RUN_BUDGET = 50;
 const MAX_RUN_BUDGET = 1000;
-const SOURCE_MOTION_EASE = [0.22, 1, 0.36, 1] as const;
 
 function normalizeUiCountryKey(value: string): string {
   const normalized = normalizeCountryKey(value);
@@ -128,107 +117,6 @@ function formatWorkplaceTypeLabel(workplaceType: WorkplaceType): string {
   return workplaceType.charAt(0).toUpperCase() + workplaceType.slice(1);
 }
 
-function getKnownJobSource(
-  source: LocationSourcePlan["source"],
-): JobSource | null {
-  return source in EXTRACTOR_SOURCE_METADATA ? (source as JobSource) : null;
-}
-
-function getSourceStatus(args: {
-  countrySelected: boolean;
-  plan: LocationSourcePlan;
-}): {
-  badgeLabel: string;
-  detail: string;
-  available: boolean;
-} {
-  const { countrySelected, plan } = args;
-  const { source, requestedCountry, requestedCities } = plan;
-  const knownSource = getKnownJobSource(source);
-  const countryLabel = requestedCountry
-    ? formatCountryLabel(requestedCountry)
-    : "";
-  const sourceName = knownSource ? sourceLabel[knownSource] : source;
-  const isUkOnlySource = knownSource
-    ? Boolean(EXTRACTOR_SOURCE_METADATA[knownSource]?.ukOnly)
-    : false;
-
-  if (!countrySelected) {
-    if (source === "glassdoor" || isUkOnlySource) {
-      return {
-        badgeLabel: "Select country",
-        detail:
-          "Pick a country first to check whether this source is available.",
-        available: false,
-      };
-    }
-
-    return {
-      badgeLabel: "Available",
-      detail: "This source is available without a country selection.",
-      available: true,
-    };
-  }
-
-  if (source === "glassdoor") {
-    if (
-      plan.capabilities.supportedCountryKeys !== null &&
-      requestedCountry !== null &&
-      !plan.capabilities.supportedCountryKeys.includes(requestedCountry)
-    ) {
-      return {
-        badgeLabel: "Blocked",
-        detail: GLASSDOOR_COUNTRY_REASON,
-        available: false,
-      };
-    }
-
-    if (
-      plan.capabilities.requiresCityLocations &&
-      requestedCities.length === 0
-    ) {
-      return {
-        badgeLabel: "Needs city",
-        detail: GLASSDOOR_LOCATION_REASON,
-        available: false,
-      };
-    }
-
-    return {
-      badgeLabel: "Available",
-      detail: "Glassdoor is available for this location intent.",
-      available: true,
-    };
-  }
-
-  if (isUkOnlySource && !plan.canRun) {
-    return {
-      badgeLabel: "UK only",
-      detail: `${sourceName} is available only when country is United Kingdom.`,
-      available: false,
-    };
-  }
-
-  if (!plan.canRun) {
-    return {
-      badgeLabel: "Blocked",
-      detail: `${sourceName} is not available for ${countryLabel || "the selected country"}.`,
-      available: false,
-    };
-  }
-
-  return {
-    badgeLabel: "Available",
-    detail: "Available for this location intent.",
-    available: true,
-  };
-}
-
-interface SourcePickerRow {
-  source: JobSource;
-  selected: boolean;
-  status: ReturnType<typeof getSourceStatus>;
-}
 
 function getRadioOptionClassName(selected: boolean): string {
   return `flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-3 text-sm transition-colors ${
@@ -242,17 +130,11 @@ export const AutomaticRunTab: React.FC<AutomaticRunTabProps> = ({
   open,
   settings,
   enabledSources,
-  pipelineSources,
-  onToggleSource,
-  onSetPipelineSources,
   isPipelineRunning,
   onSaveAndRun,
 }) => {
   const [isSaving, setIsSaving] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const prefersReducedMotion = useReducedMotion();
-  const [sourceDisplayOrder, setSourceDisplayOrder] =
-    useState<JobSource[]>(enabledSources);
   const [browserCountrySuggestion, setBrowserCountrySuggestion] = useState<
     string | null
   >(null);
@@ -289,11 +171,7 @@ export const AutomaticRunTab: React.FC<AutomaticRunTabProps> = ({
   useEffect(() => {
     if (!open) return;
     const memory = loadAutomaticRunMemory();
-    const fallbackRunBudget = normalizeRunBudget(
-      settings?.jobspyResultsWanted?.value ??
-        settings?.startupjobsMaxJobsPerTerm?.value ??
-        DEFAULT_VALUES.runBudget,
-    );
+    const fallbackRunBudget = normalizeRunBudget(DEFAULT_VALUES.runBudget);
     const rememberedPresetValues =
       memory?.presetId && memory.presetId !== "custom"
         ? AUTOMATIC_PRESETS[memory.presetId]
@@ -310,11 +188,10 @@ export const AutomaticRunTab: React.FC<AutomaticRunTabProps> = ({
         fallbackRunBudget,
     );
     const hasExplicitLocationOverride = Boolean(
-      settings?.jobspyCountryIndeed?.override ||
-        settings?.searchCities?.override,
+      settings?.searchCountry?.override || settings?.searchCities?.override,
     );
     const rememberedCountry = normalizeUiCountryKey(
-      settings?.jobspyCountryIndeed?.value ??
+      settings?.searchCountry?.value ??
         settings?.searchCities?.value ??
         DEFAULT_VALUES.country,
     );
@@ -356,23 +233,6 @@ export const AutomaticRunTab: React.FC<AutomaticRunTabProps> = ({
     setSelectedPreset(memory?.presetId ?? "custom");
     setAdvancedOpen(false);
   }, [open, settings, reset]);
-
-  useEffect(() => {
-    setSourceDisplayOrder((current) => {
-      const filtered = current.filter((source) =>
-        enabledSources.includes(source),
-      );
-      const additions = enabledSources.filter(
-        (source) => !filtered.includes(source),
-      );
-      const next = [...filtered, ...additions];
-
-      return next.length === current.length &&
-        next.every((source, index) => source === current[index])
-        ? current
-        : next;
-    });
-  }, [enabledSources]);
 
   const values = useMemo<AutomaticRunValues>(() => {
     const normalizedCountry = normalizeUiCountryKey(countryInput);
@@ -451,95 +311,24 @@ export const AutomaticRunTab: React.FC<AutomaticRunTabProps> = ({
     [enabledSources, sourcePlans.compatibleSources],
   );
 
-  const compatiblePipelineSources = useMemo(
-    () => pipelineSources.filter((source) => isSourceAvailableForRun(source)),
-    [pipelineSources, isSourceAvailableForRun],
+  const incompatibleEnabledSources = useMemo(
+    () =>
+      enabledSources.filter((source) => !isSourceAvailableForRun(source)),
+    [enabledSources, isSourceAvailableForRun],
   );
   const countrySelectionInvalid = values.country.length === 0;
-  const sourceRows = useMemo<SourcePickerRow[]>(
-    () =>
-      sourceDisplayOrder.flatMap((source) => {
-        const plan = sourcePlanBySource.get(source);
-        if (!plan) return [];
-
-        return [
-          {
-            source,
-            selected: pipelineSources.includes(source),
-            status: getSourceStatus({
-              countrySelected: !countrySelectionInvalid,
-              plan,
-            }),
-          },
-        ];
-      }),
-    [
-      countrySelectionInvalid,
-      pipelineSources,
-      sourceDisplayOrder,
-      sourcePlanBySource,
-    ],
-  );
-  const selectedSourceRows = useMemo(
-    () => sourceRows.filter((row) => row.selected && row.status.available),
-    [sourceRows],
-  );
-  const readySourceRows = useMemo(
-    () => sourceRows.filter((row) => !row.selected && row.status.available),
-    [sourceRows],
-  );
-  const unavailableSourceRows = useMemo(
-    () => sourceRows.filter((row) => !row.status.available),
-    [sourceRows],
-  );
-  const sourceMotionTransition = useMemo(
-    () =>
-      prefersReducedMotion
-        ? { duration: 0 }
-        : { duration: 0.22, ease: SOURCE_MOTION_EASE },
-    [prefersReducedMotion],
-  );
-  const sourceSectionInitial = prefersReducedMotion
-    ? false
-    : { opacity: 0, y: -8 };
-  const sourceSectionAnimate = { opacity: 1, y: 0 };
-  const sourceRowInitial = prefersReducedMotion
-    ? { opacity: 1 }
-    : { opacity: 0, y: 8, scale: 0.985 };
-  const sourceRowExit = prefersReducedMotion
-    ? { opacity: 0 }
-    : { opacity: 0, y: -6, scale: 0.985 };
   const countrySuggestion =
     browserCountrySuggestion && browserCountrySuggestion !== values.country
       ? browserCountrySuggestion
       : null;
 
-  useEffect(() => {
-    const filtered = pipelineSources.filter((source) =>
-      isSourceAvailableForRun(source),
-    );
-    if (filtered.length === pipelineSources.length) return;
-    if (filtered.length > 0) {
-      onSetPipelineSources(filtered);
-      return;
-    }
-    if (compatibleEnabledSources.length > 0) {
-      onSetPipelineSources([compatibleEnabledSources[0]]);
-    }
-  }, [
-    compatibleEnabledSources,
-    isSourceAvailableForRun,
-    onSetPipelineSources,
-    pipelineSources,
-  ]);
-
   const estimate = useMemo(
     () =>
       calculateAutomaticEstimate({
         values,
-        sources: compatiblePipelineSources,
+        sources: compatibleEnabledSources,
       }),
-    [values, compatiblePipelineSources],
+    [values, compatibleEnabledSources],
   );
 
   const locationSummary = useMemo(
@@ -550,7 +339,7 @@ export const AutomaticRunTab: React.FC<AutomaticRunTabProps> = ({
   const runDisabled =
     isPipelineRunning ||
     isSaving ||
-    compatiblePipelineSources.length === 0 ||
+    compatibleEnabledSources.length === 0 ||
     values.searchTerms.length === 0 ||
     countrySelectionInvalid ||
     workplaceTypeSelectionInvalid;
@@ -565,17 +354,6 @@ export const AutomaticRunTab: React.FC<AutomaticRunTabProps> = ({
 
     setValue("workplaceTypes", next, { shouldDirty: true });
   };
-
-  const handleSourceToggle = useCallback(
-    (source: JobSource, checked: boolean) => {
-      setSourceDisplayOrder((current) => [
-        ...current.filter((value) => value !== source),
-        source,
-      ]);
-      onToggleSource(source, checked);
-    },
-    [onToggleSource],
-  );
 
   const applyPreset = (presetId: AutomaticPresetId) => {
     const preset = AUTOMATIC_PRESETS[presetId];
@@ -1010,224 +788,32 @@ export const AutomaticRunTab: React.FC<AutomaticRunTabProps> = ({
           <CardHeader className="pb-1">
             <CardTitle>Sources</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <Accordion type="single" collapsible className="w-full">
-              <AccordionItem value="sources" className="border-b-0">
-                <AccordionTrigger
-                  aria-label="Review and edit sources"
-                  className="gap-4 py-2 hover:no-underline"
-                >
-                  <motion.div
-                    layout
-                    transition={sourceMotionTransition}
-                    className="flex w-full flex-col gap-3 text-left sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <motion.div
-                      layout
-                      transition={sourceMotionTransition}
-                      className="min-w-0 space-y-1"
-                    >
-                      <p className="text-sm font-semibold text-foreground">
-                        {selectedSourceRows.length === 0
-                          ? "Choose sources for this run"
-                          : `${selectedSourceRows.length} source${selectedSourceRows.length === 1 ? "" : "s"} selected`}
-                      </p>
-                    </motion.div>
-                    <motion.div
-                      layout
-                      transition={sourceMotionTransition}
-                      className="flex shrink-0 flex-wrap gap-2"
-                    >
-                      <Badge variant="outline" className="rounded-full">
-                        {selectedSourceRows.length} selected
-                      </Badge>
-                      <Badge variant="outline" className="rounded-full">
-                        {
-                          sourceRows.filter((row) => row.status.available)
-                            .length
-                        }{" "}
-                        available
-                      </Badge>
-                      {unavailableSourceRows.length > 0 ? (
-                        <Badge variant="outline" className="rounded-full">
-                          {unavailableSourceRows.length} unavailable
-                        </Badge>
-                      ) : null}
-                    </motion.div>
-                  </motion.div>
-                </AccordionTrigger>
-                <AccordionContent className="pt-4">
-                  <motion.div
-                    initial={sourceSectionInitial}
-                    animate={sourceSectionAnimate}
-                    transition={sourceMotionTransition}
-                    className="space-y-5"
-                  >
-                    {selectedSourceRows.length > 0 ? (
-                      <motion.div
-                        layout
-                        transition={sourceMotionTransition}
-                        className="space-y-2"
-                      >
-                        <motion.p
-                          layout
-                          transition={sourceMotionTransition}
-                          className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground"
-                        >
-                          Selected
-                        </motion.p>
-                        <motion.div
-                          layout
-                          transition={sourceMotionTransition}
-                          className="grid gap-2 md:grid-cols-2"
-                        >
-                          <AnimatePresence initial={false} mode="popLayout">
-                            {selectedSourceRows.map((row) => (
-                              <motion.div
-                                key={row.source}
-                                layout
-                                initial={sourceRowInitial}
-                                animate={sourceSectionAnimate}
-                                exit={sourceRowExit}
-                                transition={sourceMotionTransition}
-                              >
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  aria-label={sourceLabel[row.source]}
-                                  aria-pressed
-                                  title="Included in this run."
-                                  className="flex h-auto w-full items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/10 px-3 py-3 text-left text-foreground transition-colors duration-200 hover:bg-primary/15"
-                                  onClick={() =>
-                                    handleSourceToggle(row.source, false)
-                                  }
-                                >
-                                  <span className="min-w-0">
-                                    <span className="block text-sm font-semibold">
-                                      {sourceLabel[row.source]}
-                                    </span>
-                                  </span>
-                                </Button>
-                              </motion.div>
-                            ))}
-                          </AnimatePresence>
-                        </motion.div>
-                      </motion.div>
-                    ) : null}
-
-                    {readySourceRows.length > 0 ? (
-                      <motion.div
-                        layout
-                        transition={sourceMotionTransition}
-                        className="space-y-2"
-                      >
-                        <motion.p
-                          layout
-                          transition={sourceMotionTransition}
-                          className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground"
-                        >
-                          Available
-                        </motion.p>
-                        <motion.div
-                          layout
-                          transition={sourceMotionTransition}
-                          className="grid gap-2 md:grid-cols-2"
-                        >
-                          <AnimatePresence initial={false} mode="popLayout">
-                            {readySourceRows.map((row) => (
-                              <motion.div
-                                key={row.source}
-                                layout
-                                initial={sourceRowInitial}
-                                animate={sourceSectionAnimate}
-                                exit={sourceRowExit}
-                                transition={sourceMotionTransition}
-                              >
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  aria-label={sourceLabel[row.source]}
-                                  aria-pressed={false}
-                                  title="Available for this location setup."
-                                  className="flex h-auto w-full items-center justify-between gap-3 rounded-xl border border-border/60 bg-background/60 px-3 py-3 text-left text-foreground transition-colors duration-200 hover:bg-muted/40"
-                                  onClick={() =>
-                                    handleSourceToggle(row.source, true)
-                                  }
-                                >
-                                  <span className="min-w-0">
-                                    <span className="block text-sm font-semibold">
-                                      {sourceLabel[row.source]}
-                                    </span>
-                                  </span>
-                                </Button>
-                              </motion.div>
-                            ))}
-                          </AnimatePresence>
-                        </motion.div>
-                      </motion.div>
-                    ) : null}
-
-                    {unavailableSourceRows.length > 0 ? (
-                      <motion.div
-                        layout
-                        transition={sourceMotionTransition}
-                        className="space-y-2"
-                      >
-                        <motion.p
-                          layout
-                          transition={sourceMotionTransition}
-                          className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground"
-                        >
-                          Currently unavailable
-                        </motion.p>
-                        <motion.div
-                          layout
-                          transition={sourceMotionTransition}
-                          className="grid gap-2 md:grid-cols-2"
-                        >
-                          <AnimatePresence initial={false} mode="popLayout">
-                            {unavailableSourceRows.map((row) => (
-                              <motion.div
-                                key={row.source}
-                                layout
-                                initial={sourceRowInitial}
-                                animate={sourceSectionAnimate}
-                                exit={sourceRowExit}
-                                transition={sourceMotionTransition}
-                              >
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  disabled
-                                  aria-label={sourceLabel[row.source]}
-                                  title={row.status.detail}
-                                  className="flex h-auto w-full items-start justify-between gap-3 rounded-xl border border-border/50 bg-transparent px-3 py-3 text-left text-foreground/80 disabled:pointer-events-none disabled:opacity-100"
-                                >
-                                  <span className="min-w-0 space-y-1">
-                                    <span className="block text-sm font-semibold">
-                                      {sourceLabel[row.source]}
-                                    </span>
-                                    <span className="block text-xs leading-5 text-muted-foreground whitespace-pre-wrap">
-                                      {row.status.detail}
-                                    </span>
-                                  </span>
-                                  <Badge
-                                    variant="outline"
-                                    className="shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em]"
-                                  >
-                                    {row.status.badgeLabel}
-                                  </Badge>
-                                </Button>
-                              </motion.div>
-                            ))}
-                          </AnimatePresence>
-                        </motion.div>
-                      </motion.div>
-                    ) : null}
-                  </motion.div>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
+          <CardContent className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              {compatibleEnabledSources.length === 0
+                ? "No sources enabled."
+                : `Will run: ${compatibleEnabledSources
+                    .map((source) => sourceLabel[source])
+                    .join(", ")}.`}
+            </p>
+            {incompatibleEnabledSources.length > 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Skipping (incompatible with this location):{" "}
+                {incompatibleEnabledSources
+                  .map((source) => sourceLabel[source])
+                  .join(", ")}
+              </p>
+            ) : null}
+            <p className="text-xs text-muted-foreground">
+              Manage in{" "}
+              <a
+                href="#/sources"
+                className="font-medium text-foreground underline underline-offset-2"
+              >
+                Sources
+              </a>
+              .
+            </p>
           </CardContent>
         </Card>
       </div>

@@ -584,6 +584,33 @@ try {
     insertRow.run(sourceId, 1, JSON.stringify(config), "{}");
   }
   console.log("✅ source_configs backfill applied");
+
+  // Rename jobspyCountryIndeed → searchCountry, then drop the four legacy
+  // settings keys. Must run AFTER the source_configs backfill above, which
+  // reads these keys; running it as part of the SQL `migrations[]` array
+  // would fire before the JS backfill and clobber the values.
+  if (jobspyCountryIndeed) {
+    const existingSearchCountry = readSetting("searchCountry");
+    if (!existingSearchCountry) {
+      const insertSetting = sqlite.prepare(
+        `INSERT INTO settings (key, value, created_at, updated_at)
+         VALUES (?, ?, datetime('now'), datetime('now'))`,
+      );
+      insertSetting.run("searchCountry", jobspyCountryIndeed);
+    }
+  }
+
+  sqlite
+    .prepare(
+      `DELETE FROM settings WHERE key IN (
+         'jobspyResultsWanted',
+         'jobspyCountryIndeed',
+         'jobspyLocation',
+         'startupjobsMaxJobsPerTerm'
+       )`,
+    )
+    .run();
+  console.log("✅ legacy settings keys dropped");
 } catch (error) {
   console.error("❌ source_configs backfill failed:", error);
   process.exit(1);

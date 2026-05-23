@@ -60,7 +60,6 @@ export interface AppSettings {
   model: Resolved<string>;
   llmProvider: Resolved<string>;
   llmBaseUrl: Resolved<string>;
-  startupjobsMaxJobsPerTerm: Resolved<number>;
   searchTerms: Resolved<string[]>;
   workplaceTypes: Resolved<Array<"remote" | "hybrid" | "onsite">>;
   blockedCompanyKeywords: Resolved<string[]>;
@@ -68,8 +67,7 @@ export interface AppSettings {
   searchCities: Resolved<string>;
   locationSearchScope: Resolved<LocationSearchScope>;
   locationMatchStrictness: Resolved<LocationMatchStrictness>;
-  jobspyResultsWanted: Resolved<number>;
-  jobspyCountryIndeed: Resolved<string>;
+  searchCountry: Resolved<string>;
   showSponsorInfo: Resolved<boolean>;
   renderMarkdownInJobDescriptions: Resolved<boolean>;
   chatStyleTone: Resolved<string>;

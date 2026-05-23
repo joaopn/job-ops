@@ -15,9 +15,6 @@ describe("RunModeModal", () => {
         open
         settings={null}
         enabledSources={["linkedin"]}
-        pipelineSources={["linkedin"]}
-        onToggleSource={vi.fn()}
-        onSetPipelineSources={vi.fn()}
         isPipelineRunning={false}
         onOpenChange={vi.fn()}
         onSaveAndRunAutomatic={vi.fn().mockResolvedValue(undefined)}

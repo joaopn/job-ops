@@ -3,7 +3,13 @@ import { sanitizeUnknown } from "@infra/sanitize";
 import { getExtractorRegistry } from "@server/extractors/registry";
 import { getAllJobUrls } from "@server/repositories/jobs";
 import * as settingsRepo from "@server/repositories/settings";
+import * as sourceConfigsRepo from "@server/repositories/source-configs";
+import { resolveSourceContextSettings } from "@server/services/source-configs/resolve";
 import { asyncPool } from "@server/utils/async-pool";
+import {
+  type ExtractorSourceId,
+  isExtractorSourceId,
+} from "@shared/extractors";
 import { matchJobLocationIntent } from "@shared/job-matching.js";
 import {
   buildLocationEvidence as buildSharedLocationEvidence,
@@ -13,7 +19,12 @@ import {
 } from "@shared/location-domain.js";
 import { formatCountryLabel } from "@shared/location-support.js";
 import { normalizeStringArray } from "@shared/normalize-string-array.js";
-import type { CreateJobInput, PipelineConfig } from "@shared/types";
+import type {
+  CreateJobInput,
+  PipelineConfig,
+  SourceConfigRow,
+  SourceConfigRunGlobals,
+} from "@shared/types";
 import { type CrawlSource, progressHelpers, updateProgress } from "../progress";
 
 const DISCOVERY_CONCURRENCY = 3;
@@ -140,17 +151,44 @@ export async function discoverJobsStep(args: {
   const locationIntent =
     args.mergedConfig.locationIntent ??
     createLocationIntentFromLegacyInputs({
-      selectedCountry: settings.jobspyCountryIndeed ?? "",
-      searchCities: settings.searchCities ?? settings.jobspyLocation ?? "",
+      selectedCountry: settings.searchCountry ?? "",
+      searchCities: settings.searchCities ?? "",
       workplaceTypes: parseWorkplaceTypes(settings.workplaceTypes),
       searchScope: settings.locationSearchScope,
       matchStrictness: settings.locationMatchStrictness,
     });
-  const sourcePlans = args.mergedConfig.sources.map((source) => ({
+
+  const sourceConfigRows = await sourceConfigsRepo.getAllSourceConfigs();
+  const sourceConfigBySourceId = new Map<string, SourceConfigRow>();
+  for (const row of sourceConfigRows) {
+    sourceConfigBySourceId.set(row.sourceId, row);
+  }
+  const enabledSourceIds = sourceConfigRows
+    .filter((row) => row.enabled)
+    .map((row) => row.sourceId);
+  const enabledSourceIdSet = new Set<string>(enabledSourceIds);
+
+  const requestedSources: ExtractorSourceId[] =
+    args.mergedConfig.sources === undefined
+      ? enabledSourceIds.filter(isExtractorSourceId)
+      : args.mergedConfig.sources.filter((source) =>
+          enabledSourceIdSet.has(source),
+        );
+
+  const runGlobals: SourceConfigRunGlobals = {
+    city: settings.searchCities ?? "",
+    country: locationIntent.selectedCountry ?? "",
+    workplaceTypes: settings.workplaceTypes ?? "[]",
+    ...(args.mergedConfig.maxJobsPerTerm !== undefined
+      ? { maxJobsPerTerm: String(args.mergedConfig.maxJobsPerTerm) }
+      : {}),
+  };
+
+  const sourcePlans = requestedSources.map((source) => ({
     source,
     plan: getSourceLocationPlan(source, locationIntent),
   }));
-  const compatibleSources = sourcePlans
+  const compatibleSources: ExtractorSourceId[] = sourcePlans
     .filter(({ plan }) => plan.canRun)
     .map(({ source }) => source);
   let existingJobUrlsPromise: Promise<string[]> | null = null;
@@ -167,13 +205,13 @@ export async function discoverJobsStep(args: {
       step: "discover-jobs",
       locationIntent,
       primaryLocation: getPrimaryLocationLabel(locationIntent),
-      requestedSources: args.mergedConfig.sources,
+      requestedSources,
       skippedSources: skippedSources.map(({ source }) => source),
       warnings: skippedSources.flatMap(({ plan }) => plan.warnings),
     });
   }
 
-  if (args.mergedConfig.sources.length > 0 && compatibleSources.length === 0) {
+  if (requestedSources.length > 0 && compatibleSources.length === 0) {
     throw new Error(
       locationIntent.selectedCountry
         ? `No compatible sources for selected country: ${formatCountryLabel(locationIntent.selectedCountry)}`
@@ -221,17 +259,18 @@ export async function discoverJobsStep(args: {
           ? `${manifest.displayName}: ${grouped.sources.join(", ")}...`
           : grouped.detail,
       run: async () => {
-        const filteredSettings = Object.fromEntries(
-          Object.entries(settings).filter(
-            ([, value]) =>
-              typeof value === "string" || typeof value === "undefined",
-          ),
-        ) as Record<string, string | undefined>;
+        const primarySourceId = grouped.sources[0];
+        const row = sourceConfigBySourceId.get(primarySourceId);
+        const perSourceSettings = resolveSourceContextSettings({
+          schema: manifest.configSchema,
+          row: row ?? { config: {}, mappings: {} },
+          runGlobals,
+        });
 
         const result = await manifest.run({
           source: grouped.sources[0],
           selectedSources: grouped.sources,
-          settings: filteredSettings,
+          settings: perSourceSettings,
           searchTerms,
           selectedCountry: getLegacyLocationSelection(locationIntent),
           locationIntent,

@@ -188,7 +188,7 @@ describe("API client auth flow", () => {
       api.runPipeline({
         topN: 12,
         minSuitabilityCategory: "good_fit",
-        runBudget: 150,
+        maxJobsPerTerm: 30,
         searchTerms: ["backend engineer"],
         country: "united kingdom",
         cityLocations: ["London"],
@@ -206,7 +206,7 @@ describe("API client auth flow", () => {
         body: JSON.stringify({
           topN: 12,
           minSuitabilityCategory: "good_fit",
-          runBudget: 150,
+          maxJobsPerTerm: 30,
           searchTerms: ["backend engineer"],
           country: "united kingdom",
           cityLocations: ["London"],

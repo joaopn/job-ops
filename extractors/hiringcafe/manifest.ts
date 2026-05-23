@@ -33,6 +33,11 @@ const hiringcafeConfigSchema: SourceConfigSchema = {
       sourceField: "workplaceTypes",
       enabledByDefault: true,
     },
+    {
+      globalField: "maxJobsPerTerm",
+      sourceField: "max_jobs_per_term",
+      enabledByDefault: true,
+    },
   ],
 };
 
@@ -89,8 +94,8 @@ export const manifest: ExtractorManifest = {
       return { success: true, jobs: [] };
     }
 
-    const maxJobsPerTerm = context.settings.jobspyResultsWanted
-      ? parseInt(context.settings.jobspyResultsWanted, 10)
+    const maxJobsPerTerm = context.settings.max_jobs_per_term
+      ? parseInt(context.settings.max_jobs_per_term, 10)
       : 200;
 
     const result = await runHiringCafe({
@@ -98,8 +103,7 @@ export const manifest: ExtractorManifest = {
       countryKey: context.selectedCountry,
       searchTerms: context.searchTerms,
       locations: resolveSearchCities({
-        single:
-          context.settings.searchCities ?? context.settings.jobspyLocation,
+        single: context.settings.searchCities,
       }),
       workplaceTypes: context.settings.workplaceTypes
         ? JSON.parse(context.settings.workplaceTypes)

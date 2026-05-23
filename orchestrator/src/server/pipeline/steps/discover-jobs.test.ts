@@ -11,6 +11,18 @@ vi.mock("@server/repositories/jobs", () => ({
   getAllJobUrls: vi.fn().mockResolvedValue([]),
 }));
 
+vi.mock("@server/repositories/source-configs", () => ({
+  getAllSourceConfigs: vi.fn().mockResolvedValue([
+    { sourceId: "indeed", enabled: true, config: {}, mappings: {}, updatedAt: "" },
+    { sourceId: "linkedin", enabled: true, config: {}, mappings: {}, updatedAt: "" },
+    { sourceId: "glassdoor", enabled: true, config: {}, mappings: {}, updatedAt: "" },
+    { sourceId: "hiringcafe", enabled: true, config: {}, mappings: {}, updatedAt: "" },
+    { sourceId: "startupjobs", enabled: true, config: {}, mappings: {}, updatedAt: "" },
+    { sourceId: "workingnomads", enabled: true, config: {}, mappings: {}, updatedAt: "" },
+    { sourceId: "golangjobs", enabled: true, config: {}, mappings: {}, updatedAt: "" },
+  ]),
+}));
+
 vi.mock("@server/extractors/registry", () => ({
   getExtractorRegistry: vi.fn(),
 }));
@@ -72,7 +84,7 @@ describe("discoverJobsStep", () => {
 
     vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
       searchTerms: JSON.stringify(["engineer"]),
-      jobspyCountryIndeed: "united kingdom",
+      searchCountry: "united kingdom",
     } as any);
 
     vi.mocked(registryModule.getExtractorRegistry).mockResolvedValue({
@@ -117,7 +129,7 @@ describe("discoverJobsStep", () => {
 
     vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
       searchTerms: JSON.stringify(["engineer"]),
-      jobspyCountryIndeed: "united kingdom",
+      searchCountry: "united kingdom",
     } as any);
 
     vi.mocked(registryModule.getExtractorRegistry).mockResolvedValue({
@@ -146,7 +158,7 @@ describe("discoverJobsStep", () => {
     // country it does not support so the country-compat filter rejects it.
     vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
       searchTerms: JSON.stringify(["engineer"]),
-      jobspyCountryIndeed: "croatia",
+      searchCountry: "croatia",
     } as any);
 
     vi.mocked(registryModule.getExtractorRegistry).mockResolvedValue({
@@ -171,7 +183,7 @@ describe("discoverJobsStep", () => {
 
     vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
       searchTerms: JSON.stringify(["engineer"]),
-      jobspyCountryIndeed: "united states",
+      searchCountry: "united states",
     } as any);
 
     vi.mocked(registryModule.getExtractorRegistry).mockResolvedValue({
@@ -293,7 +305,7 @@ describe("discoverJobsStep", () => {
     vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
       searchTerms: JSON.stringify(["engineer"]),
       searchCities: "Leeds",
-      jobspyCountryIndeed: "united kingdom",
+      searchCountry: "united kingdom",
     } as any);
 
     vi.mocked(registryModule.getExtractorRegistry).mockResolvedValue({
@@ -359,7 +371,7 @@ describe("discoverJobsStep", () => {
 
     vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
       searchTerms: JSON.stringify(["engineer"]),
-      jobspyCountryIndeed: "croatia",
+      searchCountry: "croatia",
       searchCities: null,
     } as any);
 
@@ -412,7 +424,7 @@ describe("discoverJobsStep", () => {
 
     vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
       searchTerms: JSON.stringify(["engineer"]),
-      jobspyCountryIndeed: "croatia",
+      searchCountry: "croatia",
       searchCities: null,
     } as any);
 
@@ -475,7 +487,7 @@ describe("discoverJobsStep", () => {
 
     vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
       searchTerms: JSON.stringify(["engineer"]),
-      jobspyCountryIndeed: "croatia",
+      searchCountry: "croatia",
       searchCities: null,
       workplaceTypes: JSON.stringify(["remote", "hybrid"]),
       locationSearchScope: "selected_plus_remote_worldwide",
@@ -529,7 +541,7 @@ describe("discoverJobsStep", () => {
 
     vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
       searchTerms: JSON.stringify(["engineer"]),
-      jobspyCountryIndeed: "croatia",
+      searchCountry: "croatia",
       searchCities: "Zagreb",
       locationMatchStrictness: "flexible",
     } as any);
@@ -581,7 +593,7 @@ describe("discoverJobsStep", () => {
 
     vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
       searchTerms: JSON.stringify(["engineer"]),
-      jobspyCountryIndeed: "united kingdom",
+      searchCountry: "united kingdom",
     } as any);
     vi.mocked(jobsRepo.getAllJobUrls).mockResolvedValue([
       "https://example.com/existing",

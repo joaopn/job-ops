@@ -31,9 +31,9 @@ async function resolveLocationIntent(
 
   const settings = await settingsRepo.getAllSettings();
   return createLocationIntentFromLegacyInputs({
-    selectedCountry: settings.jobspyCountryIndeed ?? "",
+    selectedCountry: settings.searchCountry ?? "",
     cityLocations: resolveSearchCities({
-      single: settings.searchCities ?? settings.jobspyLocation ?? null,
+      single: settings.searchCities ?? null,
     }),
     workplaceTypes: parseWorkplaceTypes(settings.workplaceTypes),
     geoScope: settings.locationSearchScope ?? null,

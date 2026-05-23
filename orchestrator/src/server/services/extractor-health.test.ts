@@ -75,8 +75,8 @@ describe("extractor health service", () => {
         searchTerms: ["software"],
         selectedCountry: "united kingdom",
         settings: expect.objectContaining({
-          jobspyCountryIndeed: "UK",
-          jobspyResultsWanted: "1",
+          country_indeed: "UK",
+          max_jobs_per_term: "1",
         }),
       }),
     );

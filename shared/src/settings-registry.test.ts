@@ -56,13 +56,20 @@ describe("settingsRegistry helpers", () => {
       }
     });
 
-    it("does not default jobspyCountryIndeed to UK when no env is configured", () => {
+    it("does not default searchCountry when no env is configured", () => {
+      const previousSearchCountry = process.env.SEARCH_COUNTRY;
       const previousJobspyCountryIndeed = process.env.JOBSPY_COUNTRY_INDEED;
+      delete process.env.SEARCH_COUNTRY;
       delete process.env.JOBSPY_COUNTRY_INDEED;
 
       try {
-        expect(settingsRegistry.jobspyCountryIndeed.default()).toBe("");
+        expect(settingsRegistry.searchCountry.default()).toBe("");
       } finally {
+        if (previousSearchCountry === undefined) {
+          delete process.env.SEARCH_COUNTRY;
+        } else {
+          process.env.SEARCH_COUNTRY = previousSearchCountry;
+        }
         if (previousJobspyCountryIndeed === undefined) {
           delete process.env.JOBSPY_COUNTRY_INDEED;
         } else {
@@ -97,15 +104,15 @@ describe("settingsRegistry helpers", () => {
 
   describe("number parsing and clamping", () => {
     it("returns null for empty/invalid values", () => {
-      expect(settingsRegistry.startupjobsMaxJobsPerTerm.parse("")).toBeNull();
-      expect(settingsRegistry.startupjobsMaxJobsPerTerm.parse("abc")).toBeNull();
+      expect(settingsRegistry.missingSalaryPenalty.parse("")).toBeNull();
+      expect(settingsRegistry.missingSalaryPenalty.parse("abc")).toBeNull();
       expect(
-        settingsRegistry.startupjobsMaxJobsPerTerm.parse(undefined),
+        settingsRegistry.missingSalaryPenalty.parse(undefined),
       ).toBeNull();
     });
 
     it("parses valid numbers", () => {
-      expect(settingsRegistry.startupjobsMaxJobsPerTerm.parse("42")).toBe(42);
+      expect(settingsRegistry.missingSalaryPenalty.parse("42")).toBe(42);
     });
 
     it("clamps missingSalaryPenalty to 0-100", () => {

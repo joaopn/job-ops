@@ -363,9 +363,13 @@ function RunInsightsBody(props: {
                   }
                 />
                 <MetricCard
-                  label="Source limits"
-                  value={`JobSpy ${savedDetails.effectiveConfig.sourceLimits.jobspyResultsWanted}`}
-                  hint={`startup.jobs ${savedDetails.effectiveConfig.sourceLimits.startupjobsMaxJobsPerTerm}`}
+                  label="Per-run cap"
+                  value={
+                    savedDetails.effectiveConfig.sourceLimits.maxJobsPerTerm ==
+                    null
+                      ? "Per source"
+                      : `${savedDetails.effectiveConfig.sourceLimits.maxJobsPerTerm.toLocaleString()} per term`
+                  }
                 />
                 <MetricCard
                   label="Models"
