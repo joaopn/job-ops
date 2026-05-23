@@ -114,12 +114,20 @@ function resolveSourceOrder(id: string): number {
   return 9000 + sourceRowFallbackCounter;
 }
 
-function getOrCreateSourceRow(platform: string): SourceStatsInternal {
+function getOrCreateSourceRow(
+  platform: string,
+  labelOverride?: string,
+): SourceStatsInternal {
   const existing = sourceStatsByPlatform.get(platform);
-  if (existing) return existing;
+  if (existing) {
+    if (labelOverride && existing.label !== labelOverride) {
+      existing.label = labelOverride;
+    }
+    return existing;
+  }
   const row: SourceStatsInternal = {
     id: platform,
-    label: resolveSourceLabel(platform),
+    label: labelOverride ?? resolveSourceLabel(platform),
     status: "pending",
     jobsFound: 0,
     jobsScraped: 0,
@@ -305,9 +313,16 @@ export const progressHelpers = {
     const aggregated = aggregateCrawlingStats();
 
     const platforms = options?.platforms ?? [source];
+    // When an extractor groups multiple platforms (e.g. jobspy →
+    // indeed/linkedin/glassdoor), suffix each row's label with `[<extractorId>]`
+    // so the banner shows "LinkedIn [jobspy]" — keeps per-platform attribution
+    // visible while making the underlying extractor obvious. 1:1 extractors
+    // (hiringcafe / workingnomads / startupjobs) stay unsuffixed.
+    const suffix = platforms.length > 1 ? ` [${source}]` : "";
     const startedAt = new Date().toISOString();
     for (const platform of platforms) {
-      const row = getOrCreateSourceRow(platform);
+      const baseLabel = resolveSourceLabel(platform);
+      const row = getOrCreateSourceRow(platform, `${baseLabel}${suffix}`);
       if (row.status === "pending" || row.status === "running") {
         row.status = "running";
         row.startedAt = row.startedAt ?? startedAt;

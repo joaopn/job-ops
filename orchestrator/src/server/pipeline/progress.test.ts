@@ -25,8 +25,26 @@ describe("pipeline progress source-stats tracking", () => {
       "linkedin",
       "glassdoor",
     ]);
+    // Multi-platform extractor: each row's label gets a `[<extractorId>]`
+    // suffix so the banner shows the underlying extractor alongside the
+    // platform.
+    expect(stats.map((row) => row.label)).toEqual([
+      "Indeed [jobspy]",
+      "LinkedIn [jobspy]",
+      "Glassdoor [jobspy]",
+    ]);
     expect(stats.every((row) => row.status === "running")).toBe(true);
     expect(stats.every((row) => row.jobsFound === 0)).toBe(true);
+  });
+
+  it("does not suffix the label for 1:1 extractors", () => {
+    progressHelpers.startCrawling(1);
+    progressHelpers.startSource("hiringcafe", 0, 1, {
+      platforms: ["hiringcafe"],
+    });
+
+    const row = getProgress().sourceStats.find((r) => r.id === "hiringcafe");
+    expect(row?.label).toBe("Hiring Cafe");
   });
 
   it("records found/scraped counts and marks the row completed", () => {
