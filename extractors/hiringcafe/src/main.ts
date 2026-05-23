@@ -41,12 +41,10 @@ interface ExtractedJob {
   jobType?: string;
 }
 
-interface BrowserApiResponse {
-  ok: boolean;
-  status: number;
-  statusText: string;
-  data: unknown;
-  responseText: string;
+interface SsrSearchPage {
+  hits: RawHiringCafeJob[];
+  totalCount: number | null;
+  isLastPage: boolean;
 }
 
 interface CityLocationContext {
@@ -114,9 +112,10 @@ function parseWorkplaceTypes(
 }
 
 function encodeSearchState(searchState: unknown): string {
-  const json = JSON.stringify(searchState);
-  const urlEncodedJson = encodeURIComponent(json);
-  return Buffer.from(urlEncodedJson, "utf-8").toString("base64");
+  // Post-2026-05-23: Hiring Cafe deprecated /api/search-jobs* and search
+  // state now rides as a URL-encoded JSON `searchState` query param against
+  // the SSR-rendered home page. No base64 layer.
+  return encodeURIComponent(JSON.stringify(searchState));
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -253,30 +252,6 @@ function mapHiringCafeJob(raw: RawHiringCafeJob): ExtractedJob | null {
     jobDescription: toStringOrNull(jobInformation?.description) ?? undefined,
     jobType,
   };
-}
-
-function extractResultsBatch(payload: unknown): RawHiringCafeJob[] {
-  if (Array.isArray(payload)) {
-    return payload.filter(
-      (item): item is RawHiringCafeJob =>
-        Boolean(item) && typeof item === "object" && !Array.isArray(item),
-    );
-  }
-
-  const payloadRecord = asRecord(payload);
-  const results = payloadRecord?.results;
-  if (!Array.isArray(results)) return [];
-
-  return results.filter(
-    (item): item is RawHiringCafeJob =>
-      Boolean(item) && typeof item === "object" && !Array.isArray(item),
-  );
-}
-
-function parseTotalCount(payload: unknown): number | null {
-  const payloadRecord = asRecord(payload);
-  if (!payloadRecord) return null;
-  return toNumberOrNull(payloadRecord.total);
 }
 
 function buildCityLocationId(input: string): string {
@@ -535,64 +510,62 @@ function createCitySearchState(args: {
   };
 }
 
-async function callHiringCafeApi(
+async function fetchSsrSearchPage(
   page: Page,
-  endpoint: string,
-  params: Record<string, string>,
-): Promise<unknown> {
-  const response = await page.evaluate(
-    async ({ endpointArg, paramsArg }) => {
-      const url = new URL(endpointArg, window.location.origin);
-      for (const [key, value] of Object.entries(paramsArg)) {
-        url.searchParams.set(key, value);
-      }
+  searchStateEncoded: string,
+  pageNo: number,
+): Promise<SsrSearchPage> {
+  // Post-2026-05-23: the JSON `/api/search-jobs*` endpoints are gone (404/405).
+  // Search now rides on the SSR home page — Next.js bakes the result set into
+  // `__NEXT_DATA__` as `pageProps.ssrHits[]` with `ssrTotalCount` and
+  // `ssrIsLastPage` on the same payload. We navigate to the search URL once
+  // per page, grab `__NEXT_DATA__` from the rendered DOM, parse, and return.
+  const url = `${BASE_URL}/?searchState=${searchStateEncoded}&page=${pageNo}`;
+  const response = await page.goto(url, {
+    waitUntil: "domcontentloaded",
+    timeout: 60_000,
+  });
+  if (!response || !response.ok()) {
+    const status = response?.status() ?? "unknown";
+    throw new Error(`Hiring Cafe SSR fetch failed (status ${status})`);
+  }
 
-      const res = await fetch(url.toString(), {
-        method: "GET",
-        credentials: "include",
-        headers: {
-          Accept: "application/json, text/plain, */*",
-        },
-      });
-
-      const text = await res.text();
-      let data: unknown = null;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        // Keep response text for diagnostics.
-      }
-
-      const output: BrowserApiResponse = {
-        ok: res.ok,
-        status: res.status,
-        statusText: res.statusText,
-        data,
-        responseText: text,
-      };
-
-      return output;
-    },
-    { endpointArg: endpoint, paramsArg: params },
-  );
-
-  const result = response as BrowserApiResponse;
-
-  if (!result.ok) {
-    const snippet = result.responseText.slice(0, 250);
+  const rawNextData = await page.evaluate(() => {
+    const el = document.getElementById("__NEXT_DATA__");
+    return el?.textContent ?? null;
+  });
+  if (!rawNextData) {
     throw new Error(
-      `Hiring Cafe API ${endpoint} failed (${result.status} ${result.statusText}): ${snippet}`,
+      "Hiring Cafe SSR fetch returned no __NEXT_DATA__ — site shape changed",
     );
   }
 
-  if (result.data === null) {
-    const snippet = result.responseText.slice(0, 250);
-    throw new Error(
-      `Hiring Cafe API ${endpoint} returned non-JSON response: ${snippet}`,
-    );
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawNextData);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Hiring Cafe SSR __NEXT_DATA__ parse failed: ${message}`);
   }
 
-  return result.data;
+  const pageProps = asRecord(asRecord(asRecord(parsed)?.props)?.pageProps);
+  if (!pageProps) {
+    throw new Error("Hiring Cafe SSR __NEXT_DATA__ missing pageProps");
+  }
+
+  const hitsRaw = pageProps.ssrHits;
+  const hits = Array.isArray(hitsRaw)
+    ? hitsRaw.filter(
+        (item): item is RawHiringCafeJob =>
+          Boolean(item) && typeof item === "object" && !Array.isArray(item),
+      )
+    : [];
+
+  return {
+    hits,
+    totalCount: toNumberOrNull(pageProps.ssrTotalCount),
+    isLastPage: pageProps.ssrIsLastPage === true,
+  };
 }
 
 async function run(): Promise<void> {
@@ -697,44 +670,35 @@ async function run(): Promise<void> {
           });
       const encodedSearchState = encodeSearchState(searchState);
 
-      let totalAvailable: number | null = null;
-      try {
-        const countPayload = await callHiringCafeApi(
-          page,
-          "/api/search-jobs/get-total-count",
-          {
-            s: encodedSearchState,
-          },
-        );
-        totalAvailable = parseTotalCount(countPayload);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        console.warn(
-          `Hiring Cafe count request failed for term '${searchTerm}': ${message}`,
-        );
-      }
-
-      const termTarget =
-        totalAvailable !== null
-          ? Math.min(maxJobsPerTerm, totalAvailable)
-          : maxJobsPerTerm;
-
       let pageNo = 0;
       let termCollected = 0;
+      let termTarget = maxJobsPerTerm;
 
-      while (termCollected < termTarget && pageNo < PAGE_LIMIT) {
-        const size = Math.min(1000, termTarget - termCollected);
-        const jobsPayload = await callHiringCafeApi(page, "/api/search-jobs", {
-          size: String(size),
-          page: String(pageNo),
-          s: encodedSearchState,
-        });
+      while (pageNo < PAGE_LIMIT) {
+        let pageResult: SsrSearchPage;
+        try {
+          pageResult = await fetchSsrSearchPage(
+            page,
+            encodedSearchState,
+            pageNo,
+          );
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          console.warn(
+            `Hiring Cafe SSR fetch failed for term '${searchTerm}' page ${pageNo}: ${message}`,
+          );
+          break;
+        }
 
-        const batch = extractResultsBatch(jobsPayload);
-        if (batch.length === 0) break;
+        if (pageNo === 0 && pageResult.totalCount !== null) {
+          termTarget = Math.min(maxJobsPerTerm, pageResult.totalCount);
+        }
+
+        if (pageResult.hits.length === 0) break;
 
         let mappedOnPage = 0;
-        for (const rawJob of batch) {
+        for (const rawJob of pageResult.hits) {
           if (termCollected >= termTarget) break;
           const mapped = mapHiringCafeJob(rawJob);
           if (!mapped) continue;
@@ -758,7 +722,8 @@ async function run(): Promise<void> {
           totalCollected: termCollected,
         });
 
-        if (batch.length < size) break;
+        if (termCollected >= termTarget) break;
+        if (pageResult.isLastPage) break;
         pageNo += 1;
       }
 
