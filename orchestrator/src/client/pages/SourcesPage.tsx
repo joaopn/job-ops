@@ -1,16 +1,19 @@
 import * as api from "@client/api";
+import type { SourceConfigsExtractorEntry } from "@client/api";
 import { PageHeader, PageMain } from "@client/components/layout";
 import { ActivityLogButton } from "@client/components/ActivityLogButton";
 import { LlmStatusButton } from "@client/components/LlmStatusButton";
 import { queryKeys } from "@client/lib/queryKeys";
 import { toast } from "@client/lib/toast";
-import type { ExtractorSourceMetadata } from "@shared/extractors";
+import {
+  EXTRACTOR_SOURCE_METADATA,
+  type ExtractorSourceId,
+  isExtractorSourceId,
+} from "@shared/extractors";
 import type {
   SourceConfigField,
   SourceConfigGlobalField,
   SourceConfigGlobalMapping,
-  SourceConfigRow,
-  SourceConfigSchema,
 } from "@shared/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Network, Save } from "lucide-react";
@@ -36,6 +39,13 @@ const GLOBAL_FIELD_LABELS: Record<SourceConfigGlobalField, string> = {
   maxJobsPerTerm: "Max jobs per term (budget)",
 };
 
+function platformLabel(platform: string): string {
+  if (isExtractorSourceId(platform)) {
+    return EXTRACTOR_SOURCE_METADATA[platform as ExtractorSourceId].label;
+  }
+  return platform;
+}
+
 export function SourcesPage() {
   const query = useQuery({
     queryKey: queryKeys.sourceConfigs.list(),
@@ -47,7 +57,7 @@ export function SourcesPage() {
       <PageHeader
         icon={Network}
         title="Sources"
-        subtitle="Configure which job sources to run and how the Run modal's globals feed each one."
+        subtitle="Configure which extractors run and how the Run modal's globals feed each one."
         actions={
           <>
             <LlmStatusButton />
@@ -69,35 +79,22 @@ export function SourcesPage() {
           </p>
         ) : null}
         {query.data
-          ? query.data.rows
-              .slice()
-              .sort(
-                (left, right) =>
-                  (query.data.metadata[left.sourceId]?.order ?? 0) -
-                  (query.data.metadata[right.sourceId]?.order ?? 0),
-              )
-              .map((row) => (
-                <SourceCard
-                  key={row.sourceId}
-                  row={row}
-                  metadata={query.data.metadata[row.sourceId]}
-                  schema={query.data.schemas[row.sourceId]}
-                />
-              ))
+          ? query.data.extractors.map((entry) => (
+              <ExtractorCard key={entry.extractorId} entry={entry} />
+            ))
           : null}
       </PageMain>
     </>
   );
 }
 
-interface SourceCardProps {
-  row: SourceConfigRow;
-  metadata: ExtractorSourceMetadata | undefined;
-  schema: SourceConfigSchema | null;
+interface ExtractorCardProps {
+  entry: SourceConfigsExtractorEntry;
 }
 
-function SourceCard({ row, metadata, schema }: SourceCardProps) {
+function ExtractorCard({ entry }: ExtractorCardProps) {
   const queryClient = useQueryClient();
+  const { row, schema, displayName, providesSources, effectiveSettings } = entry;
   const [enabled, setEnabled] = useState(row.enabled);
   const [config, setConfig] = useState<Record<string, string>>(row.config);
   const [mappings, setMappings] = useState<
@@ -112,9 +109,13 @@ function SourceCard({ row, metadata, schema }: SourceCardProps) {
 
   const mutation = useMutation({
     mutationFn: () =>
-      api.upsertSourceConfig(row.sourceId, { enabled, config, mappings }),
+      api.upsertSourceConfig(entry.extractorId, {
+        enabled,
+        config,
+        mappings,
+      }),
     onSuccess: () => {
-      toast.success(`Saved ${metadata?.label ?? row.sourceId}`);
+      toast.success(`Saved ${displayName}`);
       queryClient.invalidateQueries({
         queryKey: queryKeys.sourceConfigs.all,
       });
@@ -129,6 +130,11 @@ function SourceCard({ row, metadata, schema }: SourceCardProps) {
     JSON.stringify(config) !== JSON.stringify(row.config) ||
     JSON.stringify(mappings) !== JSON.stringify(row.mappings);
 
+  const subline =
+    providesSources.length > 1
+      ? providesSources.map(platformLabel).join(" · ")
+      : null;
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-start justify-between gap-4">
@@ -137,13 +143,11 @@ function SourceCard({ row, metadata, schema }: SourceCardProps) {
             <Checkbox
               checked={enabled}
               onCheckedChange={(value) => setEnabled(value === true)}
-              aria-label={`Enable ${metadata?.label ?? row.sourceId}`}
+              aria-label={`Enable ${displayName}`}
             />
-            <span>{metadata?.label ?? row.sourceId}</span>
+            <span>{displayName}</span>
           </CardTitle>
-          {metadata?.ukOnly ? (
-            <CardDescription>UK-only source.</CardDescription>
-          ) : null}
+          {subline ? <CardDescription>{subline}</CardDescription> : null}
         </div>
         <Button
           type="button"
@@ -186,7 +190,7 @@ function SourceCard({ row, metadata, schema }: SourceCardProps) {
             </h3>
             <p className="text-xs text-muted-foreground">
               When enabled, the Run modal&apos;s value overrides this
-              source&apos;s default.
+              extractor&apos;s default.
             </p>
             {schema.globalMappings.map((mapping) => (
               <GlobalMappingRow
@@ -208,11 +212,44 @@ function SourceCard({ row, metadata, schema }: SourceCardProps) {
 
         {!schema ? (
           <p className="text-sm text-muted-foreground">
-            No configuration schema declared for this source.
+            No configuration schema declared for this extractor.
           </p>
         ) : null}
+
+        <details className="group">
+          <summary className="cursor-pointer select-none text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground">
+            Show raw
+          </summary>
+          <div className="mt-3 space-y-3 text-xs">
+            <RawBlock
+              label="Effective settings (what manifest.run() sees)"
+              value={effectiveSettings}
+            />
+            <RawBlock
+              label="Saved row"
+              value={{ config: row.config, mappings: row.mappings }}
+            />
+            <RawBlock label="Schema" value={schema ?? null} />
+          </div>
+        </details>
       </CardContent>
     </Card>
+  );
+}
+
+interface RawBlockProps {
+  label: string;
+  value: unknown;
+}
+
+function RawBlock({ label, value }: RawBlockProps) {
+  return (
+    <div className="space-y-1">
+      <div className="text-xs font-medium text-muted-foreground">{label}</div>
+      <pre className="overflow-x-auto rounded-md border border-border/60 bg-muted/40 p-2 font-mono text-xs whitespace-pre-wrap">
+        {JSON.stringify(value, null, 2)}
+      </pre>
+    </div>
   );
 }
 

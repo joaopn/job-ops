@@ -1,5 +1,5 @@
 import { logger } from "@infra/logger";
-import type { ExtractorManifest } from "@shared/types";
+import type { ExtractorManifest, SourceConfigSchema } from "@shared/types";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./discovery", () => ({
@@ -11,11 +11,13 @@ function makeManifest(
   id: string,
   sources: string[],
   displayName = id,
+  configSchema?: SourceConfigSchema,
 ): ExtractorManifest {
   return {
     id,
     displayName,
     providesSources: sources,
+    configSchema,
     run: vi.fn(),
   };
 }
@@ -164,6 +166,69 @@ describe("extractor registry", () => {
           message.includes("Shared extractor sources have no runtime manifest"),
       ),
     ).toBe(true);
+  });
+
+  it("throws on configSchema mapping with no matching field", async () => {
+    const discovery = await import("./discovery");
+    const registryModule = await import("./registry");
+    registryModule.__resetExtractorRegistryForTests();
+    process.env.EXTRACTOR_REGISTRY_STRICT = "false";
+
+    vi.mocked(discovery.discoverManifestPaths).mockResolvedValue([
+      "/tmp/broken-schema.ts",
+    ]);
+    vi.mocked(discovery.loadManifestFromFile).mockResolvedValue(
+      makeManifest("broken-schema", ["indeed"], "Broken", {
+        fields: [
+          { key: "max_jobs_per_term", label: "Max", type: "number", default: "20" },
+        ],
+        globalMappings: [
+          {
+            globalField: "city",
+            sourceField: "searchCities",
+            enabledByDefault: true,
+          },
+        ],
+      }),
+    );
+
+    await expect(registryModule.initializeExtractorRegistry()).rejects.toThrow(
+      /globalMapping "city → searchCities" has no matching configSchema\.fields entry/,
+    );
+  });
+
+  it("accepts a configSchema with every mapping target backed by a field", async () => {
+    const discovery = await import("./discovery");
+    const registryModule = await import("./registry");
+    registryModule.__resetExtractorRegistryForTests();
+    process.env.EXTRACTOR_REGISTRY_STRICT = "false";
+
+    vi.mocked(discovery.discoverManifestPaths).mockResolvedValue([
+      "/tmp/good-schema.ts",
+    ]);
+    vi.mocked(discovery.loadManifestFromFile).mockResolvedValue(
+      makeManifest("good-schema", ["indeed"], "Good", {
+        fields: [
+          { key: "max_jobs_per_term", label: "Max", type: "number", default: "20" },
+          { key: "searchCities", label: "Cities", type: "text", default: "" },
+        ],
+        globalMappings: [
+          {
+            globalField: "city",
+            sourceField: "searchCities",
+            enabledByDefault: true,
+          },
+          {
+            globalField: "maxJobsPerTerm",
+            sourceField: "max_jobs_per_term",
+            enabledByDefault: true,
+          },
+        ],
+      }),
+    );
+
+    const registry = await registryModule.initializeExtractorRegistry();
+    expect(registry.manifests.has("good-schema")).toBe(true);
   });
 
   it("continues loading valid manifests in non-strict mode when one manifest fails", async () => {

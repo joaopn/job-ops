@@ -6,10 +6,7 @@ import * as settingsRepo from "@server/repositories/settings";
 import * as sourceConfigsRepo from "@server/repositories/source-configs";
 import { resolveSourceContextSettings } from "@server/services/source-configs/resolve";
 import { asyncPool } from "@server/utils/async-pool";
-import {
-  type ExtractorSourceId,
-  isExtractorSourceId,
-} from "@shared/extractors";
+import type { ExtractorSourceId } from "@shared/extractors";
 import { matchJobLocationIntent } from "@shared/job-matching.js";
 import {
   buildLocationEvidence as buildSharedLocationEvidence,
@@ -159,21 +156,28 @@ export async function discoverJobsStep(args: {
     });
 
   const sourceConfigRows = await sourceConfigsRepo.getAllSourceConfigs();
-  const sourceConfigBySourceId = new Map<string, SourceConfigRow>();
+  const sourceConfigByExtractor = new Map<string, SourceConfigRow>();
   for (const row of sourceConfigRows) {
-    sourceConfigBySourceId.set(row.sourceId, row);
+    sourceConfigByExtractor.set(row.extractorId, row);
   }
-  const enabledSourceIds = sourceConfigRows
-    .filter((row) => row.enabled)
-    .map((row) => row.sourceId);
-  const enabledSourceIdSet = new Set<string>(enabledSourceIds);
+  const enabledExtractorIds = new Set<string>(
+    sourceConfigRows.filter((row) => row.enabled).map((row) => row.extractorId),
+  );
+
+  // When `sources` is undefined the caller wants "all platforms whose
+  // extractor is enabled in source_configs". When specified, the caller's
+  // list is authoritative — downstream code (per-extractor grouping) drops
+  // platforms whose extractor isn't enabled.
+  const allEnabledPlatforms: ExtractorSourceId[] = Array.from(
+    registry.manifestBySource.entries(),
+  )
+    .filter(([, manifest]) => enabledExtractorIds.has(manifest.id))
+    .map(([platform]) => platform);
 
   const requestedSources: ExtractorSourceId[] =
     args.mergedConfig.sources === undefined
-      ? enabledSourceIds.filter(isExtractorSourceId)
-      : args.mergedConfig.sources.filter((source) =>
-          enabledSourceIdSet.has(source),
-        );
+      ? allEnabledPlatforms
+      : args.mergedConfig.sources;
 
   const runGlobals: SourceConfigRunGlobals = {
     city: settings.searchCities ?? "",
@@ -231,6 +235,8 @@ export async function discoverJobsStep(args: {
       continue;
     }
 
+    if (!enabledExtractorIds.has(manifest.id)) continue;
+
     const existing = groupedByManifest.get(manifest.id);
     if (existing) {
       existing.sources.push(source);
@@ -259,8 +265,7 @@ export async function discoverJobsStep(args: {
           ? `${manifest.displayName}: ${grouped.sources.join(", ")}...`
           : grouped.detail,
       run: async () => {
-        const primarySourceId = grouped.sources[0];
-        const row = sourceConfigBySourceId.get(primarySourceId);
+        const row = sourceConfigByExtractor.get(manifest.id);
         const perSourceSettings = resolveSourceContextSettings({
           schema: manifest.configSchema,
           row: row ?? { config: {}, mappings: {} },

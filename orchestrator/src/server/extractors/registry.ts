@@ -6,7 +6,7 @@ import {
   type ExtractorSourceId,
   PIPELINE_EXTRACTOR_SOURCE_IDS,
 } from "@shared/extractors";
-import type { ExtractorManifest } from "@shared/types";
+import type { ExtractorManifest, SourceConfigSchema } from "@shared/types";
 import { discoverManifestPaths, loadManifestFromFile } from "./discovery";
 
 export interface ExtractorRegistry {
@@ -25,6 +25,31 @@ class DuplicateManifestIdError extends Error {
     super(`Duplicate extractor manifest id: ${manifestId}`);
     this.manifestId = manifestId;
     this.name = "DuplicateManifestIdError";
+  }
+}
+
+class InvalidConfigSchemaError extends Error {
+  readonly manifestId: string;
+
+  constructor(manifestId: string, detail: string) {
+    super(`Extractor "${manifestId}" ${detail}`);
+    this.manifestId = manifestId;
+    this.name = "InvalidConfigSchemaError";
+  }
+}
+
+function validateConfigSchema(
+  manifestId: string,
+  schema: SourceConfigSchema,
+): void {
+  const fieldKeys = new Set(schema.fields.map((field) => field.key));
+  for (const mapping of schema.globalMappings) {
+    if (!fieldKeys.has(mapping.sourceField)) {
+      throw new InvalidConfigSchemaError(
+        manifestId,
+        `globalMapping "${mapping.globalField} → ${mapping.sourceField}" has no matching configSchema.fields entry. Add a field with key="${mapping.sourceField}" or change the mapping target.`,
+      );
+    }
   }
 }
 
@@ -143,6 +168,10 @@ async function createRegistry(): Promise<ExtractorRegistry> {
         continue;
       }
 
+      if (manifest.configSchema) {
+        validateConfigSchema(manifest.id, manifest.configSchema);
+      }
+
       for (const typedSource of validSources) {
         if (manifestBySource.has(typedSource)) {
           const existing = manifestBySource.get(typedSource);
@@ -160,6 +189,10 @@ async function createRegistry(): Promise<ExtractorRegistry> {
       }
     } catch (error) {
       if (error instanceof DuplicateSourceProviderError) {
+        throw error;
+      }
+
+      if (error instanceof InvalidConfigSchemaError) {
         throw error;
       }
 

@@ -13,13 +13,11 @@ vi.mock("@server/repositories/jobs", () => ({
 
 vi.mock("@server/repositories/source-configs", () => ({
   getAllSourceConfigs: vi.fn().mockResolvedValue([
-    { sourceId: "indeed", enabled: true, config: {}, mappings: {}, updatedAt: "" },
-    { sourceId: "linkedin", enabled: true, config: {}, mappings: {}, updatedAt: "" },
-    { sourceId: "glassdoor", enabled: true, config: {}, mappings: {}, updatedAt: "" },
-    { sourceId: "hiringcafe", enabled: true, config: {}, mappings: {}, updatedAt: "" },
-    { sourceId: "startupjobs", enabled: true, config: {}, mappings: {}, updatedAt: "" },
-    { sourceId: "workingnomads", enabled: true, config: {}, mappings: {}, updatedAt: "" },
-    { sourceId: "golangjobs", enabled: true, config: {}, mappings: {}, updatedAt: "" },
+    { extractorId: "jobspy", enabled: true, config: {}, mappings: {}, updatedAt: "" },
+    { extractorId: "hiringcafe", enabled: true, config: {}, mappings: {}, updatedAt: "" },
+    { extractorId: "startupjobs", enabled: true, config: {}, mappings: {}, updatedAt: "" },
+    { extractorId: "workingnomads", enabled: true, config: {}, mappings: {}, updatedAt: "" },
+    { extractorId: "golangjobs", enabled: true, config: {}, mappings: {}, updatedAt: "" },
   ]),
 }));
 

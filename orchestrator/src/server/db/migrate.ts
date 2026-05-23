@@ -502,10 +502,18 @@ const migrations: string[] = [
      'pipelineWebhookUrl'
    )`,
 
-  // Per-source configuration. One row per pipeline source. Populated by a
-  // JS-driven backfill below that reads legacy AppSettings keys.
+  // Per-extractor configuration. One row per *extractor* (manifest.id):
+  // jobspy / hiringcafe / startupjobs / workingnomads / golangjobs. The
+  // original phase-10 schema keyed on `source_id` (per-platform: indeed /
+  // linkedin / glassdoor / hiringcafe / ...). The collapse from per-platform
+  // to per-extractor happens in the JS-driven rebuild below — it merges
+  // legacy per-platform rows into per-extractor rows, picking the
+  // first-priority config row and OR'ing the `enabled` flag across each
+  // extractor's sub-platforms. Per CLAUDE.md's "one canonical rebuild only"
+  // rule, this CREATE TABLE IF NOT EXISTS now declares the post-rename
+  // shape directly — no parallel rebuild block appended.
   `CREATE TABLE IF NOT EXISTS source_configs (
-     source_id TEXT PRIMARY KEY,
+     extractor_id TEXT PRIMARY KEY,
      enabled INTEGER NOT NULL DEFAULT 0,
      config_json TEXT NOT NULL DEFAULT '{}',
      mappings_json TEXT NOT NULL DEFAULT '{}',
@@ -534,24 +542,155 @@ for (const migration of migrations) {
   }
 }
 
-// Source-configs backfill. Idempotent via INSERT OR IGNORE on the
-// source_id PK — re-running on an existing DB never clobbers user edits.
+// Source-configs migration + backfill.
 //
-// `jobspyResultsWanted` is the de-facto shared max-per-term default for
-// every extractor today; it fans out to each row's `max_jobs_per_term`.
-// `startupjobsMaxJobsPerTerm` overrides on startupjobs. `jobspyCountryIndeed`
-// and `jobspyLocation` are jobspy-only.
+// Two scenarios funnel through here:
+//
+// 1. Legacy per-platform shape (`source_id` PK, one row per platform —
+//    indeed / linkedin / glassdoor / hiringcafe / ...). Phase 10b collapse
+//    folds those into per-extractor rows (manifest.id): jobspy carries
+//    Indeed + LinkedIn + Glassdoor; everything else is 1:1. First-priority
+//    platform's config wins; `enabled` is OR'd across sub-platforms; the
+//    legacy `location_override` config key is renamed to `searchCities`
+//    in-place (matches the field rename in the extractor manifests).
+//
+// 2. Fresh DB or already-migrated. SQL migrations created the
+//    `extractor_id`-shaped table already; this block backfills one row per
+//    pipeline extractor with default enabled=1 and any pre-Phase-10 legacy
+//    AppSettings keys folded in. Idempotent via INSERT OR IGNORE.
 try {
-  const PIPELINE_SOURCE_IDS = [
-    "indeed",
-    "linkedin",
-    "glassdoor",
+  const PLATFORM_TO_EXTRACTOR: Record<string, string> = {
+    indeed: "jobspy",
+    linkedin: "jobspy",
+    glassdoor: "jobspy",
+    hiringcafe: "hiringcafe",
+    workingnomads: "workingnomads",
+    startupjobs: "startupjobs",
+    golangjobs: "golangjobs",
+    manual: "manual",
+  };
+  // Mirrors EXTRACTOR_SOURCE_METADATA[*].order in shared/extractors. Inlined
+  // here so migrate.ts doesn't need to import shared TS at boot. The
+  // first-priority platform's config wins when collapsing per-extractor.
+  const PLATFORM_ORDER: Record<string, number> = {
+    indeed: 20,
+    linkedin: 30,
+    glassdoor: 40,
+    hiringcafe: 70,
+    startupjobs: 80,
+    workingnomads: 90,
+    golangjobs: 100,
+    manual: 110,
+  };
+  const PIPELINE_EXTRACTOR_IDS = [
+    "jobspy",
     "hiringcafe",
     "startupjobs",
     "workingnomads",
     "golangjobs",
   ];
-  const JOBSPY_SUB_SOURCES = new Set(["indeed", "linkedin", "glassdoor"]);
+
+  const tableCols = sqlite
+    .prepare("PRAGMA table_info(source_configs)")
+    .all() as Array<{ name: string }>;
+  const colNames = new Set(tableCols.map((c) => c.name));
+  const isLegacyShape =
+    colNames.has("source_id") && !colNames.has("extractor_id");
+
+  const remapLegacyConfigKey = (raw: string): string => {
+    if (!raw) return "{}";
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      return "{}";
+    }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return "{}";
+    }
+    if (
+      typeof parsed.location_override === "string" &&
+      parsed.searchCities === undefined
+    ) {
+      parsed.searchCities = parsed.location_override;
+    }
+    delete parsed.location_override;
+    return JSON.stringify(parsed);
+  };
+
+  if (isLegacyShape) {
+    const legacyRows = sqlite
+      .prepare(
+        `SELECT source_id, enabled, config_json, mappings_json, updated_at
+         FROM source_configs`,
+      )
+      .all() as Array<{
+      source_id: string;
+      enabled: number;
+      config_json: string;
+      mappings_json: string;
+      updated_at: string;
+    }>;
+
+    legacyRows.sort(
+      (a, b) =>
+        (PLATFORM_ORDER[a.source_id] ?? 9999) -
+        (PLATFORM_ORDER[b.source_id] ?? 9999),
+    );
+
+    type Aggregated = {
+      config_json: string;
+      mappings_json: string;
+      enabled: number;
+      updated_at: string;
+    };
+    const merged = new Map<string, Aggregated>();
+    for (const row of legacyRows) {
+      const extractorId = PLATFORM_TO_EXTRACTOR[row.source_id];
+      if (!extractorId) continue;
+      const existing = merged.get(extractorId);
+      if (!existing) {
+        merged.set(extractorId, {
+          config_json: remapLegacyConfigKey(row.config_json),
+          mappings_json: row.mappings_json || "{}",
+          enabled: row.enabled ? 1 : 0,
+          updated_at: row.updated_at,
+        });
+      } else {
+        existing.enabled = existing.enabled || row.enabled ? 1 : 0;
+      }
+    }
+
+    sqlite.exec("DROP TABLE IF EXISTS source_configs_new");
+    sqlite.exec(
+      `CREATE TABLE source_configs_new (
+         extractor_id TEXT PRIMARY KEY,
+         enabled INTEGER NOT NULL DEFAULT 0,
+         config_json TEXT NOT NULL DEFAULT '{}',
+         mappings_json TEXT NOT NULL DEFAULT '{}',
+         updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+       )`,
+    );
+    const insertNew = sqlite.prepare(
+      `INSERT INTO source_configs_new
+         (extractor_id, enabled, config_json, mappings_json, updated_at)
+       VALUES (?, ?, ?, ?, ?)`,
+    );
+    for (const [extractorId, row] of merged) {
+      insertNew.run(
+        extractorId,
+        row.enabled,
+        row.config_json,
+        row.mappings_json,
+        row.updated_at,
+      );
+    }
+    sqlite.exec("DROP TABLE source_configs");
+    sqlite.exec("ALTER TABLE source_configs_new RENAME TO source_configs");
+    console.log(
+      "✅ source_configs collapsed per-platform → per-extractor",
+    );
+  }
 
   const getSetting = sqlite.prepare(
     "SELECT value FROM settings WHERE key = ?",
@@ -569,23 +708,23 @@ try {
 
   const insertRow = sqlite.prepare(
     `INSERT OR IGNORE INTO source_configs
-       (source_id, enabled, config_json, mappings_json, updated_at)
+       (extractor_id, enabled, config_json, mappings_json, updated_at)
      VALUES (?, ?, ?, ?, datetime('now'))`,
   );
 
-  for (const sourceId of PIPELINE_SOURCE_IDS) {
+  for (const extractorId of PIPELINE_EXTRACTOR_IDS) {
     const config: Record<string, string> = {};
     if (sharedMaxPerTerm) config.max_jobs_per_term = sharedMaxPerTerm;
-    if (JOBSPY_SUB_SOURCES.has(sourceId)) {
+    if (extractorId === "jobspy") {
       if (jobspyCountryIndeed) config.country_indeed = jobspyCountryIndeed;
       if (jobspyLocation && jobspyLocation !== searchCities) {
-        config.location_override = jobspyLocation;
+        config.searchCities = jobspyLocation;
       }
     }
-    if (sourceId === "startupjobs" && startupjobsMaxJobsPerTerm) {
+    if (extractorId === "startupjobs" && startupjobsMaxJobsPerTerm) {
       config.max_jobs_per_term = startupjobsMaxJobsPerTerm;
     }
-    insertRow.run(sourceId, 1, JSON.stringify(config), "{}");
+    insertRow.run(extractorId, 1, JSON.stringify(config), "{}");
   }
   console.log("✅ source_configs backfill applied");
 

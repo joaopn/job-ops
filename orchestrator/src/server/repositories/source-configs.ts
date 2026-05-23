@@ -1,7 +1,3 @@
-import {
-  type ExtractorSourceId,
-  isExtractorSourceId,
-} from "@shared/extractors";
 import type {
   SourceConfigGlobalField,
   SourceConfigRow,
@@ -47,10 +43,9 @@ function safeParse(raw: string): unknown {
   }
 }
 
-function mapRow(row: SourceConfigDbRow): SourceConfigRow | null {
-  if (!isExtractorSourceId(row.sourceId)) return null;
+function mapRow(row: SourceConfigDbRow): SourceConfigRow {
   return {
-    sourceId: row.sourceId,
+    extractorId: row.extractorId,
     enabled: Boolean(row.enabled),
     config: parseConfigJson(row.configJson),
     mappings: parseMappingsJson(row.mappingsJson),
@@ -60,34 +55,29 @@ function mapRow(row: SourceConfigDbRow): SourceConfigRow | null {
 
 export async function getAllSourceConfigs(): Promise<SourceConfigRow[]> {
   const rows = await db.select().from(sourceConfigs);
-  const out: SourceConfigRow[] = [];
-  for (const row of rows) {
-    const mapped = mapRow(row);
-    if (mapped) out.push(mapped);
-  }
-  return out;
+  return rows.map(mapRow);
 }
 
 export async function getSourceConfig(
-  sourceId: ExtractorSourceId,
+  extractorId: string,
 ): Promise<SourceConfigRow | null> {
   const [row] = await db
     .select()
     .from(sourceConfigs)
-    .where(eq(sourceConfigs.sourceId, sourceId));
+    .where(eq(sourceConfigs.extractorId, extractorId));
   return row ? mapRow(row) : null;
 }
 
-export async function getEnabledSources(): Promise<ExtractorSourceId[]> {
+export async function getEnabledExtractorIds(): Promise<string[]> {
   const rows = await getAllSourceConfigs();
-  return rows.filter((row) => row.enabled).map((row) => row.sourceId);
+  return rows.filter((row) => row.enabled).map((row) => row.extractorId);
 }
 
 export async function upsertSourceConfig(
-  sourceId: ExtractorSourceId,
+  extractorId: string,
   patch: UpsertSourceConfigInput,
 ): Promise<SourceConfigRow> {
-  const existing = await getSourceConfig(sourceId);
+  const existing = await getSourceConfig(extractorId);
   const enabled = patch.enabled ?? existing?.enabled ?? false;
   const config = patch.config ?? existing?.config ?? {};
   const mappings = patch.mappings
@@ -104,10 +94,10 @@ export async function upsertSourceConfig(
         mappingsJson: mappings,
         updatedAt,
       })
-      .where(eq(sourceConfigs.sourceId, sourceId));
+      .where(eq(sourceConfigs.extractorId, extractorId));
   } else {
     await db.insert(sourceConfigs).values({
-      sourceId,
+      extractorId,
       enabled,
       configJson: config,
       mappingsJson: mappings,
@@ -115,9 +105,9 @@ export async function upsertSourceConfig(
     });
   }
 
-  const refreshed = await getSourceConfig(sourceId);
+  const refreshed = await getSourceConfig(extractorId);
   if (!refreshed) {
-    throw new Error(`Failed to load upserted source config ${sourceId}`);
+    throw new Error(`Failed to load upserted source config ${extractorId}`);
   }
   return refreshed;
 }

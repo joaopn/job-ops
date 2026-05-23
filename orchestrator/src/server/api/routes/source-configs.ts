@@ -2,14 +2,12 @@ import { notFound, toAppError } from "@infra/errors";
 import { fail, ok } from "@infra/http";
 import { getExtractorRegistry } from "@server/extractors/registry";
 import * as repo from "@server/repositories/source-configs";
-import {
-  EXTRACTOR_SOURCE_METADATA,
-  type ExtractorSourceId,
-  isExtractorSourceId,
-  PIPELINE_EXTRACTOR_SOURCE_IDS,
-} from "@shared/extractors";
+import * as settingsRepo from "@server/repositories/settings";
+import { resolveSourceContextSettings } from "@server/services/source-configs/resolve";
 import {
   SOURCE_CONFIG_GLOBAL_FIELDS,
+  type SourceConfigRow,
+  type SourceConfigRunGlobals,
   type SourceConfigSchema,
 } from "@shared/types";
 import type { Request, Response } from "express";
@@ -28,57 +26,80 @@ const upsertSchema = z.object({
   mappings: z.record(globalFieldEnum, z.boolean()).optional(),
 });
 
+function emptyRow(extractorId: string): SourceConfigRow {
+  return {
+    extractorId,
+    enabled: false,
+    config: {},
+    mappings: {},
+    updatedAt: new Date(0).toISOString(),
+  };
+}
+
 sourceConfigsRouter.get("/", async (_req: Request, res: Response) => {
   try {
-    const [rows, registry] = await Promise.all([
+    const [rows, registry, settings] = await Promise.all([
       repo.getAllSourceConfigs(),
       getExtractorRegistry(),
+      settingsRepo.getAllSettings(),
     ]);
-    const rowsBySource = new Map<ExtractorSourceId, (typeof rows)[number]>();
-    for (const row of rows) rowsBySource.set(row.sourceId, row);
+    const rowsByExtractor = new Map<string, SourceConfigRow>();
+    for (const row of rows) rowsByExtractor.set(row.extractorId, row);
 
-    const data = PIPELINE_EXTRACTOR_SOURCE_IDS.map((sourceId) => {
-      const existing = rowsBySource.get(sourceId);
-      return (
-        existing ?? {
-          sourceId,
-          enabled: false,
-          config: {},
-          mappings: {},
-          updatedAt: new Date(0).toISOString(),
-        }
-      );
-    });
-    const schemas: Record<string, SourceConfigSchema | null> = {};
-    for (const sourceId of PIPELINE_EXTRACTOR_SOURCE_IDS) {
-      const manifest = registry.manifestBySource.get(sourceId);
-      schemas[sourceId] = manifest?.configSchema ?? null;
+    const runGlobals: SourceConfigRunGlobals = {
+      city: settings.searchCities ?? "",
+      country: settings.searchCountry ?? "",
+      workplaceTypes: settings.workplaceTypes ?? "[]",
+    };
+
+    type ExtractorEntry = {
+      extractorId: string;
+      displayName: string;
+      providesSources: readonly string[];
+      row: SourceConfigRow;
+      schema: SourceConfigSchema | null;
+      effectiveSettings: Record<string, string>;
+    };
+
+    const extractors: ExtractorEntry[] = [];
+    const manifestsSorted = Array.from(registry.manifests.values()).sort(
+      (a, b) => a.id.localeCompare(b.id),
+    );
+    for (const manifest of manifestsSorted) {
+      const row = rowsByExtractor.get(manifest.id) ?? emptyRow(manifest.id);
+      const schema = manifest.configSchema ?? null;
+      const effectiveSettings = resolveSourceContextSettings({
+        schema: manifest.configSchema,
+        row,
+        runGlobals,
+      });
+      extractors.push({
+        extractorId: manifest.id,
+        displayName: manifest.displayName,
+        providesSources: manifest.providesSources,
+        row,
+        schema,
+        effectiveSettings,
+      });
     }
-    ok(res, {
-      rows: data,
-      metadata: Object.fromEntries(
-        PIPELINE_EXTRACTOR_SOURCE_IDS.map((sourceId) => [
-          sourceId,
-          EXTRACTOR_SOURCE_METADATA[sourceId],
-        ]),
-      ),
-      schemas,
-    });
+
+    ok(res, { extractors });
   } catch (error) {
     fail(res, toAppError(error));
   }
 });
 
 sourceConfigsRouter.put(
-  "/:sourceId",
+  "/:extractorId",
   async (req: Request, res: Response) => {
     try {
-      const { sourceId } = req.params;
-      if (!isExtractorSourceId(sourceId)) {
-        return fail(res, notFound(`Unknown source: ${sourceId}`));
+      const { extractorId } = req.params;
+      const registry = await getExtractorRegistry();
+      if (!registry.manifests.has(extractorId)) {
+        return fail(res, notFound(`Unknown extractor: ${extractorId}`));
       }
       const patch = upsertSchema.parse(req.body ?? {});
-      const updated = await repo.upsertSourceConfig(sourceId, patch);
+      const updated = await repo.upsertSourceConfig(extractorId, patch);
       ok(res, updated);
     } catch (error) {
       fail(res, toAppError(error));

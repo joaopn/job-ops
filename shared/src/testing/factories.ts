@@ -128,7 +128,7 @@ export const createApplicationTask = (
 export const createSourceConfigRow = (
   overrides: Partial<SourceConfigRow> = {},
 ): SourceConfigRow => ({
-  sourceId: "hiringcafe",
+  extractorId: "hiringcafe",
   enabled: true,
   config: {},
   mappings: {},

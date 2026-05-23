@@ -15,11 +15,20 @@ const hiringcafeConfigSchema: SourceConfigSchema = {
       default: "200",
     },
     {
-      key: "location_override",
-      label: "Location override",
+      key: "searchCities",
+      label: "Search cities",
       type: "text",
       default: "",
-      description: "Used when the Run modal's city mapping is disabled.",
+      description:
+        "Authoritative city fallback. Used when the Run modal's city mapping is disabled.",
+    },
+    {
+      key: "workplaceTypes",
+      label: "Workplace types",
+      type: "text",
+      default: "",
+      description:
+        'JSON-encoded array of "remote" | "hybrid" | "onsite". Used when the Run modal\'s workplace-types mapping is disabled.',
     },
   ],
   globalMappings: [

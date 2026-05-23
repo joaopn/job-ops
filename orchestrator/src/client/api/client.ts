@@ -1466,17 +1466,23 @@ export async function updateSettings(
 }
 
 // Source-configs API
-import type { ExtractorSourceMetadata } from "@shared/extractors";
 import type {
   SourceConfigRow,
   SourceConfigSchema,
   UpsertSourceConfigInput,
 } from "@shared/types";
 
+export interface SourceConfigsExtractorEntry {
+  extractorId: string;
+  displayName: string;
+  providesSources: readonly string[];
+  row: SourceConfigRow;
+  schema: SourceConfigSchema | null;
+  effectiveSettings: Record<string, string>;
+}
+
 export interface SourceConfigsResponse {
-  rows: SourceConfigRow[];
-  metadata: Record<string, ExtractorSourceMetadata>;
-  schemas: Record<string, SourceConfigSchema | null>;
+  extractors: SourceConfigsExtractorEntry[];
 }
 
 export async function getSourceConfigs(): Promise<SourceConfigsResponse> {
@@ -1484,10 +1490,10 @@ export async function getSourceConfigs(): Promise<SourceConfigsResponse> {
 }
 
 export async function upsertSourceConfig(
-  sourceId: string,
+  extractorId: string,
   patch: UpsertSourceConfigInput,
 ): Promise<SourceConfigRow> {
-  return fetchApi<SourceConfigRow>(`/source-configs/${sourceId}`, {
+  return fetchApi<SourceConfigRow>(`/source-configs/${extractorId}`, {
     method: "PUT",
     body: JSON.stringify(patch),
   });

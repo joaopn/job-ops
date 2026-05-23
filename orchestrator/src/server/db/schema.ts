@@ -331,7 +331,7 @@ export const settings = sqliteTable("settings", {
 });
 
 export const sourceConfigs = sqliteTable("source_configs", {
-  sourceId: text("source_id").primaryKey(),
+  extractorId: text("extractor_id").primaryKey(),
   enabled: integer("enabled", { mode: "boolean" }).notNull().default(false),
   configJson: text("config_json", { mode: "json" })
     .notNull()

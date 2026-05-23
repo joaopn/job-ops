@@ -1,5 +1,3 @@
-import type { ExtractorSourceId } from "../extractors";
-
 export const SOURCE_CONFIG_GLOBAL_FIELDS = [
   "searchTerms",
   "city",
@@ -43,7 +41,7 @@ export interface SourceConfigSchema {
 }
 
 export interface SourceConfigRow {
-  sourceId: ExtractorSourceId;
+  extractorId: string;
   enabled: boolean;
   config: Record<string, string>;
   mappings: Partial<Record<SourceConfigGlobalField, boolean>>;
