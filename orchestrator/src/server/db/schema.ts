@@ -342,6 +342,31 @@ export const sourceConfigs = sqliteTable("source_configs", {
   updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
 });
 
+export const providerInstances = sqliteTable(
+  "provider_instances",
+  {
+    id: text("id").primaryKey(),
+    providerId: text("provider_id").notNull(),
+    actorRef: text("actor_ref").notNull(),
+    label: text("label").notNull(),
+    templateId: text("template_id"),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(false),
+    inputTemplateJson: text("input_template_json").notNull(),
+    outputMappingJson: text("output_mapping_json")
+      .notNull()
+      .default("{}"),
+    mappingsJson: text("mappings_json", { mode: "json" })
+      .notNull()
+      .default(sql`('{}')`),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+  },
+  (table) => ({
+    providerIndex: index("idx_provider_instances_provider").on(
+      table.providerId,
+    ),
+  }),
+);
+
 export const authSessions = sqliteTable(
   "auth_sessions",
   {
@@ -378,5 +403,7 @@ export type SettingsRow = typeof settings.$inferSelect;
 export type NewSettingsRow = typeof settings.$inferInsert;
 export type SourceConfigDbRow = typeof sourceConfigs.$inferSelect;
 export type NewSourceConfigDbRow = typeof sourceConfigs.$inferInsert;
+export type ProviderInstanceDbRow = typeof providerInstances.$inferSelect;
+export type NewProviderInstanceDbRow = typeof providerInstances.$inferInsert;
 export type CvDocumentRow = typeof cvDocuments.$inferSelect;
 export type NewCvDocumentRow = typeof cvDocuments.$inferInsert;

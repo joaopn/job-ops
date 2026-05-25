@@ -29,7 +29,9 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { ApifyTab } from "./sources/ApifyTab";
 
 const GLOBAL_FIELD_LABELS: Record<SourceConfigGlobalField, string> = {
   searchTerms: "Search terms",
@@ -51,13 +53,17 @@ export function SourcesPage() {
     queryKey: queryKeys.sourceConfigs.list(),
     queryFn: api.getSourceConfigs,
   });
+  const settingsQuery = useQuery({
+    queryKey: queryKeys.settings.current(),
+    queryFn: api.getSettings,
+  });
 
   return (
     <>
       <PageHeader
         icon={Network}
         title="Sources"
-        subtitle="Configure which extractors run and how the Run modal's globals feed each one."
+        subtitle="Built-in extractors and Apify marketplace actors. Configure once; the Run modal's globals feed both."
         actions={
           <>
             <LlmStatusButton />
@@ -66,23 +72,36 @@ export function SourcesPage() {
         }
       />
       <PageMain>
-        {query.isLoading ? (
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading sources…
-          </div>
-        ) : null}
-        {query.isError ? (
-          <p className="text-sm text-destructive">
-            Failed to load sources:{" "}
-            {query.error instanceof Error ? query.error.message : "unknown"}
-          </p>
-        ) : null}
-        {query.data
-          ? query.data.extractors.map((entry) => (
-              <ExtractorCard key={entry.extractorId} entry={entry} />
-            ))
-          : null}
+        <Tabs defaultValue="builtin" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="builtin">Built-in</TabsTrigger>
+            <TabsTrigger value="apify">Apify (paid API)</TabsTrigger>
+          </TabsList>
+          <TabsContent value="builtin" className="space-y-4">
+            {query.isLoading ? (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading sources…
+              </div>
+            ) : null}
+            {query.isError ? (
+              <p className="text-sm text-destructive">
+                Failed to load sources:{" "}
+                {query.error instanceof Error
+                  ? query.error.message
+                  : "unknown"}
+              </p>
+            ) : null}
+            {query.data
+              ? query.data.extractors.map((entry) => (
+                  <ExtractorCard key={entry.extractorId} entry={entry} />
+                ))
+              : null}
+          </TabsContent>
+          <TabsContent value="apify" className="space-y-4">
+            <ApifyTab settings={settingsQuery.data} />
+          </TabsContent>
+        </Tabs>
       </PageMain>
     </>
   );

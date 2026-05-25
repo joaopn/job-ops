@@ -158,7 +158,15 @@ export interface JobNote {
   updatedAt: string;
 }
 
-export type JobSource = ExtractorSourceId;
+/**
+ * Synthetic source id for a marketplace-provider actor instance.
+ * Shape: `<providerId>:<instanceId>` (e.g. `apify:7a4c1f2e-...`). The
+ * colon is what distinguishes a provider source from a built-in
+ * `ExtractorSourceId` literal at the type level.
+ */
+export type ProviderInstanceSourceId = `${string}:${string}`;
+
+export type JobSource = ExtractorSourceId | ProviderInstanceSourceId;
 
 export interface AppliedDuplicateMatch {
   jobId: string;

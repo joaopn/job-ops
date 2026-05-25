@@ -2,8 +2,10 @@ import { logger } from "@infra/logger";
 import { sanitizeUnknown } from "@infra/sanitize";
 import { getExtractorRegistry } from "@server/extractors/registry";
 import { getAllJobUrls } from "@server/repositories/jobs";
+import * as providerInstancesRepo from "@server/repositories/provider-instances";
 import * as settingsRepo from "@server/repositories/settings";
 import * as sourceConfigsRepo from "@server/repositories/source-configs";
+import { getProvider } from "@server/providers";
 import { resolveSourceContextSettings } from "@server/services/source-configs/resolve";
 import { asyncPool } from "@server/utils/async-pool";
 import type { ExtractorSourceId } from "@shared/extractors";
@@ -251,6 +253,71 @@ export async function discoverJobsStep(args: {
   }
 
   const sourceTasks: DiscoverySourceTask[] = [];
+
+  // Provider-instance tasks (Apify and future marketplace providers).
+  // Each enabled instance is its own runnable with one synthetic platform
+  // id `<providerId>:<instanceId>`. The instance carries its own input
+  // template + output mapping; the API token lives in settings.
+  const enabledProviderInstances =
+    await providerInstancesRepo.getEnabledProviderInstances();
+  if (enabledProviderInstances.length > 0) {
+    const apifyApiToken = (await settingsRepo.getSetting("apifyApiToken")) ?? "";
+    for (const instance of enabledProviderInstances) {
+      const provider = getProvider(instance.providerId);
+      if (!provider) {
+        sourceErrors.push(
+          `${instance.label}: provider "${instance.providerId}" is not registered`,
+        );
+        continue;
+      }
+      const apiToken =
+        instance.providerId === "apify" ? apifyApiToken : "";
+      const syntheticSource = `${instance.providerId}:${instance.id}`;
+      sourceTasks.push({
+        source: syntheticSource,
+        platforms: [syntheticSource],
+        termsTotal: searchTerms.length,
+        detail: `${instance.label}: fetching jobs...`,
+        run: async () => {
+          const result = await provider.run({
+            instance,
+            runGlobals,
+            apiToken: apiToken || null,
+            searchTerms,
+            shouldCancel: args.shouldCancel,
+            onProgress: (event) => {
+              progressHelpers.crawlingUpdate({
+                source: syntheticSource,
+                termsProcessed: event.termsProcessed,
+                termsTotal: event.termsTotal,
+                listPagesProcessed: event.listPagesProcessed,
+                listPagesTotal: event.listPagesTotal,
+                jobCardsFound: event.jobCardsFound,
+                jobPagesEnqueued: event.jobPagesEnqueued,
+                jobPagesSkipped: event.jobPagesSkipped,
+                jobPagesProcessed: event.jobPagesProcessed,
+                phase: event.phase,
+                currentUrl: event.currentUrl,
+              });
+              if (event.detail) {
+                updateProgress({ step: "crawling", detail: event.detail });
+              }
+            },
+          });
+
+          if (!result.success) {
+            return {
+              discoveredJobs: [],
+              sourceErrors: [
+                `${instance.label}: ${result.error ?? "unknown error"}`,
+              ],
+            };
+          }
+          return { discoveredJobs: result.jobs, sourceErrors: [] };
+        },
+      });
+    }
+  }
 
   for (const [manifestId, grouped] of groupedByManifest) {
     const manifest = registry.manifests.get(manifestId);

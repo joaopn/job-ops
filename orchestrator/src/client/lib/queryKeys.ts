@@ -49,4 +49,8 @@ export const queryKeys = {
     all: ["source-configs"] as const,
     list: () => [...queryKeys.sourceConfigs.all, "list"] as const,
   },
+  providerInstances: {
+    all: ["provider-instances"] as const,
+    list: () => [...queryKeys.providerInstances.all, "list"] as const,
+  },
 } as const;

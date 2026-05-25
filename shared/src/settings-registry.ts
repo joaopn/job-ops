@@ -592,6 +592,11 @@ export const settingsRegistry = {
     envKey: "BASIC_AUTH_PASSWORD",
     schema: z.string().trim().max(2000),
   },
+  apifyApiToken: {
+    kind: "secret" as const,
+    envKey: "APIFY_API_TOKEN",
+    schema: z.string().trim().max(2000),
+  },
 
   // --- Virtual ---
   enableBasicAuth: {

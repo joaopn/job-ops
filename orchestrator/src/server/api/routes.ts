@@ -15,6 +15,7 @@ import { manualJobsRouter } from "./routes/manual-jobs";
 import { onboardingRouter } from "./routes/onboarding";
 import { pipelineRouter } from "./routes/pipeline";
 import { promptsRouter } from "./routes/prompts";
+import { providerInstancesRouter } from "./routes/provider-instances";
 import { settingsRouter } from "./routes/settings";
 import { sourceConfigsRouter } from "./routes/source-configs";
 
@@ -33,4 +34,5 @@ apiRouter.use("/onboarding", onboardingRouter);
 apiRouter.use("/prompts", promptsRouter);
 apiRouter.use("/auth", authRouter);
 apiRouter.use("/source-configs", sourceConfigsRouter);
+apiRouter.use("/provider-instances", providerInstancesRouter);
 apiRouter.use("/", extractorHealthRouter);

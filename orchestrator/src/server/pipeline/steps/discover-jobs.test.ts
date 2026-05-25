@@ -5,6 +5,7 @@ import { discoverJobsStep } from "./discover-jobs";
 
 vi.mock("@server/repositories/settings", () => ({
   getAllSettings: vi.fn(),
+  getSetting: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock("@server/repositories/jobs", () => ({
@@ -18,6 +19,10 @@ vi.mock("@server/repositories/source-configs", () => ({
     { extractorId: "startupjobs", enabled: true, config: {}, mappings: {}, updatedAt: "" },
     { extractorId: "workingnomads", enabled: true, config: {}, mappings: {}, updatedAt: "" },
   ]),
+}));
+
+vi.mock("@server/repositories/provider-instances", () => ({
+  getEnabledProviderInstances: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock("@server/extractors/registry", () => ({

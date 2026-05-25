@@ -232,6 +232,7 @@ export const createAppSettings = (
   basicAuthUser: null,
   basicAuthPassword: null,
   basicAuthPasswordHint: null,
+  apifyApiTokenHint: null,
   basicAuthActive: false,
   penalizeMissingSalary: { value: false, default: false, override: null },
   missingSalaryPenalty: { value: 10, default: 10, override: null },

@@ -519,6 +519,24 @@ const migrations: string[] = [
      mappings_json TEXT NOT NULL DEFAULT '{}',
      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
    )`,
+
+  // User-managed instances of marketplace-provider actors (Apify today,
+  // extensible to other providers). Each row is one configured actor; the
+  // pipeline iterates enabled rows alongside built-in extractor manifests.
+  `CREATE TABLE IF NOT EXISTS provider_instances (
+     id TEXT PRIMARY KEY,
+     provider_id TEXT NOT NULL,
+     actor_ref TEXT NOT NULL,
+     label TEXT NOT NULL,
+     template_id TEXT,
+     enabled INTEGER NOT NULL DEFAULT 0,
+     input_template_json TEXT NOT NULL,
+     output_mapping_json TEXT NOT NULL DEFAULT '{}',
+     mappings_json TEXT NOT NULL DEFAULT '{}',
+     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+   )`,
+  `CREATE INDEX IF NOT EXISTS idx_provider_instances_provider
+     ON provider_instances(provider_id)`,
 ];
 
 console.log("🔧 Running database migrations...");

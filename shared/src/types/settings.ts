@@ -110,6 +110,7 @@ export interface AppSettings {
   // Secret hints:
   llmApiKeyHint: string | null;
   basicAuthPasswordHint: string | null;
+  apifyApiTokenHint: string | null;
 
   // Computed:
   basicAuthActive: boolean;

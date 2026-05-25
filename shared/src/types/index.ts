@@ -7,5 +7,6 @@ export * from "./extractors";
 export * from "./jobs";
 export * from "./location";
 export * from "./pipeline";
+export * from "./provider-instances";
 export * from "./settings";
 export * from "./source-config";

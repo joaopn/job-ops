@@ -1467,8 +1467,12 @@ export async function updateSettings(
 
 // Source-configs API
 import type {
+  CreateProviderInstanceInput,
+  ProviderActorTemplateSummary,
+  ProviderInstanceRow,
   SourceConfigRow,
   SourceConfigSchema,
+  UpdateProviderInstanceInput,
   UpsertSourceConfigInput,
 } from "@shared/types";
 
@@ -1497,6 +1501,66 @@ export async function upsertSourceConfig(
     method: "PUT",
     body: JSON.stringify(patch),
   });
+}
+
+// Provider-instances API (Apify and other marketplace providers)
+export interface ProviderEntry {
+  id: string;
+  displayName: string;
+  templates: ProviderActorTemplateSummary[];
+  instances: ProviderInstanceRow[];
+}
+
+export interface ProviderInstancesResponse {
+  providers: ProviderEntry[];
+}
+
+export async function getProviderInstances(): Promise<ProviderInstancesResponse> {
+  return fetchApi<ProviderInstancesResponse>("/provider-instances");
+}
+
+export async function createProviderInstance(
+  input: CreateProviderInstanceInput,
+): Promise<ProviderInstanceRow> {
+  return fetchApi<ProviderInstanceRow>("/provider-instances", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updateProviderInstance(
+  id: string,
+  patch: UpdateProviderInstanceInput,
+): Promise<ProviderInstanceRow> {
+  return fetchApi<ProviderInstanceRow>(`/provider-instances/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(patch),
+  });
+}
+
+export async function deleteProviderInstance(
+  id: string,
+): Promise<{ id: string }> {
+  return fetchApi<{ id: string }>(`/provider-instances/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export type ProviderInstanceTestResponse =
+  | {
+      outcome: "ok";
+      samples: Array<Record<string, unknown>>;
+      totalMapped: number;
+    }
+  | { outcome: "error"; error: string; samples: [] };
+
+export async function testProviderInstance(
+  id: string,
+): Promise<ProviderInstanceTestResponse> {
+  return fetchApi<ProviderInstanceTestResponse>(
+    `/provider-instances/${id}/test`,
+    { method: "POST" },
+  );
 }
 
 // Prompts API

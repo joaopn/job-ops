@@ -1,10 +1,10 @@
 import {
   EXTRACTOR_SOURCE_IDS,
   EXTRACTOR_SOURCE_METADATA,
+  type ExtractorSourceId,
   PIPELINE_EXTRACTOR_SOURCE_IDS,
 } from "@shared/extractors";
 import {
-  type JobSource,
   type JobStatus,
   SUITABILITY_CATEGORIES,
   SUITABILITY_CATEGORY_LABELS,
@@ -56,14 +56,16 @@ export const FIT_FILTER_CHIP_CLASS: Record<
   },
 };
 
-export const orderedSources: JobSource[] = [
+export const orderedSources: ExtractorSourceId[] = [
   ...PIPELINE_EXTRACTOR_SOURCE_IDS,
 ].sort(
   (left, right) =>
     EXTRACTOR_SOURCE_METADATA[left].order -
     EXTRACTOR_SOURCE_METADATA[right].order,
 );
-export const orderedFilterSources: JobSource[] = [...EXTRACTOR_SOURCE_IDS].sort(
+export const orderedFilterSources: ExtractorSourceId[] = [
+  ...EXTRACTOR_SOURCE_IDS,
+].sort(
   (left, right) =>
     EXTRACTOR_SOURCE_METADATA[left].order -
     EXTRACTOR_SOURCE_METADATA[right].order,
