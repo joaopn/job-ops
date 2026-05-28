@@ -54,9 +54,14 @@ function buildPlaceholders(args: SubstituteArgs): Record<string, Placeholder> {
 
   if (runGlobals.maxJobsPerTerm) {
     const parsed = Number(runGlobals.maxJobsPerTerm);
-    if (Number.isFinite(parsed)) {
-      out.maxJobsPerTerm = { kind: "number", value: parsed };
-    }
+    out.maxJobsPerTerm = {
+      kind: "number",
+      value: Number.isFinite(parsed) ? parsed : 20,
+    };
+  } else {
+    // Sensible default so the placeholder always resolves (Test endpoint,
+    // pipeline runs without an explicit per-run budget, etc.).
+    out.maxJobsPerTerm = { kind: "number", value: 20 };
   }
 
   return out;
@@ -74,9 +79,9 @@ function substituteNode(
     const name = match[1];
     const placeholder = placeholders[name];
     if (!placeholder) {
-      throw new TemplateSubstitutionError(
-        `Unknown placeholder {{${name}}} in input template`,
-      );
+      // Unknown placeholder name (typo). Strip the {{...}} and leave an
+      // empty string rather than crashing the run.
+      return "";
     }
     if (placeholder.kind === "array") return [...placeholder.value];
     return placeholder.value;

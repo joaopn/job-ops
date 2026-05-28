@@ -1,32 +1,6 @@
 import type { CreateJobInput, JobSource } from "@shared/types";
 import type { ProviderActorTemplate } from "../../types";
 
-interface ScraperItem {
-  // The curious_coder/linkedin-jobs-scraper actor returns an array of
-  // job objects roughly shaped like the LinkedIn job-posting JSON.
-  // Field names below mirror the actor's documented output; missing
-  // values produce null/undefined and gracefully degrade.
-  id?: string;
-  job_url?: string;
-  jobUrl?: string;
-  applyUrl?: string;
-  title?: string;
-  job_title?: string;
-  company_name?: string;
-  companyName?: string;
-  location?: string;
-  description?: string;
-  job_description?: string;
-  posted_date?: string;
-  postedAt?: string;
-  date_posted?: string;
-  is_remote?: boolean;
-  employment_type?: string;
-  job_type?: string;
-  level?: string;
-  seniority?: string;
-}
-
 function pickString(
   obj: Record<string, unknown>,
   keys: readonly string[],
@@ -41,20 +15,14 @@ function pickString(
   return undefined;
 }
 
-function pickBoolean(
-  obj: Record<string, unknown>,
-  keys: readonly string[],
-): boolean | undefined {
-  for (const key of keys) {
-    const value = obj[key];
-    if (typeof value === "boolean") return value;
-    if (typeof value === "string") {
-      const lower = value.trim().toLowerCase();
-      if (lower === "true" || lower === "remote") return true;
-      if (lower === "false" || lower === "onsite") return false;
-    }
-  }
-  return undefined;
+function joinSalary(value: unknown): string | undefined {
+  if (typeof value === "string" && value.trim().length > 0) return value.trim();
+  if (!Array.isArray(value)) return undefined;
+  const parts = value
+    .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
+    .map((v) => v.trim());
+  if (parts.length === 0) return undefined;
+  return parts.join(" – ");
 }
 
 export const linkedinJobsScraperTemplate: ProviderActorTemplate = {
@@ -63,33 +31,31 @@ export const linkedinJobsScraperTemplate: ProviderActorTemplate = {
   actorRef: "curious_coder/linkedin-jobs-scraper",
   displayName: "LinkedIn Jobs Scraper (curious_coder)",
   description:
-    "Apify's curious_coder/linkedin-jobs-scraper. Searches LinkedIn jobs by keyword and location. Requires a personal Apify API token. See https://apify.com/curious_coder/linkedin-jobs-scraper/api for input options.",
+    "curious_coder/linkedin-jobs-scraper expects pre-built LinkedIn jobs-search URLs (build your search on linkedin.com/jobs and paste the address-bar URL here). The {{maxJobsPerTerm}} placeholder caps result count. Set scrapeCompany=true if you want company-side fields populated (costs more CUs).",
   defaultInputTemplate: JSON.stringify(
     {
-      keywords: "{{searchTerms}}",
-      location: "{{city}}",
-      rows: "{{maxJobsPerTerm}}",
+      urls: [
+        "https://www.linkedin.com/jobs/search/?keywords=engineer&location=United%20Kingdom&pageNum=0",
+      ],
+      scrapeCompany: false,
+      count: "{{maxJobsPerTerm}}",
     },
     null,
     2,
   ),
   defaultMappings: {
-    searchTerms: true,
-    city: true,
     maxJobsPerTerm: true,
   },
   mapItem(item, context): CreateJobInput | null {
     if (!item || typeof item !== "object" || Array.isArray(item)) return null;
     const obj = item as Record<string, unknown>;
-    const _typed = obj as unknown as ScraperItem;
-    void _typed;
 
-    const jobUrl = pickString(obj, ["job_url", "jobUrl", "applyUrl", "url"]);
+    const jobUrl = pickString(obj, ["link", "url", "job_url", "jobUrl"]);
     const title = pickString(obj, ["title", "job_title", "name"]);
     if (!jobUrl || !title) return null;
 
     const employer =
-      pickString(obj, ["company_name", "companyName", "company", "employer"]) ??
+      pickString(obj, ["companyName", "company_name", "company", "employer"]) ??
       "Unknown";
 
     const result: CreateJobInput = {
@@ -99,32 +65,57 @@ export const linkedinJobsScraperTemplate: ProviderActorTemplate = {
       jobUrl,
     };
 
+    const sourceJobId = pickString(obj, ["id", "jobId"]);
+    if (sourceJobId) result.sourceJobId = sourceJobId;
+
+    const employerUrl = pickString(obj, [
+      "companyLinkedinUrl",
+      "companyUrl",
+      "company_url",
+    ]);
+    if (employerUrl) result.employerUrl = employerUrl;
+
     const location = pickString(obj, ["location", "job_location"]);
     if (location) result.location = location;
 
     const description = pickString(obj, [
+      "descriptionText",
+      "description_text",
       "description",
       "job_description",
-      "descriptionText",
     ]);
     if (description) result.jobDescription = description;
 
     const datePosted = pickString(obj, [
-      "posted_date",
       "postedAt",
+      "posted_date",
       "date_posted",
-      "postedTimeAgo",
     ]);
     if (datePosted) result.datePosted = datePosted;
 
-    const isRemote = pickBoolean(obj, ["is_remote", "isRemote", "remote"]);
-    if (isRemote !== undefined) result.isRemote = isRemote;
-
-    const jobType = pickString(obj, ["employment_type", "job_type", "jobType"]);
+    const jobType = pickString(obj, ["employmentType", "employment_type"]);
     if (jobType) result.jobType = jobType;
 
-    const jobLevel = pickString(obj, ["level", "seniority", "experienceLevel"]);
+    const jobLevel = pickString(obj, ["seniorityLevel", "level", "seniority"]);
     if (jobLevel) result.jobLevel = jobLevel;
+
+    const jobFunction = pickString(obj, ["jobFunction", "job_function"]);
+    if (jobFunction) result.jobFunction = jobFunction;
+
+    const companyIndustry = pickString(obj, ["industries", "industry"]);
+    if (companyIndustry) result.companyIndustry = companyIndustry;
+
+    const companyLogo = pickString(obj, ["companyLogo", "company_logo"]);
+    if (companyLogo) result.companyLogo = companyLogo;
+
+    const companyDescription = pickString(obj, [
+      "companyDescription",
+      "company_description",
+    ]);
+    if (companyDescription) result.companyDescription = companyDescription;
+
+    const salary = joinSalary(obj.salaryInfo ?? obj.salary);
+    if (salary) result.salary = salary;
 
     const applyUrl = pickString(obj, ["applyUrl", "apply_url"]);
     if (applyUrl && applyUrl !== jobUrl) result.applicationLink = applyUrl;

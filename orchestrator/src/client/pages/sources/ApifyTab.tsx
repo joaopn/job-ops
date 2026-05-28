@@ -47,12 +47,20 @@ export function ApifyTab({ settings }: ApifyTabProps) {
               from the Apify marketplace.
             </p>
           ) : (
-            apifyProvider.instances.map((instance) => (
-              <ProviderInstanceCard
-                key={instance.id}
-                instance={instance}
-              />
-            ))
+            apifyProvider.instances.map((instance) => {
+              const template = instance.templateId
+                ? (apifyProvider.templates.find(
+                    (t) => t.id === instance.templateId,
+                  ) ?? null)
+                : null;
+              return (
+                <ProviderInstanceCard
+                  key={instance.id}
+                  instance={instance}
+                  template={template}
+                />
+              );
+            })
           )}
           <div>
             <Button onClick={() => setAddOpen(true)}>

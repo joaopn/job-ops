@@ -3,6 +3,7 @@ import type { ProviderInstanceTestResponse } from "@client/api";
 import { queryKeys } from "@client/lib/queryKeys";
 import { toast } from "@client/lib/toast";
 import type {
+  ProviderActorTemplateSummary,
   ProviderInstanceRow,
   SourceConfigGlobalField,
 } from "@shared/types";
@@ -11,6 +12,7 @@ import {
   ChevronDown,
   Loader2,
   PlayCircle,
+  RotateCcw,
   Save,
   Trash2,
 } from "lucide-react";
@@ -46,9 +48,13 @@ const GLOBAL_FIELD_LABELS: Record<SourceConfigGlobalField, string> = {
 
 interface ProviderInstanceCardProps {
   instance: ProviderInstanceRow;
+  template: ProviderActorTemplateSummary | null;
 }
 
-export function ProviderInstanceCard({ instance }: ProviderInstanceCardProps) {
+export function ProviderInstanceCard({
+  instance,
+  template,
+}: ProviderInstanceCardProps) {
   const queryClient = useQueryClient();
   const [enabled, setEnabled] = useState(instance.enabled);
   const [label, setLabel] = useState(instance.label);
@@ -89,6 +95,22 @@ export function ProviderInstanceCard({ instance }: ProviderInstanceCardProps) {
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : "Save failed");
+    },
+  });
+
+  const resetMutation = useMutation({
+    mutationFn: async (defaultTemplate: string) =>
+      api.updateProviderInstance(instance.id, {
+        inputTemplateJson: defaultTemplate,
+      }),
+    onSuccess: () => {
+      toast.success("Reset to template default");
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.providerInstances.all,
+      });
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : "Reset failed");
     },
   });
 
@@ -160,6 +182,25 @@ export function ProviderInstanceCard({ instance }: ProviderInstanceCardProps) {
             </CardDescription>
           </div>
           <div className="flex gap-1">
+            {template ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setInputTemplateJson(template.defaultInputTemplate);
+                  resetMutation.mutate(template.defaultInputTemplate);
+                }}
+                disabled={resetMutation.isPending}
+                title="Reset input template to the curated default (persists immediately)"
+              >
+                {resetMutation.isPending ? (
+                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RotateCcw className="mr-1 h-3.5 w-3.5" />
+                )}
+                Reset
+              </Button>
+            ) : null}
             <Button
               variant="outline"
               size="sm"
