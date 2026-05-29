@@ -87,10 +87,12 @@ type SourceStatsInternal = {
   id: string;
   label: string;
   status: PipelineSourceStatus;
-  jobsFound: number;
   jobsScraped: number;
   jobsImported: number;
   jobsReposted: number;
+  jobsDuplicated: number;
+  jobsFiltered: number;
+  jobsRejected: number;
   startedAt?: string;
   completedAt?: string;
   durationMs?: number;
@@ -129,10 +131,12 @@ function getOrCreateSourceRow(
     id: platform,
     label: labelOverride ?? resolveSourceLabel(platform),
     status: "pending",
-    jobsFound: 0,
     jobsScraped: 0,
     jobsImported: 0,
     jobsReposted: 0,
+    jobsDuplicated: 0,
+    jobsFiltered: 0,
+    jobsRejected: 0,
     order: resolveSourceOrder(platform),
   };
   sourceStatsByPlatform.set(platform, row);
@@ -146,10 +150,12 @@ function buildSourceStats(): PipelineSourceStats[] {
       id: row.id,
       label: row.label,
       status: row.status,
-      jobsFound: row.jobsFound,
       jobsScraped: row.jobsScraped,
       jobsImported: row.jobsImported,
       jobsReposted: row.jobsReposted,
+      jobsDuplicated: row.jobsDuplicated,
+      jobsFiltered: row.jobsFiltered,
+      jobsRejected: row.jobsRejected,
       startedAt: row.startedAt,
       completedAt: row.completedAt,
       durationMs: row.durationMs,
@@ -374,22 +380,34 @@ export const progressHelpers = {
 
   recordSourceJobsCounts: (
     platform: string,
-    counts: { found?: number; scraped?: number },
+    counts: { scraped?: number },
   ) => {
     const row = sourceStatsByPlatform.get(platform);
     if (!row) return;
-    if (counts.found !== undefined) row.jobsFound = counts.found;
     if (counts.scraped !== undefined) row.jobsScraped = counts.scraped;
+    updateProgress({});
+  },
+
+  recordSourceJobsFiltered: (platform: string, count: number) => {
+    const row = getOrCreateSourceRow(platform);
+    row.jobsFiltered = count;
     updateProgress({});
   },
 
   recordSourceJobsImported: (
     platform: string,
-    counts: { imported: number; reposted: number },
+    counts: {
+      imported: number;
+      reposted: number;
+      duplicated: number;
+      rejected: number;
+    },
   ) => {
     const row = getOrCreateSourceRow(platform);
     row.jobsImported = counts.imported;
     row.jobsReposted = counts.reposted;
+    row.jobsDuplicated = counts.duplicated;
+    row.jobsRejected = counts.rejected;
     updateProgress({});
   },
 
@@ -441,7 +459,6 @@ export const progressHelpers = {
         platformRow &&
         (platformRow.status === "pending" || platformRow.status === "running")
       ) {
-        platformRow.jobsFound = nextForSource.jobPagesEnqueued;
         platformRow.jobsScraped = nextForSource.jobPagesProcessed;
       }
     }

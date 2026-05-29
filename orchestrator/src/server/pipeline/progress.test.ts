@@ -34,7 +34,7 @@ describe("pipeline progress source-stats tracking", () => {
       "Glassdoor [jobspy]",
     ]);
     expect(stats.every((row) => row.status === "running")).toBe(true);
-    expect(stats.every((row) => row.jobsFound === 0)).toBe(true);
+    expect(stats.every((row) => row.jobsScraped === 0)).toBe(true);
   });
 
   it("does not suffix the label for 1:1 extractors", () => {
@@ -47,20 +47,18 @@ describe("pipeline progress source-stats tracking", () => {
     expect(row?.label).toBe("Hiring Cafe");
   });
 
-  it("records found/scraped counts and marks the row completed", () => {
+  it("records scraped counts and marks the row completed", () => {
     progressHelpers.startCrawling(1);
     progressHelpers.startSource("hiringcafe", 0, 1, {
       platforms: ["hiringcafe"],
     });
     progressHelpers.recordSourceJobsCounts("hiringcafe", {
-      found: 17,
       scraped: 17,
     });
     progressHelpers.markSourceCompleted("hiringcafe");
 
     const row = getProgress().sourceStats.find((r) => r.id === "hiringcafe");
     expect(row?.status).toBe("completed");
-    expect(row?.jobsFound).toBe(17);
     expect(row?.jobsScraped).toBe(17);
     expect(row?.completedAt).toBeDefined();
     expect(row?.durationMs).toBeGreaterThanOrEqual(0);
@@ -81,7 +79,7 @@ describe("pipeline progress source-stats tracking", () => {
     expect(row?.completedAt).toBeDefined();
   });
 
-  it("attributes imports + reposts per source", () => {
+  it("attributes imports + reposts + duplicates + rejects per source", () => {
     progressHelpers.startCrawling(1);
     progressHelpers.startSource("hiringcafe", 0, 1, {
       platforms: ["hiringcafe"],
@@ -89,17 +87,32 @@ describe("pipeline progress source-stats tracking", () => {
     progressHelpers.recordSourceJobsImported("hiringcafe", {
       imported: 5,
       reposted: 2,
+      duplicated: 9,
+      rejected: 1,
     });
 
     const row = getProgress().sourceStats.find((r) => r.id === "hiringcafe");
     expect(row?.jobsImported).toBe(5);
     expect(row?.jobsReposted).toBe(2);
+    expect(row?.jobsDuplicated).toBe(9);
+    expect(row?.jobsRejected).toBe(1);
+  });
+
+  it("records per-source filtered (dropped-before-import) counts", () => {
+    progressHelpers.startCrawling(1);
+    progressHelpers.startSource("hiringcafe", 0, 1, {
+      platforms: ["hiringcafe"],
+    });
+    progressHelpers.recordSourceJobsFiltered("hiringcafe", 4);
+
+    const row = getProgress().sourceStats.find((r) => r.id === "hiringcafe");
+    expect(row?.jobsFiltered).toBe(4);
   });
 
   it("recordSourceJobsCounts is a no-op when the row does not exist yet", () => {
     progressHelpers.startCrawling(1);
     // Notably no startSource call.
-    progressHelpers.recordSourceJobsCounts("hiringcafe", { found: 99 });
+    progressHelpers.recordSourceJobsCounts("hiringcafe", { scraped: 99 });
     expect(getProgress().sourceStats).toEqual([]);
   });
 

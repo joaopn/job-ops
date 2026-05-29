@@ -286,16 +286,16 @@ export const PipelineRunBanner: React.FC<PipelineRunBannerProps> = ({
                           <TableHead className="w-44">Platform</TableHead>
                           <TableHead className="w-28">Status</TableHead>
                           <TableHead className="w-20 text-right">
-                            Found
-                          </TableHead>
-                          <TableHead className="w-20 text-right">
                             Scraped
                           </TableHead>
                           <TableHead className="w-20 text-right">
                             Imported
                           </TableHead>
                           <TableHead className="w-20 text-right">
-                            Reposted
+                            Duplicated
+                          </TableHead>
+                          <TableHead className="w-20 text-right">
+                            Rejected
                           </TableHead>
                           <TableHead className="w-24 text-right">
                             Duration
@@ -336,6 +336,9 @@ const SourceRow: React.FC<{
   onRerun?: (source: JobSource) => void;
   showRerunColumn: boolean;
 }> = ({ row, onRerun, showRerunColumn }) => {
+  // "Rejected" bundles everything found but not kept: pre-import filter drops
+  // (location / blocked company) plus import-time rejects (bad data).
+  const rejectedTotal = row.jobsFiltered + row.jobsRejected;
   return (
     <>
       <TableRow>
@@ -344,16 +347,35 @@ const SourceRow: React.FC<{
           <StatusCell status={row.status} />
         </TableCell>
         <TableCell className="text-right tabular-nums">
-          {row.status === "pending" ? "—" : row.jobsFound}
-        </TableCell>
-        <TableCell className="text-right tabular-nums">
           {row.status === "pending" ? "—" : row.jobsScraped}
         </TableCell>
-        <TableCell className="text-right tabular-nums">
-          {row.status === "pending" ? "—" : row.jobsImported}
+        <TableCell
+          className="text-right tabular-nums"
+          title={
+            row.jobsReposted > 0
+              ? `${row.jobsImported} new + ${row.jobsReposted} reposted`
+              : undefined
+          }
+        >
+          {row.status === "pending"
+            ? "—"
+            : row.jobsImported + row.jobsReposted}
         </TableCell>
-        <TableCell className="text-right tabular-nums">
-          {row.status === "pending" ? "—" : row.jobsReposted}
+        <TableCell className="text-right tabular-nums text-muted-foreground">
+          {row.status === "pending" ? "—" : row.jobsDuplicated}
+        </TableCell>
+        <TableCell
+          className={cn(
+            "text-right tabular-nums",
+            rejectedTotal > 0 ? "text-destructive" : "text-muted-foreground",
+          )}
+          title={
+            rejectedTotal > 0
+              ? `${row.jobsFiltered} filtered (location/blocked) + ${row.jobsRejected} rejected (bad data)`
+              : undefined
+          }
+        >
+          {row.status === "pending" ? "—" : rejectedTotal}
         </TableCell>
         <TableCell className="text-right text-xs text-muted-foreground tabular-nums">
           {formatDuration(row.durationMs)}

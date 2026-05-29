@@ -37,6 +37,8 @@ export async function importJobsStep(args: {
     progressHelpers.recordSourceJobsImported(source, {
       imported: result.created,
       reposted: result.reposted,
+      duplicated: result.skipped,
+      rejected: result.rejected,
     });
   }
 

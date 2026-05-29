@@ -463,7 +463,6 @@ export async function discoverJobsStep(args: {
           (job) => job.source === platform,
         );
         progressHelpers.recordSourceJobsCounts(platform, {
-          found: platformJobs.length,
           scraped: platformJobs.length,
         });
         progressHelpers.markSourceCompleted(platform);
@@ -539,6 +538,24 @@ export async function discoverJobsStep(args: {
   );
   const droppedCount =
     locationFilteredJobs.length - filteredDiscoveredJobs.length;
+
+  // Attribute every found-but-dropped job (location mismatch + blocked
+  // company) back to its source so the banner's Rejected column reconciles
+  // with Scraped. Import-time rejects (bad date) are recorded separately.
+  const keptBySource = new Map<string, number>();
+  for (const job of filteredDiscoveredJobs) {
+    keptBySource.set(job.source, (keptBySource.get(job.source) ?? 0) + 1);
+  }
+  const foundBySource = new Map<string, number>();
+  for (const job of discoveredJobs) {
+    foundBySource.set(job.source, (foundBySource.get(job.source) ?? 0) + 1);
+  }
+  for (const [source, found] of foundBySource) {
+    const filtered = found - (keptBySource.get(source) ?? 0);
+    if (filtered > 0) {
+      progressHelpers.recordSourceJobsFiltered(source, filtered);
+    }
+  }
 
   if (droppedCount > 0) {
     const blockedCompanyKeywordsPreview = blockedCompanyKeywords.slice(0, 10);

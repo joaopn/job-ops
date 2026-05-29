@@ -120,10 +120,12 @@ export interface PipelineSourceStats {
   id: string;
   label: string;
   status: PipelineSourceStatus;
-  jobsFound: number;
-  jobsScraped: number;
-  jobsImported: number;
-  jobsReposted: number;
+  jobsScraped: number; // all jobs returned by the source after mapping
+  jobsImported: number; // brand-new rows inserted
+  jobsReposted: number; // existing rows re-promoted from a shelf (folded into "imported" in the UI)
+  jobsDuplicated: number; // existing rows that stayed put (deduped at import)
+  jobsFiltered: number; // dropped before import (location-intent mismatch / blocked company)
+  jobsRejected: number; // rows dropped at import (e.g. unparseable date_posted)
   startedAt?: string;
   completedAt?: string;
   durationMs?: number;
