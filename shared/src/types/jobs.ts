@@ -290,7 +290,12 @@ export type JobListItem = Pick<
   | "readyAt"
   | "appliedAt"
   | "updatedAt"
->;
+> & {
+  // Human-readable label for `source`, resolved server-side (provider
+  // instances → their user-set display name; built-ins → metadata label).
+  // Optional so non-list callers / fixtures don't need to supply it.
+  sourceLabel?: string;
+};
 
 export interface CreateJobInput {
   source: JobSource;

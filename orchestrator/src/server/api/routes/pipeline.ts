@@ -21,6 +21,7 @@ import {
   subscribeToProgress,
 } from "@server/pipeline/index";
 import * as pipelineRepo from "@server/repositories/pipeline";
+import { getEnabledProviderInstances } from "@server/repositories/provider-instances";
 import { PIPELINE_EXTRACTOR_SOURCE_IDS } from "@shared/extractors";
 import {
   createLocationIntent,
@@ -143,6 +144,8 @@ pipelineRouter.get(
 const runPipelineSchema = z.object({
   topN: z.number().min(1).max(50).optional(),
   minSuitabilityCategory: z.enum(SUITABILITY_CATEGORIES).optional(),
+  // An empty array is meaningful: "run no built-in extractors" (used by a
+  // provider-instance-only re-run). `undefined` = all enabled extractors.
   sources: z
     .array(
       z.enum(
@@ -152,8 +155,10 @@ const runPipelineSchema = z.object({
         ],
       ),
     )
-    .min(1)
     .optional(),
+  // Marketplace provider instance ids to scope the run to. `undefined` = all
+  // enabled instances; `[]` = none; a list = only those instances.
+  providerInstanceIds: z.array(z.string().min(1)).optional(),
   maxJobsPerTerm: z.number().int().min(1).max(10_000).optional(),
   searchTerms: z.array(z.string().trim().min(1)).optional(),
   country: z.string().trim().optional(),
@@ -232,12 +237,30 @@ pipelineRouter.post("/run", async (req: Request, res: Response) => {
       }
     }
 
+    if (config.providerInstanceIds && config.providerInstanceIds.length > 0) {
+      const enabledInstances = await getEnabledProviderInstances();
+      const enabledIds = new Set(enabledInstances.map((row) => row.id));
+      const unknownInstanceIds = config.providerInstanceIds.filter(
+        (id) => !enabledIds.has(id),
+      );
+      if (unknownInstanceIds.length > 0) {
+        return fail(
+          res,
+          badRequest(
+            `Requested provider instances are not enabled or do not exist: ${unknownInstanceIds.join(", ")}`,
+            { unknownInstanceIds },
+          ),
+        );
+      }
+    }
+
     // Start pipeline in background
     runWithRequestContext({}, () => {
       runPipeline({
         topN: config.topN,
         minSuitabilityCategory: config.minSuitabilityCategory,
         sources: config.sources,
+        providerInstanceIds: config.providerInstanceIds,
         maxJobsPerTerm: config.maxJobsPerTerm,
         locationIntent,
         enableAutoTailoring: config.enableAutoTailoring,

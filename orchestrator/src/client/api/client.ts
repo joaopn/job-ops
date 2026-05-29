@@ -1135,6 +1135,7 @@ export async function runPipeline(config?: {
   topN?: number;
   minSuitabilityCategory?: SuitabilityCategory;
   sources?: JobSource[];
+  providerInstanceIds?: string[];
   maxJobsPerTerm?: number;
   searchTerms?: string[];
   country?: string;

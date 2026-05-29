@@ -302,7 +302,12 @@ export const progressHelpers = {
     source: CrawlSource,
     sourcesCompleted: number,
     sourcesTotal: number,
-    options?: { termsTotal?: number; detail?: string; platforms?: string[] },
+    options?: {
+      termsTotal?: number;
+      detail?: string;
+      platforms?: string[];
+      label?: string;
+    },
   ) => {
     const existing =
       crawlingStatsBySource.get(source) ?? emptySourceCrawlingStats();
@@ -321,7 +326,10 @@ export const progressHelpers = {
     const suffix = platforms.length > 1 ? ` [${source}]` : "";
     const startedAt = new Date().toISOString();
     for (const platform of platforms) {
-      const baseLabel = resolveSourceLabel(platform);
+      // A caller-supplied label (provider instances pass their user-set
+      // display name) wins over the id-derived label; only the multi-platform
+      // suffix logic falls back to the resolved extractor label.
+      const baseLabel = options?.label ?? resolveSourceLabel(platform);
       const row = getOrCreateSourceRow(platform, `${baseLabel}${suffix}`);
       if (row.status === "pending" || row.status === "running") {
         row.status = "running";

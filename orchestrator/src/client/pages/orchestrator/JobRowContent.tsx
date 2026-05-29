@@ -64,6 +64,7 @@ export const JobRowContent = ({
   staleThresholdDays,
 }: JobRowContentProps) => {
   const category = job.suitabilityCategory ?? null;
+  const sourceLabel = job.sourceLabel ?? job.source;
   const statusToken = statusTokens[job.status] ?? defaultStatusToken;
   const age = formatAge(job, Date.now());
   const isStale =
@@ -141,16 +142,26 @@ export const JobRowContent = ({
         )}
       </div>
 
-      {category && (
+      {(category || sourceLabel) && (
         <div className="shrink-0 text-right">
-          <span
-            className={cn(
-              "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
-              CATEGORY_PILL_CLASS[category],
-            )}
-          >
-            {CATEGORY_PILL_LABEL[category]}
-          </span>
+          {category && (
+            <span
+              className={cn(
+                "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                CATEGORY_PILL_CLASS[category],
+              )}
+            >
+              {CATEGORY_PILL_LABEL[category]}
+            </span>
+          )}
+          {sourceLabel && (
+            <div
+              className="mt-0.5 max-w-[10rem] truncate text-[10px] text-muted-foreground"
+              title={sourceLabel}
+            >
+              {sourceLabel}
+            </div>
+          )}
         </div>
       )}
     </div>

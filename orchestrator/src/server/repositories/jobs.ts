@@ -28,6 +28,11 @@ import type {
   LocationEvidenceEntry,
 } from "@shared/types/location";
 import { and, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import {
+  isProviderInstanceSource,
+  resolveSourceDisplayLabel,
+} from "../services/sources/display";
+import { getAllProviderInstances } from "./provider-instances";
 import { db, schema } from "../db/index";
 
 const { jobNotes, jobs } = schema;
@@ -149,10 +154,25 @@ export async function getJobListItems(
       : db.select(selection).from(jobs).orderBy(desc(jobs.discoveredAt));
 
   const rows = await query;
+
+  // Resolve a human label for each row's source. Provider-instance sources
+  // (`<provider>:<uuid>`) need the configured instances to map to the user's
+  // display name; only load them when at least one such source is present.
+  const hasProviderInstanceSource = rows.some((row) =>
+    isProviderInstanceSource(row.source),
+  );
+  const providerInstances = hasProviderInstanceSource
+    ? await getAllProviderInstances()
+    : undefined;
+
   return rows.map((row) => ({
     ...row,
     source: row.source as JobListItem["source"],
     status: row.status as JobStatus,
+    sourceLabel: resolveSourceDisplayLabel({
+      source: row.source,
+      providerInstances,
+    }),
   }));
 }
 

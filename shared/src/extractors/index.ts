@@ -41,6 +41,25 @@ export const PIPELINE_EXTRACTOR_SOURCE_IDS = EXTRACTOR_SOURCE_IDS.filter(
   (source) => EXTRACTOR_SOURCE_METADATA[source].category === "pipeline",
 );
 
+/**
+ * Which extractor produces each platform. jobspy is a single extractor that
+ * provides indeed/linkedin/glassdoor; the rest are 1:1. Used to surface the
+ * underlying scraper (e.g. "jobspy") rather than the platform (e.g. "LinkedIn").
+ */
+export const EXTRACTOR_ID_BY_SOURCE: Record<ExtractorSourceId, string> = {
+  indeed: "jobspy",
+  linkedin: "jobspy",
+  glassdoor: "jobspy",
+  hiringcafe: "hiringcafe",
+  startupjobs: "startupjobs",
+  workingnomads: "workingnomads",
+  manual: "manual",
+};
+
+export function sourceExtractorLabel(source: ExtractorSourceId): string {
+  return EXTRACTOR_ID_BY_SOURCE[source];
+}
+
 const extractorSourceTuple = EXTRACTOR_SOURCE_IDS as unknown as [
   ExtractorSourceId,
   ...ExtractorSourceId[],

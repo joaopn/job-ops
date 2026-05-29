@@ -10,6 +10,10 @@ export interface PipelineConfig {
   topN: number; // Number of top jobs to process
   minSuitabilityCategory: SuitabilityCategory; // Minimum category to auto-process
   sources?: ExtractorSourceId[]; // Optional per-run override; otherwise uses enabled sources from source_configs
+  // Optional per-run override for marketplace provider instances (Apify, …).
+  // `undefined` = all enabled instances run; `[]` = none; a list = only those
+  // instance ids. Mirrors the undefined-vs-empty semantics of `sources`.
+  providerInstanceIds?: string[];
   maxJobsPerTerm?: number; // Per-run cap that overrides each source's stored max_jobs_per_term
   outputDir: string; // Directory for generated PDFs
   locationIntent?: LocationIntent;

@@ -1,6 +1,6 @@
 import {
-  EXTRACTOR_SOURCE_METADATA,
   isExtractorSourceId,
+  sourceExtractorLabel,
 } from "@shared/extractors";
 import type { ProviderInstanceRow } from "@shared/types";
 
@@ -10,17 +10,18 @@ interface ResolveArgs {
 }
 
 /**
- * Resolve a source identifier to a human-readable label.
+ * Resolve a source identifier to the scraper that produced it.
  *
- * Built-in source ids map via `EXTRACTOR_SOURCE_METADATA`. Provider
- * synthetic ids (`<providerId>:<instanceId>`) look up the matching
+ * Built-in platform ids map to their extractor (e.g. linkedin → "jobspy")
+ * so jobs are attributed to the underlying scraper, not the platform.
+ * Provider synthetic ids (`<providerId>:<instanceId>`) look up the matching
  * row's user-set label, falling back to the provider id + actor ref.
  * Unknown ids return the raw string.
  */
 export function resolveSourceDisplayLabel(args: ResolveArgs): string {
   const { source, providerInstances } = args;
   if (isExtractorSourceId(source)) {
-    return EXTRACTOR_SOURCE_METADATA[source].label;
+    return sourceExtractorLabel(source);
   }
   const colonIndex = source.indexOf(":");
   if (colonIndex > 0 && providerInstances) {

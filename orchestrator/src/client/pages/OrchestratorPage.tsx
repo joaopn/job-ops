@@ -183,6 +183,7 @@ export const OrchestratorPage: React.FC = () => {
     openRunMode,
     handleCancelPipeline,
     handleSaveAndRunAutomatic,
+    handleRerunSource,
   } = usePipelineControls({
     isPipelineRunning,
     setIsPipelineRunning,
@@ -472,7 +473,10 @@ export const OrchestratorPage: React.FC = () => {
         onCancelPipeline={handleCancelPipeline}
       />
 
-      <PipelineRunBanner isRunning={isPipelineRunning} />
+      <PipelineRunBanner
+        isRunning={isPipelineRunning}
+        onRerunSource={handleRerunSource}
+      />
 
       <main
         className={`space-y-6 px-4 py-6 ${

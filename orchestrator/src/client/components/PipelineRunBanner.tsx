@@ -1,4 +1,5 @@
 import type {
+  JobSource,
   PipelineProgressEvent,
   PipelineSourceStats,
 } from "@shared/types";
@@ -7,6 +8,7 @@ import {
   Clock,
   Loader2,
   AlertTriangle,
+  RotateCcw,
   X,
   XCircle,
 } from "lucide-react";
@@ -30,6 +32,9 @@ import { cn } from "@/lib/utils";
 
 interface PipelineRunBannerProps {
   isRunning: boolean;
+  // Re-run a single source (built-in extractor or provider instance) using the
+  // current saved run settings. Omit to hide the per-row re-run button.
+  onRerunSource?: (source: JobSource) => void;
 }
 
 const stepLabels: Record<PipelineProgressEvent["step"], string> = {
@@ -160,6 +165,7 @@ const StatusCell: React.FC<{ status: PipelineSourceStats["status"] }> = ({
 
 export const PipelineRunBanner: React.FC<PipelineRunBannerProps> = ({
   isRunning,
+  onRerunSource,
 }) => {
   const [progress, setProgress] = useState<PipelineProgressEvent | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -294,11 +300,17 @@ export const PipelineRunBanner: React.FC<PipelineRunBannerProps> = ({
                           <TableHead className="w-24 text-right">
                             Duration
                           </TableHead>
+                          {onRerunSource && <TableHead className="w-16" />}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {sourceStats.map((row) => (
-                          <SourceRow key={row.id} row={row} />
+                          <SourceRow
+                            key={row.id}
+                            row={row}
+                            onRerun={!isActive ? onRerunSource : undefined}
+                            showRerunColumn={!!onRerunSource}
+                          />
                         ))}
                       </TableBody>
                     </Table>
@@ -319,7 +331,11 @@ export const PipelineRunBanner: React.FC<PipelineRunBannerProps> = ({
   );
 };
 
-const SourceRow: React.FC<{ row: PipelineSourceStats }> = ({ row }) => {
+const SourceRow: React.FC<{
+  row: PipelineSourceStats;
+  onRerun?: (source: JobSource) => void;
+  showRerunColumn: boolean;
+}> = ({ row, onRerun, showRerunColumn }) => {
   return (
     <>
       <TableRow>
@@ -342,11 +358,28 @@ const SourceRow: React.FC<{ row: PipelineSourceStats }> = ({ row }) => {
         <TableCell className="text-right text-xs text-muted-foreground tabular-nums">
           {formatDuration(row.durationMs)}
         </TableCell>
+        {showRerunColumn && (
+          <TableCell className="text-right">
+            {onRerun && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                title={`Re-run ${row.label}`}
+                aria-label={`Re-run ${row.label}`}
+                onClick={() => onRerun(row.id as JobSource)}
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+              </Button>
+            )}
+          </TableCell>
+        )}
       </TableRow>
       {row.status === "failed" && row.error && (
         <TableRow className="border-b-0 hover:bg-transparent">
           <TableCell
-            colSpan={7}
+            colSpan={showRerunColumn ? 8 : 7}
             className="py-1 text-xs text-destructive whitespace-pre-wrap"
           >
             {row.error}

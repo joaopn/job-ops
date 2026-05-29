@@ -38,6 +38,10 @@ type DiscoverySourceTask = {
   platforms: string[];
   termsTotal?: number;
   detail: string;
+  // Display label override for the source-stats row. Provider instances pass
+  // their user-set name so the pipeline table shows it instead of the raw
+  // `<provider>:<uuid>` synthetic id.
+  label?: string;
   run: () => Promise<DiscoveryTaskResult>;
 };
 
@@ -258,8 +262,18 @@ export async function discoverJobsStep(args: {
   // Each enabled instance is its own runnable with one synthetic platform
   // id `<providerId>:<instanceId>`. The instance carries its own input
   // template + output mapping; the API token lives in settings.
-  const enabledProviderInstances =
+  const allEnabledProviderInstances =
     await providerInstancesRepo.getEnabledProviderInstances();
+  // `providerInstanceIds === undefined` → run every enabled instance (default).
+  // A list (incl. empty) → run only those ids. This lets a per-source re-run
+  // scope to one instance, or to no instances when only an extractor re-runs.
+  const requestedProviderInstanceIds = args.mergedConfig.providerInstanceIds;
+  const enabledProviderInstances =
+    requestedProviderInstanceIds === undefined
+      ? allEnabledProviderInstances
+      : allEnabledProviderInstances.filter((instance) =>
+          requestedProviderInstanceIds.includes(instance.id),
+        );
   if (enabledProviderInstances.length > 0) {
     const apifyApiToken = (await settingsRepo.getSetting("apifyApiToken")) ?? "";
     for (const instance of enabledProviderInstances) {
@@ -278,6 +292,7 @@ export async function discoverJobsStep(args: {
         platforms: [syntheticSource],
         termsTotal: searchTerms.length,
         detail: `${instance.label}: fetching jobs...`,
+        label: instance.label,
         run: async () => {
           const result = await provider.run({
             instance,
@@ -415,6 +430,7 @@ export async function discoverJobsStep(args: {
           termsTotal: sourceTask.termsTotal,
           detail: sourceTask.detail,
           platforms: sourceTask.platforms,
+          label: sourceTask.label,
         },
       );
     },
