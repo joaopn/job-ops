@@ -48,7 +48,7 @@ export const linkedinJobsScraperTemplate: ProviderActorTemplate = {
   actorRef: "curious_coder/linkedin-jobs-scraper",
   displayName: "LinkedIn Jobs Scraper (curious_coder)",
   description:
-    "curious_coder/linkedin-jobs-scraper expects pre-built LinkedIn jobs-search URLs (build your search on linkedin.com/jobs and paste the address-bar URL here). The {{maxJobsPerTerm}} placeholder caps result count. Set scrapeCompany=true if you want company-side fields populated (costs more CUs).",
+    "curious_coder/linkedin-jobs-scraper expects pre-built LinkedIn jobs-search URLs (build your search on linkedin.com/jobs and paste the address-bar URL here). The {{maxJobsPerTerm}} placeholder caps result count (the actor enforces a minimum of 10, so smaller values are bumped up to 10). Set scrapeCompany=true if you want company-side fields populated (costs more CUs).",
   defaultInputTemplate: JSON.stringify(
     {
       urls: [
@@ -62,6 +62,9 @@ export const linkedinJobsScraperTemplate: ProviderActorTemplate = {
   ),
   defaultMappings: {
     maxJobsPerTerm: true,
+  },
+  placeholderMinimums: {
+    maxJobsPerTerm: 10,
   },
   mapItem(item, context): CreateJobInput | null {
     if (!item || typeof item !== "object" || Array.isArray(item)) return null;

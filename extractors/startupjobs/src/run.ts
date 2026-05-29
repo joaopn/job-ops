@@ -135,15 +135,27 @@ export async function runStartupJobs(
     selectedCountry: options.selectedCountry,
     locations: options.locations,
   });
+  // The scraper substitutes a hardcoded default location (Preston, UK) when
+  // it receives no location, so skip the run for broad/worldwide configs
+  // rather than silently scraping the wrong place. A worldwide search is a
+  // valid config (other sources honour it) — this source just can't serve it,
+  // so it yields no jobs instead of erroring the pipeline.
+  const usableLocations = runLocations.filter(
+    (location): location is string =>
+      typeof location === "string" && location.trim().length > 0,
+  );
+  if (usableLocations.length === 0) {
+    return { success: true, jobs: [] };
+  }
   const maxJobsPerTerm = toPositiveIntOrFallback(options.maxJobsPerTerm, 50);
   const workplaceType = mapWorkplaceTypes(options.workplaceTypes);
-  const termTotal = searchTerms.length * runLocations.length;
+  const termTotal = searchTerms.length * usableLocations.length;
   const jobs: CreateJobInput[] = [];
   const seen = new Set<string>();
   let runIndex = 0;
 
   try {
-    for (const location of runLocations) {
+    for (const location of usableLocations) {
       for (const searchTerm of searchTerms) {
         runIndex += 1;
         if (options.shouldCancel?.()) {
@@ -155,14 +167,14 @@ export async function runStartupJobs(
           termIndex: runIndex,
           termTotal,
           searchTerm,
-          location: location ?? undefined,
+          location,
         });
 
         const records = await scrapeStartupJobsViaAlgolia({
           query: searchTerm,
           requestedCount: maxJobsPerTerm,
           enrichDetails: true,
-          location: location ?? undefined,
+          location,
           workplaceType,
         });
 
@@ -182,7 +194,7 @@ export async function runStartupJobs(
           termIndex: runIndex,
           termTotal,
           searchTerm,
-          location: location ?? undefined,
+          location,
           jobsFoundTerm,
         });
       }

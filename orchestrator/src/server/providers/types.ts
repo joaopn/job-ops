@@ -23,6 +23,12 @@ export interface ProviderActorTemplate {
   description: string;
   defaultInputTemplate: string;
   defaultMappings: Partial<Record<SourceConfigGlobalField, boolean>>;
+  /**
+   * Lower bounds for numeric placeholders this actor enforces server-side
+   * (e.g. curious_coder/linkedin-jobs-scraper rejects count < 10). Clamped
+   * during input substitution so a small maxJobsPerTerm never 400s the run.
+   */
+  placeholderMinimums?: Partial<Record<string, number>>;
   mapItem(
     item: unknown,
     context: { sourceId: string },

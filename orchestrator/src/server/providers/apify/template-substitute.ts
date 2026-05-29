@@ -11,6 +11,12 @@ interface SubstituteArgs {
   templateJson: string;
   runGlobals: SourceConfigRunGlobals;
   searchTerms: string[];
+  /**
+   * Per-placeholder lower bounds enforced by the target actor. Number
+   * placeholders below the floor are bumped up so the resolved input
+   * satisfies the actor's input schema.
+   */
+  placeholderMinimums?: Partial<Record<string, number>>;
 }
 
 /**
@@ -30,7 +36,7 @@ type Placeholder =
   | { kind: "number"; value: number };
 
 function buildPlaceholders(args: SubstituteArgs): Record<string, Placeholder> {
-  const { runGlobals, searchTerms } = args;
+  const { runGlobals, searchTerms, placeholderMinimums } = args;
   const out: Record<string, Placeholder> = {
     searchTerms: { kind: "array", value: searchTerms },
     city: { kind: "string", value: runGlobals.city ?? "" },
@@ -62,6 +68,16 @@ function buildPlaceholders(args: SubstituteArgs): Record<string, Placeholder> {
     // Sensible default so the placeholder always resolves (Test endpoint,
     // pipeline runs without an explicit per-run budget, etc.).
     out.maxJobsPerTerm = { kind: "number", value: 20 };
+  }
+
+  if (placeholderMinimums) {
+    for (const [name, minimum] of Object.entries(placeholderMinimums)) {
+      if (typeof minimum !== "number" || !Number.isFinite(minimum)) continue;
+      const placeholder = out[name];
+      if (placeholder?.kind === "number" && placeholder.value < minimum) {
+        out[name] = { kind: "number", value: minimum };
+      }
+    }
   }
 
   return out;

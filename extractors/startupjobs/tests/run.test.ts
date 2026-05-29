@@ -20,6 +20,7 @@ describe("runStartupJobs", () => {
 
     await runStartupJobs({
       searchTerms: ["backend engineer"],
+      locations: ["UK"],
       maxJobsPerTerm: Number.NaN,
     });
 
@@ -30,26 +31,24 @@ describe("runStartupJobs", () => {
     );
   });
 
-  it("drops broad location sentinels and falls back to selectedCountry behavior", async () => {
+  it("skips the scrape (no jobs, no error) when no concrete location resolves", async () => {
     const { scrapeStartupJobsViaAlgolia } = await import(
       "startup-jobs-scraper"
     );
     const scrapeMock = vi.mocked(scrapeStartupJobsViaAlgolia);
-    scrapeMock.mockResolvedValueOnce([]);
 
     const { runStartupJobs } = await import("../src/run");
 
-    await runStartupJobs({
+    const result = await runStartupJobs({
       searchTerms: ["platform engineer"],
       selectedCountry: "worldwide",
       locations: ["Worldwide"],
     });
 
-    expect(scrapeMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        location: undefined,
-      }),
-    );
+    expect(scrapeMock).not.toHaveBeenCalled();
+    expect(result.success).toBe(true);
+    expect(result.jobs).toEqual([]);
+    expect(result.error).toBeUndefined();
   });
 
   it("normalizes explicit city-country aliases before passing location to the scraper", async () => {
@@ -84,6 +83,7 @@ describe("runStartupJobs", () => {
 
     await runStartupJobs({
       searchTerms: ["software engineer"],
+      locations: ["UK"],
       workplaceTypes: ["remote", "hybrid"],
     });
 
@@ -105,6 +105,7 @@ describe("runStartupJobs", () => {
 
     await runStartupJobs({
       searchTerms: ["software engineer"],
+      locations: ["UK"],
       workplaceTypes: ["onsite"],
     });
 

@@ -39,12 +39,25 @@ async function runApifyInstance(
     };
   }
 
+  const template = instance.templateId
+    ? findApifyTemplate(instance.templateId)
+    : undefined;
+
+  if (instance.templateId && !template) {
+    return {
+      success: false,
+      jobs: [],
+      error: `Unknown Apify template id: ${instance.templateId}`,
+    };
+  }
+
   let resolvedInput: unknown;
   try {
     resolvedInput = substituteInputTemplate({
       templateJson: instance.inputTemplateJson,
       runGlobals,
       searchTerms,
+      placeholderMinimums: template?.placeholderMinimums,
     });
   } catch (error) {
     const message =
@@ -75,18 +88,6 @@ async function runApifyInstance(
   const sourceId = providerSourceId(instance.id);
   const mapped: CreateJobInput[] = [];
   let droppedCount = 0;
-
-  const template = instance.templateId
-    ? findApifyTemplate(instance.templateId)
-    : undefined;
-
-  if (instance.templateId && !template) {
-    return {
-      success: false,
-      jobs: [],
-      error: `Unknown Apify template id: ${instance.templateId}`,
-    };
-  }
 
   if (template) {
     for (const item of datasetItems) {
