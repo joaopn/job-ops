@@ -1,7 +1,10 @@
 import { logger } from "@infra/logger";
 import * as jobsRepo from "@server/repositories/jobs";
 import * as settingsRepo from "@server/repositories/settings";
-import { scoreJobSuitability } from "@server/services/scorer";
+import {
+  JobNotScoreableError,
+  scoreJobSuitability,
+} from "@server/services/scorer";
 import { asyncPool } from "@server/utils/async-pool";
 import {
   SUITABILITY_CATEGORIES,
@@ -79,7 +82,29 @@ export async function scoreJobsStep(args: {
         return;
       }
 
-      const { category, reason } = await scoreJobSuitability(job, args.brief);
+      let category: SuitabilityCategory;
+      let reason: string;
+      try {
+        ({ category, reason } = await scoreJobSuitability(job, args.brief));
+      } catch (error) {
+        if (error instanceof JobNotScoreableError) {
+          // Skip — leave the row unscored. The user will see "Unscored" in
+          // the UI; they can re-fetch the URL to enrich the description or
+          // manually trigger rescore once it's populated.
+          logger.info("Skipping unscoreable job (short/empty description)", {
+            jobId: job.id,
+            title: job.title,
+          });
+          completed += 1;
+          progressHelpers.scoringJob(
+            completed,
+            unprocessedJobs.length,
+            `${job.title} (unscoreable)`,
+          );
+          return;
+        }
+        throw error;
+      }
       if (args.shouldCancel?.()) return;
 
       const shouldAutoSkip =

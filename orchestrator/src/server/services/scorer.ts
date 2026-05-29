@@ -7,6 +7,7 @@
  * with no salary disclosure surfaces below other comparable matches.
  */
 
+import { AppError } from "@infra/errors";
 import { logger } from "@infra/logger";
 import {
   SUITABILITY_CATEGORIES,
@@ -19,6 +20,26 @@ import type { JsonSchemaDefinition } from "./llm/types";
 import { resolveLlmModel } from "./modelSelection";
 import { loadPrompt } from "./prompts";
 import { getEffectiveSettings } from "./settings";
+
+/**
+ * Minimum job-description length below which we refuse to score. Scoring on
+ * a title-only listing produces garbage assessments (LLM has nothing to
+ * judge against the brief), so we'd rather leave the row unscored and
+ * surface the problem.
+ */
+const MIN_SCOREABLE_DESCRIPTION_CHARS = 100;
+
+export class JobNotScoreableError extends AppError {
+  constructor(args: { jobId: string; observed: number; required: number }) {
+    super({
+      status: 422,
+      code: "UNPROCESSABLE_ENTITY",
+      message: `Cannot score job — description is ${args.observed} chars (need ≥ ${args.required}). Re-fetch the URL or paste the full description.`,
+      details: { jobId: args.jobId, observed: args.observed, required: args.required },
+    });
+    this.name = "JobNotScoreableError";
+  }
+}
 
 interface SuitabilityResult {
   category: SuitabilityCategory;
@@ -97,6 +118,15 @@ export async function scoreJobSuitability(
   job: Job,
   brief: string,
 ): Promise<SuitabilityResult> {
+  const descriptionLength = (job.jobDescription ?? "").trim().length;
+  if (descriptionLength < MIN_SCOREABLE_DESCRIPTION_CHARS) {
+    throw new JobNotScoreableError({
+      jobId: job.id,
+      observed: descriptionLength,
+      required: MIN_SCOREABLE_DESCRIPTION_CHARS,
+    });
+  }
+
   const [model, settings] = await Promise.all([
     resolveLlmModel("scoring"),
     getEffectiveSettings(),

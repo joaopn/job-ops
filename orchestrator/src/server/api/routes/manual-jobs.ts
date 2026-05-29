@@ -11,7 +11,10 @@ import {
   fetchAndExtractJobContent,
   inferManualJobDetails,
 } from "@server/services/manualJob";
-import { scoreJobSuitability } from "@server/services/scorer";
+import {
+  JobNotScoreableError,
+  scoreJobSuitability,
+} from "@server/services/scorer";
 import { asyncPool } from "@server/utils/async-pool";
 import type {
   BatchUrlImportItemResult,
@@ -160,6 +163,12 @@ manualJobsRouter.post("/import", async (req: Request, res: Response) => {
           suitabilityReason: reason,
         });
       } catch (error) {
+        if (error instanceof JobNotScoreableError) {
+          logger.info("Skipping unscoreable manual job", {
+            jobId: processedJob.id,
+          });
+          return;
+        }
         logger.warn("Manual job scoring failed", {
           jobId: processedJob.id,
           error,
@@ -201,11 +210,20 @@ async function scoreJobAsync(jobId: string): Promise<void> {
   const job = await jobsRepo.getJobById(jobId);
   if (!job) return;
   const brief = await getActivePersonalBrief();
-  const { category, reason } = await scoreJobSuitability(job, brief);
-  await jobsRepo.updateJob(jobId, {
-    suitabilityCategory: category,
-    suitabilityReason: reason,
-  });
+  try {
+    const { category, reason } = await scoreJobSuitability(job, brief);
+    await jobsRepo.updateJob(jobId, {
+      suitabilityCategory: category,
+      suitabilityReason: reason,
+    });
+  } catch (error) {
+    if (error instanceof JobNotScoreableError) {
+      // Leave row unscored; user can rescore manually after enriching.
+      logger.info("Skipping unscoreable manual job", { jobId });
+      return;
+    }
+    throw error;
+  }
 }
 
 async function importSingleUrl(
