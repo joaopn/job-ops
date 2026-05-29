@@ -278,7 +278,11 @@ export class LlmService {
           attemptNumber: attempt + 1,
           success: true,
         });
-        return { success: true, data: parsed };
+        return {
+          success: true,
+          data: parsed,
+          usage: { promptTokens: null, completionTokens: null },
+        };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
 
@@ -330,8 +334,15 @@ export class LlmService {
     const jobId = args.jobId;
     const model = normalizeModelForProvider(this.provider, rawModel);
 
+    const promptChars = messages.reduce(
+      (sum, m) =>
+        sum + (typeof m.content === "string" ? m.content.length : 0),
+      0,
+    );
+
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       const attemptStartedAt = Date.now();
+      let bodyBytes: number | null = null;
       try {
         if (attempt > 0) {
           logger.info("LLM retry attempt", {
@@ -351,10 +362,27 @@ export class LlmService {
           jsonSchema,
         });
 
+        const serializedBody = JSON.stringify(body);
+        bodyBytes = Buffer.byteLength(serializedBody, "utf8");
+
+        // Loud warning when the body is large enough that undici can choke
+        // (synchronous TLS write path). Not a block — just visibility.
+        const HEFTY_BODY_BYTES = 4 * 1024 * 1024; // 4 MiB
+        if (bodyBytes >= HEFTY_BODY_BYTES) {
+          logger.warn("LLM request body is large; fetch may fail", {
+            provider: this.provider,
+            model,
+            mode,
+            jobId: jobId ?? null,
+            promptChars,
+            bodyBytes,
+          });
+        }
+
         const response = await fetch(url, {
           method: "POST",
           headers,
-          body: JSON.stringify(body),
+          body: serializedBody,
           signal,
         });
 
@@ -388,8 +416,17 @@ export class LlmService {
           success: true,
           promptTokens: usage.promptTokens,
           completionTokens: usage.completionTokens,
+          promptChars,
+          bodyBytes,
         });
-        return { success: true, data: parsed };
+        return {
+          success: true,
+          data: parsed,
+          usage: {
+            promptTokens: usage.promptTokens ?? null,
+            completionTokens: usage.completionTokens ?? null,
+          },
+        };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         const status = (error as LlmApiError).status;
@@ -428,6 +465,8 @@ export class LlmService {
           success: false,
           errorStatus: status ?? null,
           errorMessage: message,
+          promptChars,
+          bodyBytes,
         });
         return { success: false, error: message };
       }
@@ -455,6 +494,8 @@ export class LlmService {
     completionTokens?: number | null;
     errorStatus?: number | string | null;
     errorMessage?: string;
+    promptChars?: number | null;
+    bodyBytes?: number | null;
   }): void {
     const durationMs = Date.now() - args.startedAt;
     const completionTokens = args.completionTokens ?? null;
@@ -476,6 +517,12 @@ export class LlmService {
     }
     if (tokensPerSec !== null) {
       meta.tokensPerSec = tokensPerSec;
+    }
+    if (args.promptChars !== null && args.promptChars !== undefined) {
+      meta.promptChars = args.promptChars;
+    }
+    if (args.bodyBytes !== null && args.bodyBytes !== undefined) {
+      meta.bodyBytes = args.bodyBytes;
     }
     if (!args.success) {
       if (args.errorStatus !== null && args.errorStatus !== undefined) {

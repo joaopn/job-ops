@@ -1,0 +1,56 @@
+name: job-fetch-selectors
+description: |
+  Given the cleaned HTML of a job posting page, identify CSS selectors that
+  point to the DOM nodes containing each job field. The orchestrator then
+  extracts the text of those nodes VERBATIM (no LLM in the content path) —
+  this prompt only flags WHERE the content lives, never what it says.
+variables:
+  - name: html
+    description: Cleaned HTML of the job posting page.
+model:
+  preferStructuredOutput: true
+system: ""
+user: |
+  You are looking at the HTML of a public job posting. Identify CSS selectors
+  that uniquely target the DOM node containing each field below. We will
+  programmatically read the text of those nodes — your job is to point us at
+  the right elements, not to summarize their contents.
+
+  RULES:
+  - Return CSS selectors only. Do NOT return text values.
+  - For descriptionSelector, pick the SMALLEST element that contains the
+    FULL job posting body — every section the candidate sees (intro /
+    responsibilities / requirements / nice-to-haves / benefits / DEI /
+    application instructions). Common patterns: a <section>, <article>, or
+    <div> wrapper. Avoid selecting the entire <body> or <main>.
+  - For the scalar fields (title, employer, location, etc.), pick the
+    SMALLEST element that contains exactly that value, no surrounding
+    chrome.
+  - Selectors should prefer class names or ids. Avoid `nth-child` and other
+    positional selectors when stable class names exist.
+  - Empty string is better than a guess. Leave a field blank if you cannot
+    identify a clean selector.
+  - Do not invent class names that don't appear in the HTML.
+
+  Fields:
+  - titleSelector: the job title text
+  - employerSelector: the company / employer name
+  - locationSelector: the job location text (city / country / "Remote")
+  - descriptionSelector: the wrapper containing the full job posting body
+  - jobTypeSelector: employment type (full-time, contract, etc.) if shown
+  - jobLevelSelector: seniority level if shown
+  - applicationLinkSelector: anchor element whose `href` is the apply URL
+
+  HTML:
+  {{html}}
+
+  OUTPUT FORMAT (JSON ONLY):
+  {
+    "titleSelector": "",
+    "employerSelector": "",
+    "locationSelector": "",
+    "descriptionSelector": "",
+    "jobTypeSelector": "",
+    "jobLevelSelector": "",
+    "applicationLinkSelector": ""
+  }

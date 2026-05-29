@@ -40,9 +40,15 @@ export interface LlmRequestOptions<_T> {
   subject?: string;
 }
 
+export interface LlmTokenUsage {
+  promptTokens: number | null;
+  completionTokens: number | null;
+}
+
 export interface LlmResult<T> {
   success: true;
   data: T;
+  usage?: LlmTokenUsage;
 }
 
 export interface LlmError {

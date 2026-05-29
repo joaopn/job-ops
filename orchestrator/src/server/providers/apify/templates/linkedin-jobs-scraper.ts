@@ -25,6 +25,23 @@ function joinSalary(value: unknown): string | undefined {
   return parts.join(" – ");
 }
 
+function stripHtml(html: string): string {
+  return html
+    .replace(/<br\s*\/?\s*>/gi, "\n")
+    .replace(/<\/p\s*>/gi, "\n\n")
+    .replace(/<\/li\s*>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export const linkedinJobsScraperTemplate: ProviderActorTemplate = {
   id: "linkedin-jobs-scraper",
   providerId: "apify",
@@ -84,7 +101,19 @@ export const linkedinJobsScraperTemplate: ProviderActorTemplate = {
       "description",
       "job_description",
     ]);
-    if (description) result.jobDescription = description;
+    if (description) {
+      result.jobDescription = description;
+    } else {
+      // Fall back to HTML if the actor only returned the rich variant.
+      const htmlDescription = pickString(obj, [
+        "descriptionHtml",
+        "description_html",
+      ]);
+      if (htmlDescription) {
+        const stripped = stripHtml(htmlDescription);
+        if (stripped.length > 0) result.jobDescription = stripped;
+      }
+    }
 
     const datePosted = pickString(obj, [
       "postedAt",

@@ -18,6 +18,13 @@ import { Textarea } from "@/components/ui/textarea";
 
 type RowStatus = "pending" | "in_flight" | "saved" | "duplicate" | "failed";
 
+interface UrlRowUsage {
+  promptTokens: number | null;
+  completionTokens: number | null;
+  totalTokens: number | null;
+  totalMillions: number | null;
+}
+
 interface UrlRow {
   url: string;
   status: RowStatus;
@@ -26,6 +33,24 @@ interface UrlRow {
   employer?: string;
   errorCode?: string;
   errorMessage?: string;
+  usage?: UrlRowUsage | null;
+}
+
+function formatTokens(usage: UrlRowUsage | null | undefined): string | null {
+  if (!usage) return null;
+  if (usage.totalTokens === null) return null;
+  const total = usage.totalTokens.toLocaleString();
+  const millions =
+    usage.totalMillions !== null ? usage.totalMillions.toFixed(6) : "—";
+  const parts: string[] = [];
+  if (usage.promptTokens !== null) {
+    parts.push(`in ${usage.promptTokens.toLocaleString()}`);
+  }
+  if (usage.completionTokens !== null) {
+    parts.push(`out ${usage.completionTokens.toLocaleString()}`);
+  }
+  const breakdown = parts.length > 0 ? ` (${parts.join(" · ")})` : "";
+  return `${total} tokens${breakdown} · ${millions} M`;
 }
 
 interface BatchUrlImportSheetProps {
@@ -156,6 +181,7 @@ export const BatchUrlImportSheet: React.FC<BatchUrlImportSheetProps> = ({
                 employer: result.employer,
                 errorCode: undefined,
                 errorMessage: undefined,
+                usage: result.usage ?? null,
               };
             }
             return {
@@ -163,6 +189,7 @@ export const BatchUrlImportSheet: React.FC<BatchUrlImportSheetProps> = ({
               status: "failed",
               errorCode: result.code,
               errorMessage: result.message,
+              usage: result.usage ?? null,
             };
           }),
         );
@@ -250,6 +277,11 @@ export const BatchUrlImportSheet: React.FC<BatchUrlImportSheetProps> = ({
   const showResults = phase !== "idle" && rows.length > 0;
   const allDone = phase === "done";
   const failedCount = rows.filter((row) => row.status === "failed").length;
+  const totalTokens = rows.reduce(
+    (acc, row) => acc + (row.usage?.totalTokens ?? 0),
+    0,
+  );
+  const totalMillions = totalTokens / 1_000_000;
 
   const headerTitle =
     phase === "idle"
@@ -333,6 +365,11 @@ export const BatchUrlImportSheet: React.FC<BatchUrlImportSheetProps> = ({
                 <Badge variant={failed > 0 ? "destructive" : "outline"}>
                   {failed} failed
                 </Badge>
+                {totalTokens > 0 && (
+                  <Badge variant="outline" className="font-mono">
+                    {totalTokens.toLocaleString()} tokens · {totalMillions.toFixed(6)} M
+                  </Badge>
+                )}
                 {isInFlight && (
                   <span className="flex items-center gap-1 text-muted-foreground">
                     <Loader2 className="h-3 w-3 animate-spin" />
@@ -422,6 +459,11 @@ const UrlRowView: React.FC<{ row: UrlRow }> = ({ row }) => {
         {row.status === "failed" && row.errorMessage && (
           <div className="text-destructive">
             {row.errorCode}: {row.errorMessage}
+          </div>
+        )}
+        {formatTokens(row.usage) && (
+          <div className="font-mono text-[10px] text-muted-foreground">
+            {formatTokens(row.usage)}
           </div>
         )}
       </div>

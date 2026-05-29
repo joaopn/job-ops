@@ -72,7 +72,11 @@ describe("LlmService provider normalization", () => {
       retryDelayMs: 1,
     });
 
-    expect(result).toEqual({ success: true, data: { value: "ok" } });
+    expect(result).toEqual({
+      success: true,
+      data: { value: "ok" },
+      usage: { promptTokens: null, completionTokens: null },
+    });
     expect(codexCallSpy).toHaveBeenCalledTimes(2);
   });
 

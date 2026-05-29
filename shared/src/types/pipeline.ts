@@ -288,6 +288,13 @@ export type LlmCallStreamEvent =
   | { type: "snapshot"; calls: LlmCallRecord[]; requestId: string }
   | { type: "update"; call: LlmCallRecord; requestId: string };
 
+export interface BatchUrlImportTokenUsage {
+  promptTokens: number | null;
+  completionTokens: number | null;
+  totalTokens: number | null;
+  totalMillions: number | null;
+}
+
 export type BatchUrlImportItemResult =
   | {
       ok: true;
@@ -296,6 +303,7 @@ export type BatchUrlImportItemResult =
       jobId: string;
       title: string;
       employer: string;
+      usage?: BatchUrlImportTokenUsage | null;
     }
   | {
       ok: false;
@@ -303,6 +311,7 @@ export type BatchUrlImportItemResult =
       url: string;
       code: string;
       message: string;
+      usage?: BatchUrlImportTokenUsage | null;
     };
 
 export type BatchUrlImportStreamEvent =

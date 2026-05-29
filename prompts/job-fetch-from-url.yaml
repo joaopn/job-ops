@@ -17,6 +17,23 @@ user: |
   Do not guess or invent data. Ignore navigation, headers, footers, and other
   non-job content.
 
+  CRITICAL RULES FOR `jobDescription`:
+  - Copy the job posting text VERBATIM. Do NOT summarize, paraphrase, compress,
+    rewrite, or otherwise edit it.
+  - Include EVERY section of the posting: intro/about-the-company, role
+    overview, responsibilities, requirements ("essentially..." / "must-have"),
+    nice-to-haves ("it will also help..." / "bonus"), benefits, diversity
+    statements, AI-usage disclosures, application instructions, and any other
+    prose the page contains.
+  - Preserve bullet points as a list (one per line). Preserve paragraph
+    breaks. Preserve section headings ("Requirements", "Benefits", etc.).
+  - Strip ONLY: HTML tags, repeated whitespace, navigation chrome, page
+    headers/footers, cookie banners, login prompts, "Apply now" buttons.
+  - Do not omit content because it seems redundant (some pages repeat
+    "Requirements" twice — keep both occurrences).
+  - The output should be a faithful plain-text rendering of the full posting,
+    not a summary. Length should be comparable to the source text.
+
   Keys:
   - title (job title)
   - employer (company name)
@@ -31,7 +48,7 @@ user: |
   - disciplines (required fields/disciplines)
   - degreeRequired (required education)
   - starting (start date)
-  - jobDescription (clean plain text of the job description including responsibilities and requirements - extract this from the HTML/content)
+  - jobDescription (VERBATIM full text of the posting per the rules above)
 
   JOB POSTING CONTENT:
   {{jobDescription}}

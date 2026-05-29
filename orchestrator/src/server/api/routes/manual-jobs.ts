@@ -82,6 +82,7 @@ manualJobsRouter.post("/infer", async (req: Request, res: Response) => {
     ok(res, {
       job: result.job,
       warning: result.warning ?? null,
+      usage: result.usage ?? null,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -211,7 +212,7 @@ async function importSingleUrl(
   url: string,
   options: { signal?: AbortSignal; scoringEnabled: boolean },
 ): Promise<BatchUrlImportItemResult> {
-  let fetched: { content: string; url: string };
+  let fetched: Awaited<ReturnType<typeof fetchAndExtractJobContent>>;
   try {
     fetched = await fetchAndExtractJobContent(url, { signal: options.signal });
   } catch (error) {
@@ -225,24 +226,37 @@ async function importSingleUrl(
     };
   }
 
+  // Tier 1 (per-host) or Tier 2 (LLM-selector): programmatic extraction
+  // succeeded; skip the full tier-3 LLM call. jobDescription is a verbatim
+  // DOM read. Tier 2 still consumes tokens for the selector inference;
+  // those are surfaced via programmaticUsage so the UI shows them.
   let inference: Awaited<ReturnType<typeof inferManualJobDetails>>;
-  try {
-    inference = await inferManualJobDetails(fetched.content);
-  } catch (error) {
-    const err = toAppError(error);
-    return {
-      ok: false,
-      status: "failed",
-      url,
-      code: err.code,
-      message: err.message,
+  if (fetched.programmatic) {
+    inference = {
+      job: fetched.programmatic,
+      warning: null,
+      usage: fetched.programmaticUsage ?? null,
     };
+  } else {
+    try {
+      inference = await inferManualJobDetails(fetched.content);
+    } catch (error) {
+      const err = toAppError(error);
+      return {
+        ok: false,
+        status: "failed",
+        url,
+        code: err.code,
+        message: err.message,
+      };
+    }
   }
 
   const draft = inference.job;
   const title = cleanOptional(draft.title);
   const employer = cleanOptional(draft.employer);
   const jobDescription = cleanOptional(draft.jobDescription);
+  const usage = inference.usage ?? null;
 
   if (!title || !employer || !jobDescription) {
     return {
@@ -253,6 +267,7 @@ async function importSingleUrl(
       message:
         inference.warning ||
         "Could not extract title, employer, or description from the page.",
+      usage,
     };
   }
 
@@ -269,6 +284,7 @@ async function importSingleUrl(
         jobId: existing.id,
         title: existing.title,
         employer: existing.employer,
+        usage,
       };
     }
 
@@ -306,6 +322,7 @@ async function importSingleUrl(
       jobId: created.id,
       title: created.title,
       employer: created.employer,
+      usage,
     };
   } catch (error) {
     const err = toAppError(error);
@@ -315,6 +332,7 @@ async function importSingleUrl(
       url,
       code: err.code,
       message: err.message,
+      usage,
     };
   }
 }

@@ -355,9 +355,17 @@ export interface ManualJobDraft {
   starting?: string;
 }
 
+export interface ManualJobInferenceUsage {
+  promptTokens: number | null;
+  completionTokens: number | null;
+  totalTokens: number | null;
+  totalMillions: number | null;
+}
+
 export interface ManualJobInferenceResponse {
   job: ManualJobDraft;
   warning?: string | null;
+  usage?: ManualJobInferenceUsage | null;
 }
 
 export interface ManualJobFetchResponse {
