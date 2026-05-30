@@ -2,6 +2,7 @@ import { logger } from "@infra/logger";
 import * as jobsRepo from "@server/repositories/jobs";
 import type { CreateJobInput } from "@shared/types";
 import { progressHelpers } from "../progress";
+import { captureRunJobs, toCapturedRunJob } from "../run-job-capture";
 
 export async function importJobsStep(args: {
   discoveredJobs: CreateJobInput[];
@@ -29,7 +30,12 @@ export async function importJobsStep(args: {
   let rejected = 0;
 
   for (const [source, jobsForSource] of groups) {
-    const result = await jobsRepo.createJobs(jobsForSource);
+    const result = await jobsRepo.createJobs(
+      jobsForSource,
+      (bucket, input, reason) => {
+        captureRunJobs(source, bucket, [toCapturedRunJob(input, reason)]);
+      },
+    );
     created += result.created;
     skipped += result.skipped;
     reposted += result.reposted;

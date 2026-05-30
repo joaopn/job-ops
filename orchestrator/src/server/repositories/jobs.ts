@@ -449,8 +449,23 @@ async function tryInsertJob(input: CreateJobInput): Promise<Job | null> {
  * (`selected`, `skipped`, `closed`, etc.) keep their position — those reflect
  * active work or a final decision and shouldn't be undone by a repost.
  */
+/**
+ * Optional per-input categorization callback for the array form of
+ * `createJobs`. Invoked once per unique input as it lands in a bucket, so
+ * callers (the import step) can capture the actual jobs for the run popup
+ * without changing the count-based return shape.
+ */
+export type CreateJobsCategorizeFn = (
+  bucket: "imported" | "duplicated" | "rejected",
+  input: CreateJobInput,
+  reason?: string,
+) => void;
+
 export async function createJobs(input: CreateJobInput): Promise<Job>;
-export async function createJobs(inputs: CreateJobInput[]): Promise<{
+export async function createJobs(
+  inputs: CreateJobInput[],
+  onCategorize?: CreateJobsCategorizeFn,
+): Promise<{
   created: number;
   skipped: number;
   reposted: number;
@@ -458,6 +473,7 @@ export async function createJobs(inputs: CreateJobInput[]): Promise<{
 }>;
 export async function createJobs(
   inputOrInputs: CreateJobInput | CreateJobInput[],
+  onCategorize?: CreateJobsCategorizeFn,
 ): Promise<
   Job | { created: number; skipped: number; reposted: number; rejected: number }
 > {
@@ -483,6 +499,7 @@ export async function createJobs(
       });
     } catch (error) {
       rejected += 1;
+      onCategorize?.("rejected", input, "bad data");
       logger.error("Rejecting job ingestion: bad date_posted", {
         source: input.source,
         jobUrl: input.jobUrl,
@@ -560,8 +577,10 @@ export async function createJobs(
           .where(eq(jobs.id, existing.id));
         reposted += 1;
         skipped += count - 1;
+        onCategorize?.("imported", input);
       } else {
         skipped += count;
+        onCategorize?.("duplicated", input);
       }
       continue;
     }
@@ -569,11 +588,13 @@ export async function createJobs(
     const inserted = await tryInsertJob(input);
     if (!inserted) {
       skipped += count;
+      onCategorize?.("duplicated", input);
       continue;
     }
 
     created += 1;
     skipped += count - 1;
+    onCategorize?.("imported", input);
   }
 
   return { created, skipped, reposted, rejected };

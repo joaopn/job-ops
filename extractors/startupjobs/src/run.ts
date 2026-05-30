@@ -214,12 +214,23 @@ export async function runStartupJobs(
     const missingBrowser =
       /playwright|browser|executable/i.test(message) &&
       /install/i.test(message);
+    // The scraper bootstraps by loading a fixed startup.jobs URL (hardcoded in
+    // the package to a Preston, UK search) to scrape Algolia's config before
+    // running the real query. When that load fails on connectivity, the raw
+    // error leaks that misleading URL — collapse it to a clean network message
+    // so it doesn't read as a bogus location setting.
+    const isNetworkError =
+      /network is unreachable|tcp connect error|error sending request|ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENETUNREACH|EAI_AGAIN|client error \(Connect\)|dns error/i.test(
+        message,
+      );
     return {
       success: false,
       jobs: [],
       error: missingBrowser
         ? `${message}. Install browser binaries with 'npx playwright install'.`
-        : message,
+        : isNetworkError
+          ? "startup.jobs is unreachable (network error contacting the site). This is a connectivity issue from the container, not a location setting."
+          : message,
     };
   }
 }

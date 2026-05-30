@@ -132,6 +132,45 @@ export interface PipelineSourceStats {
   error?: string;
 }
 
+/**
+ * The four per-source funnel buckets surfaced in the run banner. Each maps to
+ * a clickable count whose jobs are captured in-memory during the run (they
+ * aren't all persisted — duplicates collide with existing rows, rejected jobs
+ * are dropped — so they can't be reconstructed from the DB after the fact).
+ */
+export type RunJobBucket = "scraped" | "imported" | "duplicated" | "rejected";
+
+export const RUN_JOB_BUCKETS: readonly RunJobBucket[] = [
+  "scraped",
+  "imported",
+  "duplicated",
+  "rejected",
+];
+
+/** A lightweight job record captured during a run for the per-bucket popup. */
+export interface CapturedRunJob {
+  title: string;
+  employer: string;
+  jobUrl: string;
+  applicationLink?: string;
+  employerUrl?: string;
+  location?: string;
+  datePosted?: string;
+  deadline?: string;
+  salary?: string;
+  jobType?: string;
+  jobLevel?: string;
+  jobFunction?: string;
+  isRemote?: boolean;
+  reason?: string; // why a "rejected" job dropped (e.g. location / blocked / bad data)
+}
+
+export interface RunJobsResponse {
+  source: string;
+  bucket: RunJobBucket;
+  jobs: CapturedRunJob[];
+}
+
 export type PipelineProgressStep =
   | "idle"
   | "crawling"

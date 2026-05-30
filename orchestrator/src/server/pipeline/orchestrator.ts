@@ -20,6 +20,7 @@ import { llmAdjustContent } from "../services/cv";
 import { getActiveCvDocument } from "../services/cv-active";
 import { generatePdf } from "../services/pdf";
 import { progressHelpers, resetProgress } from "./progress";
+import { resetRunJobCapture } from "./run-job-capture";
 import {
   buildPipelineRunSavedDetails,
   createPipelineRunResultSummary,
@@ -131,6 +132,7 @@ export async function runPipeline(
   activePipelineRunId = "pending";
   cancelRequestedAt = null;
   resetProgress();
+  resetRunJobCapture();
   const locationIntent = await resolveLocationIntent(config);
   const enableAutoTailoring = await resolveAutoTailoring(
     config.enableAutoTailoring,

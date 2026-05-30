@@ -21,6 +21,7 @@ import {
   subscribeToProgress,
 } from "@server/pipeline/index";
 import * as pipelineRepo from "@server/repositories/pipeline";
+import { getRunJobs } from "@server/pipeline/run-job-capture";
 import { getEnabledProviderInstances } from "@server/repositories/provider-instances";
 import { PIPELINE_EXTRACTOR_SOURCE_IDS } from "@shared/extractors";
 import {
@@ -32,8 +33,10 @@ import {
   LOCATION_SEARCH_SCOPE_VALUES,
 } from "@shared/location-preferences.js";
 import {
+  RUN_JOB_BUCKETS,
   SUITABILITY_CATEGORIES,
   type PipelineStatusResponse,
+  type RunJobsResponse,
 } from "@shared/types";
 import { type Request, type Response, Router } from "express";
 import { z } from "zod";
@@ -102,6 +105,44 @@ pipelineRouter.get("/runs", async (_req: Request, res: Response) => {
     const runs = await pipelineRepo.getRecentPipelineRuns(20);
     ok(res, runs);
   } catch (error) {
+    fail(
+      res,
+      new AppError({
+        status: 500,
+        code: "INTERNAL_ERROR",
+        message: error instanceof Error ? error.message : "Unknown error",
+      }),
+    );
+  }
+});
+
+const runJobsQuerySchema = z.object({
+  source: z.string().min(1),
+  bucket: z.enum(
+    RUN_JOB_BUCKETS as [
+      (typeof RUN_JOB_BUCKETS)[number],
+      ...(typeof RUN_JOB_BUCKETS)[number][],
+    ],
+  ),
+});
+
+/**
+ * GET /api/pipeline/run-jobs - jobs behind a per-source funnel count for the
+ * current run (captured in-memory; resets when the next run starts).
+ */
+pipelineRouter.get("/run-jobs", (req: Request, res: Response) => {
+  try {
+    const { source, bucket } = runJobsQuerySchema.parse(req.query);
+    const response: RunJobsResponse = {
+      source,
+      bucket,
+      jobs: getRunJobs(source, bucket),
+    };
+    ok(res, response);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return fail(res, badRequest(error.message, error.flatten()));
+    }
     fail(
       res,
       new AppError({

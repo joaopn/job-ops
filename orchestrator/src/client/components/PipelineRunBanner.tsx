@@ -1,13 +1,18 @@
+import * as api from "@client/api";
 import type {
+  CapturedRunJob,
   JobSource,
   PipelineProgressEvent,
   PipelineSourceStats,
+  RunJobBucket,
 } from "@shared/types";
+import { useQuery } from "@tanstack/react-query";
 import {
   CheckCircle2,
   Clock,
   Loader2,
   AlertTriangle,
+  ExternalLink,
   RotateCcw,
   X,
   XCircle,
@@ -18,6 +23,13 @@ import { subscribeToEventSource } from "@/client/lib/sse";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -29,6 +41,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+
+const BUCKET_LABELS: Record<RunJobBucket, string> = {
+  scraped: "Scraped",
+  imported: "Imported",
+  duplicated: "Duplicated",
+  rejected: "Rejected",
+};
 
 interface PipelineRunBannerProps {
   isRunning: boolean;
@@ -170,6 +189,11 @@ export const PipelineRunBanner: React.FC<PipelineRunBannerProps> = ({
   const [progress, setProgress] = useState<PipelineProgressEvent | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  const [jobsView, setJobsView] = useState<{
+    source: string;
+    bucket: RunJobBucket;
+    label: string;
+  } | null>(null);
   const lastStartedAtRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
@@ -310,6 +334,13 @@ export const PipelineRunBanner: React.FC<PipelineRunBannerProps> = ({
                             row={row}
                             onRerun={!isActive ? onRerunSource : undefined}
                             showRerunColumn={!!onRerunSource}
+                            onShowJobs={(bucket) =>
+                              setJobsView({
+                                source: row.id,
+                                bucket,
+                                label: row.label,
+                              })
+                            }
                           />
                         ))}
                       </TableBody>
@@ -327,7 +358,30 @@ export const PipelineRunBanner: React.FC<PipelineRunBannerProps> = ({
           )}
         </Card>
       </div>
+
+      {jobsView && (
+        <RunJobsDialog view={jobsView} onClose={() => setJobsView(null)} />
+      )}
     </div>
+  );
+};
+
+const CountValue: React.FC<{
+  value: number;
+  pending: boolean;
+  onClick: () => void;
+}> = ({ value, pending, onClick }) => {
+  if (pending) return <>—</>;
+  if (value <= 0) return <>{value}</>;
+  return (
+    <button
+      type="button"
+      className="tabular-nums underline decoration-dotted underline-offset-2 hover:decoration-solid"
+      onClick={onClick}
+      title="Show these jobs"
+    >
+      {value}
+    </button>
   );
 };
 
@@ -335,10 +389,12 @@ const SourceRow: React.FC<{
   row: PipelineSourceStats;
   onRerun?: (source: JobSource) => void;
   showRerunColumn: boolean;
-}> = ({ row, onRerun, showRerunColumn }) => {
+  onShowJobs: (bucket: RunJobBucket) => void;
+}> = ({ row, onRerun, showRerunColumn, onShowJobs }) => {
   // "Rejected" bundles everything found but not kept: pre-import filter drops
   // (location / blocked company) plus import-time rejects (bad data).
   const rejectedTotal = row.jobsFiltered + row.jobsRejected;
+  const pending = row.status === "pending";
   return (
     <>
       <TableRow>
@@ -347,7 +403,11 @@ const SourceRow: React.FC<{
           <StatusCell status={row.status} />
         </TableCell>
         <TableCell className="text-right tabular-nums">
-          {row.status === "pending" ? "—" : row.jobsScraped}
+          <CountValue
+            value={row.jobsScraped}
+            pending={pending}
+            onClick={() => onShowJobs("scraped")}
+          />
         </TableCell>
         <TableCell
           className="text-right tabular-nums"
@@ -357,12 +417,18 @@ const SourceRow: React.FC<{
               : undefined
           }
         >
-          {row.status === "pending"
-            ? "—"
-            : row.jobsImported + row.jobsReposted}
+          <CountValue
+            value={row.jobsImported + row.jobsReposted}
+            pending={pending}
+            onClick={() => onShowJobs("imported")}
+          />
         </TableCell>
         <TableCell className="text-right tabular-nums text-muted-foreground">
-          {row.status === "pending" ? "—" : row.jobsDuplicated}
+          <CountValue
+            value={row.jobsDuplicated}
+            pending={pending}
+            onClick={() => onShowJobs("duplicated")}
+          />
         </TableCell>
         <TableCell
           className={cn(
@@ -375,7 +441,11 @@ const SourceRow: React.FC<{
               : undefined
           }
         >
-          {row.status === "pending" ? "—" : rejectedTotal}
+          <CountValue
+            value={rejectedTotal}
+            pending={pending}
+            onClick={() => onShowJobs("rejected")}
+          />
         </TableCell>
         <TableCell className="text-right text-xs text-muted-foreground tabular-nums">
           {formatDuration(row.durationMs)}
@@ -409,5 +479,97 @@ const SourceRow: React.FC<{
         </TableRow>
       )}
     </>
+  );
+};
+
+function formatDatePosted(value?: string): string {
+  if (!value) return "—";
+  const ms = /^\d+$/.test(value) ? Number(value) : Date.parse(value);
+  if (!Number.isFinite(ms)) return value;
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+const RunJobsDialog: React.FC<{
+  view: { source: string; bucket: RunJobBucket; label: string };
+  onClose: () => void;
+}> = ({ view, onClose }) => {
+  const query = useQuery({
+    queryKey: ["pipeline-run-jobs", view.source, view.bucket],
+    queryFn: () => api.getRunJobs(view.source, view.bucket),
+  });
+
+  const jobs: CapturedRunJob[] = query.data?.jobs ?? [];
+  const showReason = view.bucket === "rejected";
+
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent className="max-w-5xl">
+        <DialogHeader>
+          <DialogTitle>
+            {`${BUCKET_LABELS[view.bucket]} — ${view.label}`}
+          </DialogTitle>
+          <DialogDescription>
+            {query.isLoading
+              ? "Loading…"
+              : `${jobs.length} job(s) from this run.`}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="max-h-[65vh] overflow-auto">
+          {query.isError ? (
+            <p className="text-sm text-destructive">Failed to load jobs.</p>
+          ) : jobs.length === 0 && !query.isLoading ? (
+            <p className="text-sm text-muted-foreground">
+              No jobs captured for this bucket in the current run.
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Employer</TableHead>
+                  <TableHead>Location</TableHead>
+                  <TableHead className="whitespace-nowrap">Posted</TableHead>
+                  <TableHead>Salary</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Level</TableHead>
+                  {showReason && <TableHead>Reason</TableHead>}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {jobs.map((job, index) => (
+                  <TableRow key={`${job.jobUrl}-${index}`}>
+                    <TableCell className="max-w-[18rem]">
+                      <a
+                        href={job.jobUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 font-medium hover:underline"
+                      >
+                        <span className="truncate">{job.title}</span>
+                        <ExternalLink className="h-3 w-3 shrink-0" />
+                      </a>
+                    </TableCell>
+                    <TableCell>{job.employer}</TableCell>
+                    <TableCell>{job.location ?? "—"}</TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      {formatDatePosted(job.datePosted)}
+                    </TableCell>
+                    <TableCell>{job.salary ?? "—"}</TableCell>
+                    <TableCell>{job.jobType ?? "—"}</TableCell>
+                    <TableCell>{job.jobLevel ?? "—"}</TableCell>
+                    {showReason && <TableCell>{job.reason ?? "—"}</TableCell>}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 };

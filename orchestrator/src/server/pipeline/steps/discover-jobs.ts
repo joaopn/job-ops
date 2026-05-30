@@ -19,12 +19,14 @@ import {
 import { formatCountryLabel } from "@shared/location-support.js";
 import { normalizeStringArray } from "@shared/normalize-string-array.js";
 import type {
+  CapturedRunJob,
   CreateJobInput,
   PipelineConfig,
   SourceConfigRow,
   SourceConfigRunGlobals,
 } from "@shared/types";
 import { type CrawlSource, progressHelpers, updateProgress } from "../progress";
+import { captureRunJobs, toCapturedRunJob } from "../run-job-capture";
 
 const DISCOVERY_CONCURRENCY = 3;
 
@@ -465,6 +467,11 @@ export async function discoverJobsStep(args: {
         progressHelpers.recordSourceJobsCounts(platform, {
           scraped: platformJobs.length,
         });
+        captureRunJobs(
+          platform,
+          "scraped",
+          platformJobs.map((job) => toCapturedRunJob(job)),
+        );
         progressHelpers.markSourceCompleted(platform);
       }
     },
@@ -541,20 +548,23 @@ export async function discoverJobsStep(args: {
 
   // Attribute every found-but-dropped job (location mismatch + blocked
   // company) back to its source so the banner's Rejected column reconciles
-  // with Scraped. Import-time rejects (bad date) are recorded separately.
-  const keptBySource = new Map<string, number>();
-  for (const job of filteredDiscoveredJobs) {
-    keptBySource.set(job.source, (keptBySource.get(job.source) ?? 0) + 1);
-  }
-  const foundBySource = new Map<string, number>();
+  // with Scraped, and capture the actual jobs (with reason) for the popup.
+  // Import-time rejects (bad date) are recorded separately in import-jobs.
+  const locationKept = new Set(locationFilteredJobs);
+  const blockedKept = new Set(filteredDiscoveredJobs);
+  const droppedBySource = new Map<string, CapturedRunJob[]>();
   for (const job of discoveredJobs) {
-    foundBySource.set(job.source, (foundBySource.get(job.source) ?? 0) + 1);
+    if (blockedKept.has(job)) continue;
+    const reason = locationKept.has(job)
+      ? "blocked company"
+      : "location mismatch";
+    const list = droppedBySource.get(job.source) ?? [];
+    list.push(toCapturedRunJob(job, reason));
+    droppedBySource.set(job.source, list);
   }
-  for (const [source, found] of foundBySource) {
-    const filtered = found - (keptBySource.get(source) ?? 0);
-    if (filtered > 0) {
-      progressHelpers.recordSourceJobsFiltered(source, filtered);
-    }
+  for (const [source, jobs] of droppedBySource) {
+    captureRunJobs(source, "rejected", jobs);
+    progressHelpers.recordSourceJobsFiltered(source, jobs.length);
   }
 
   if (droppedCount > 0) {

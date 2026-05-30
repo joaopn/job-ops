@@ -37,6 +37,8 @@ import type {
   PipelineRun,
   PipelineRunInsights,
   PipelineStatusResponse,
+  RunJobBucket,
+  RunJobsResponse,
   SearchTermsSuggestionResponse,
   SuitabilityCategory,
   UpdateJobNoteInput,
@@ -1148,6 +1150,14 @@ export async function runPipeline(config?: {
     method: "POST",
     body: JSON.stringify(config || {}),
   });
+}
+
+export async function getRunJobs(
+  source: string,
+  bucket: RunJobBucket,
+): Promise<RunJobsResponse> {
+  const params = new URLSearchParams({ source, bucket });
+  return fetchApi<RunJobsResponse>(`/pipeline/run-jobs?${params.toString()}`);
 }
 
 export async function cancelPipeline(): Promise<{
