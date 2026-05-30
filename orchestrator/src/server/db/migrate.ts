@@ -253,42 +253,22 @@ const migrations: string[] = [
   `ALTER TABLE job_chat_messages ADD COLUMN edit_status TEXT`,
   `ALTER TABLE cv_documents ADD COLUMN personal_brief TEXT NOT NULL DEFAULT ''`,
 
-  // Phase 5d destructive rebuild: drop the LLM-generated `template` /
-  // `content` columns on cv_documents (replaced by per-field `fields`) and
-  // drop `tailored_content` on jobs (replaced by `tailored_fields`). Legacy
-  // CVs need to be re-extracted; legacy tailorings are invalidated. The
-  // fork is private and not yet load-bearing.
+  // Phase 5d dropped the legacy LLM-generated `template` / `content` columns
+  // on cv_documents (replaced by per-field `fields`). That rebuild used to
+  // live here in the SQL array and ran UNCONDITIONALLY every boot — but the
+  // rebuilt table only listed the pre-5e columns, so it silently dropped the
+  // 5e columns (`templated_tex`, `default_field_values`, `last_compile_stderr`,
+  // `compile_attempts`, `extraction_prompt`), and the additive ALTERs further
+  // down then re-added them with empty defaults. Net effect: every reboot
+  // wiped `templated_tex`, flipping every CV back to "Older CV format" and
+  // demanding a re-extract. The rebuild now lives in a guarded JS block near
+  // the bottom of this file that only fires when the legacy columns actually
+  // still exist, and carries the full current shape forward.
   //
-  // The defensive ALTER below is required so the rebuild is idempotent.
-  // migrate.ts runs every boot; without it, the SELECT below has to
-  // hardcode `'[]' AS fields` (because legacy rows lack the column) which
-  // wipes every CV's fields on the SECOND boot after upload. The ALTER
-  // skips silently on the duplicate-column branch when fields already
-  // exists, so it's a no-op on every boot after the first.
+  // This defensive ALTER stays: legacy DBs predating `fields` need the column
+  // before the guarded rebuild's SELECT can reference it. Idempotent via the
+  // duplicate-column skip.
   `ALTER TABLE cv_documents ADD COLUMN fields TEXT NOT NULL DEFAULT '[]'`,
-  `PRAGMA foreign_keys = OFF`,
-  `DROP TABLE IF EXISTS cv_documents_new`,
-  `CREATE TABLE cv_documents_new (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    original_archive BLOB NOT NULL,
-    flattened_tex TEXT NOT NULL,
-    fields TEXT NOT NULL DEFAULT '[]',
-    personal_brief TEXT NOT NULL DEFAULT '',
-    created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL
-  )`,
-  `INSERT INTO cv_documents_new (
-    id, name, original_archive, flattened_tex, fields, personal_brief,
-    created_at, updated_at
-  )
-  SELECT
-    id, name, original_archive, flattened_tex, fields, personal_brief,
-    created_at, updated_at
-  FROM cv_documents`,
-  `DROP TABLE cv_documents`,
-  `ALTER TABLE cv_documents_new RENAME TO cv_documents`,
-  `PRAGMA foreign_keys = ON`,
 
   // 5g repost-tracking columns. Additive, idempotent via duplicate-column
   // skip below. Has to run BEFORE the rebuild block — the rebuild's
@@ -787,6 +767,60 @@ try {
   }
 } catch (error) {
   console.error("❌ source_configs backfill failed:", error);
+  process.exit(1);
+}
+
+// Phase 5d legacy-column drop on cv_documents — guarded.
+//
+// Only rebuilds when the legacy `template` / `content` columns are still
+// present (a pre-5d DB). Once they're gone the block no-ops forever, so it
+// can never clobber columns added by later ALTERs. The rebuild carries the
+// FULL current shape forward (including the 5e columns), which is why it has
+// to run here, AFTER the SQL `migrations[]` array has ensured those columns
+// exist — selecting them in the array would fail on legacy DBs.
+try {
+  const cvCols = sqlite
+    .prepare("PRAGMA table_info(cv_documents)")
+    .all() as Array<{ name: string }>;
+  const cvColNames = new Set(cvCols.map((c) => c.name));
+  const hasLegacyCvColumns =
+    cvColNames.has("template") || cvColNames.has("content");
+
+  if (hasLegacyCvColumns) {
+    sqlite.exec("PRAGMA foreign_keys = OFF");
+    sqlite.exec("DROP TABLE IF EXISTS cv_documents_new");
+    sqlite.exec(`CREATE TABLE cv_documents_new (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      original_archive BLOB NOT NULL,
+      flattened_tex TEXT NOT NULL,
+      fields TEXT NOT NULL DEFAULT '[]',
+      personal_brief TEXT NOT NULL DEFAULT '',
+      templated_tex TEXT NOT NULL DEFAULT '',
+      default_field_values TEXT NOT NULL DEFAULT '{}',
+      last_compile_stderr TEXT,
+      compile_attempts INTEGER NOT NULL DEFAULT 0,
+      extraction_prompt TEXT NOT NULL DEFAULT '',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )`);
+    sqlite.exec(`INSERT INTO cv_documents_new (
+      id, name, original_archive, flattened_tex, fields, personal_brief,
+      templated_tex, default_field_values, last_compile_stderr,
+      compile_attempts, extraction_prompt, created_at, updated_at
+    )
+    SELECT
+      id, name, original_archive, flattened_tex, fields, personal_brief,
+      templated_tex, default_field_values, last_compile_stderr,
+      compile_attempts, extraction_prompt, created_at, updated_at
+    FROM cv_documents`);
+    sqlite.exec("DROP TABLE cv_documents");
+    sqlite.exec("ALTER TABLE cv_documents_new RENAME TO cv_documents");
+    sqlite.exec("PRAGMA foreign_keys = ON");
+    console.log("✅ cv_documents legacy template/content columns dropped");
+  }
+} catch (error) {
+  console.error("❌ cv_documents legacy-column rebuild failed:", error);
   process.exit(1);
 }
 
