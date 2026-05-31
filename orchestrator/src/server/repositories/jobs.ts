@@ -740,7 +740,21 @@ export async function deleteJobsByStatus(status: JobStatus): Promise<number> {
 }
 
 /**
- * Move every row in {discovered, selected, backlog} whose effective age
+ * Statuses each sweep scope is allowed to pull aged rows from.
+ *  - `shelf`  — the passive holding tiers (Inbox / Selected / Backlog).
+ *  - `active` — in-flight rows (Ready / Live), swept on explicit request only.
+ * Both target the same `stale` status; the scope just bounds the source set so
+ * the default sweep never touches a user's tailored/applied rows by surprise.
+ */
+const STALE_SWEEP_SCOPE_STATUSES = {
+  shelf: ["discovered", "selected", "backlog"],
+  active: ["ready", "applied", "in_progress"],
+} satisfies Record<string, JobStatus[]>;
+
+export type StaleSweepScope = keyof typeof STALE_SWEEP_SCOPE_STATUSES;
+
+/**
+ * Move every row in the scope's source statuses whose effective age
  * (`date_posted` when present, else `discovered_at`) is older than
  * `thresholdDays` into the `stale` status. Returns the total moved plus a
  * per-source-status breakdown.
@@ -752,11 +766,14 @@ export async function deleteJobsByStatus(status: JobStatus): Promise<number> {
  * detects all-digit strings and routes them through `unixepoch` before
  * comparison. Unparseable values fall back to `discovered_at` via COALESCE.
  */
-export async function sweepStaleJobs(thresholdDays: number): Promise<{
+export async function sweepStaleJobs(
+  thresholdDays: number,
+  scope: StaleSweepScope = "shelf",
+): Promise<{
   moved: number;
-  breakdown: { discovered: number; selected: number; backlog: number };
+  breakdown: Partial<Record<JobStatus, number>>;
 }> {
-  const eligibleStatuses: JobStatus[] = ["discovered", "selected", "backlog"];
+  const eligibleStatuses: JobStatus[] = [...STALE_SWEEP_SCOPE_STATUSES[scope]];
   const offsetParam = `-${thresholdDays} days`;
   const cutoffClause = sql`datetime('now', ${offsetParam})`;
   // Effective age: parse date_posted (ISO or Unix-ms numeric string) and
@@ -781,13 +798,11 @@ export async function sweepStaleJobs(thresholdDays: number): Promise<{
     .select({ status: jobs.status })
     .from(jobs)
     .where(ageWhere);
-  const breakdown = { discovered: 0, selected: 0, backlog: 0 };
+  const breakdown: Partial<Record<JobStatus, number>> = {};
   for (const row of rows) {
-    if (row.status === "discovered") breakdown.discovered += 1;
-    else if (row.status === "selected") breakdown.selected += 1;
-    else if (row.status === "backlog") breakdown.backlog += 1;
+    breakdown[row.status] = (breakdown[row.status] ?? 0) + 1;
   }
-  const moved = breakdown.discovered + breakdown.selected + breakdown.backlog;
+  const moved = rows.length;
   if (moved === 0) return { moved, breakdown };
 
   await db

@@ -327,6 +327,45 @@ describe.sequential("POST /api/jobs/actions — 5g action variants", () => {
     expect(byId["sweep-ready-old"]).toBe("ready");
   });
 
+  it("sweep-stale scope=active sweeps aged ready/applied/in_progress, leaves shelf rows", async () => {
+    const { db, schema } = await import("@server/db/index");
+    const { sql } = await import("drizzle-orm");
+    await seedJob({ id: "sweep-active-ready", status: "ready" });
+    await seedJob({ id: "sweep-active-applied", status: "applied" });
+    await seedJob({ id: "sweep-active-inprogress", status: "in_progress" });
+    // Shelf row must NOT be swept under the active scope.
+    await seedJob({ id: "sweep-active-discovered", status: "discovered" });
+
+    await db
+      .update(schema.jobs)
+      .set({ discoveredAt: sql`datetime('now', '-30 days')` })
+      .where(
+        sql`${schema.jobs.id} IN ('sweep-active-ready', 'sweep-active-applied', 'sweep-active-inprogress', 'sweep-active-discovered')`,
+      );
+
+    const res = await fetch(`${baseUrl}/api/jobs/sweep-stale`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ thresholdDays: 14, scope: "active" }),
+    });
+    expect(res.status).toBe(200);
+    const payload = (await res.json()) as {
+      ok: boolean;
+      data: { moved: number };
+    };
+    expect(payload.ok).toBe(true);
+    expect(payload.data.moved).toBe(3);
+
+    const rows = await db
+      .select({ id: schema.jobs.id, status: schema.jobs.status })
+      .from(schema.jobs);
+    const byId = Object.fromEntries(rows.map((r) => [r.id, r.status]));
+    expect(byId["sweep-active-ready"]).toBe("stale");
+    expect(byId["sweep-active-applied"]).toBe("stale");
+    expect(byId["sweep-active-inprogress"]).toBe("stale");
+    expect(byId["sweep-active-discovered"]).toBe("discovered");
+  });
+
   it("sweep-stale prefers date_posted over discovered_at and handles Unix-ms strings", async () => {
     const { db, schema } = await import("@server/db/index");
     const { sql } = await import("drizzle-orm");

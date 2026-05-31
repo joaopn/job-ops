@@ -29,6 +29,7 @@ import type {
   JobSource,
   JobsListResponse,
   JobsRevisionResponse,
+  JobStatus,
   LocationMatchStrictness,
   LocationSearchScope,
   ManualJobDraft,
@@ -1079,16 +1080,17 @@ function getSingleJobFromActionResult(
 
 export async function sweepStaleJobs(
   thresholdDays: number,
+  scope: "shelf" | "active" = "shelf",
 ): Promise<{
   moved: number;
-  breakdown: { discovered: number; selected: number; backlog: number };
+  breakdown: Partial<Record<JobStatus, number>>;
 }> {
   return fetchApi<{
     moved: number;
-    breakdown: { discovered: number; selected: number; backlog: number };
+    breakdown: Partial<Record<JobStatus, number>>;
   }>("/jobs/sweep-stale", {
     method: "POST",
-    body: JSON.stringify({ thresholdDays }),
+    body: JSON.stringify({ thresholdDays, scope }),
   });
 }
 
