@@ -69,6 +69,21 @@ async function runApifyInstance(
     return { success: false, jobs: [], error: message };
   }
 
+  // URL-driven actors (LinkedIn) compute their search URLs from the live run
+  // context (search terms + location) so the configured location is honored
+  // and stale, location-pinned URLs stored on the instance are overridden.
+  if (template?.buildInput) {
+    try {
+      resolvedInput = template.buildInput(context, resolvedInput);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to build actor input";
+      return { success: false, jobs: [], error: message };
+    }
+  }
+
   let datasetItems: unknown[];
   try {
     datasetItems = await runApifyActor({

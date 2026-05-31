@@ -1,5 +1,43 @@
+import { parseSearchCitiesSetting } from "@shared/search-cities.js";
 import type { CreateJobInput, JobSource } from "@shared/types";
-import type { ProviderActorTemplate } from "../../types";
+import type { ProviderActorTemplate, ProviderRunContext } from "../../types";
+
+/**
+ * Build the LinkedIn jobs-search URLs the curious_coder actor scrapes, from
+ * the live run context. Search terms are OR-joined into a single quoted
+ * keyword query (mirroring the jobspy query composition); one URL is emitted
+ * per configured location (each city, else the country) so LinkedIn's
+ * single-place `location` param is respected. Values are URL-encoded.
+ */
+function buildLinkedInSearchUrls(context: ProviderRunContext): string[] {
+  const terms = context.searchTerms
+    .map((term) => term.trim())
+    .filter((term) => term.length > 0);
+  const keywords = terms.map((term) => `"${term}"`).join(" OR ");
+
+  const cities = parseSearchCitiesSetting(context.runGlobals.city);
+  const country = (context.runGlobals.country ?? "").trim();
+  const locations = cities.length > 0 ? cities : country ? [country] : [];
+  const locationList = locations.length > 0 ? locations : [""];
+
+  const urls: string[] = [];
+  const seen = new Set<string>();
+  for (const location of locationList) {
+    const params: string[] = [];
+    if (keywords) params.push(`keywords=${encodeURIComponent(keywords)}`);
+    if (location) params.push(`location=${encodeURIComponent(location)}`);
+    params.push("pageNum=0");
+    const url = `https://www.linkedin.com/jobs/search/?${params.join("&")}`;
+    if (!seen.has(url)) {
+      seen.add(url);
+      urls.push(url);
+    }
+  }
+
+  return urls.length > 0
+    ? urls
+    : ["https://www.linkedin.com/jobs/search/?pageNum=0"];
+}
 
 function pickString(
   obj: Record<string, unknown>,
@@ -48,12 +86,9 @@ export const linkedinJobsScraperTemplate: ProviderActorTemplate = {
   actorRef: "curious_coder/linkedin-jobs-scraper",
   displayName: "LinkedIn Jobs Scraper (curious_coder)",
   description:
-    "curious_coder/linkedin-jobs-scraper expects pre-built LinkedIn jobs-search URLs (build your search on linkedin.com/jobs and paste the address-bar URL here). The {{maxJobsPerTerm}} placeholder caps result count (the actor enforces a minimum of 10, so smaller values are bumped up to 10). Set scrapeCompany=true if you want company-side fields populated (costs more CUs).",
+    "curious_coder/linkedin-jobs-scraper. Search URLs are built automatically from your configured search terms + location (one URL per city, else the country) — you no longer paste LinkedIn URLs here, and any `urls` you set are ignored/overridden. The {{maxJobsPerTerm}} placeholder caps result count (the actor enforces a minimum of 10, so smaller values are bumped up to 10). Set scrapeCompany=true if you want company-side fields populated (costs more CUs).",
   defaultInputTemplate: JSON.stringify(
     {
-      urls: [
-        "https://www.linkedin.com/jobs/search/?keywords=engineer&location=United%20Kingdom&pageNum=0",
-      ],
       scrapeCompany: false,
       count: "{{maxJobsPerTerm}}",
     },
@@ -65,6 +100,20 @@ export const linkedinJobsScraperTemplate: ProviderActorTemplate = {
   },
   placeholderMinimums: {
     maxJobsPerTerm: 10,
+  },
+  buildInput(context, base) {
+    // Honor the configured location/terms by computing the search URLs here;
+    // preserve per-instance knobs (scrapeCompany, count) from the substituted
+    // stored input and override only `urls`. Self-heals instances created
+    // from the old location-pinned default template.
+    const baseObj =
+      base && typeof base === "object" && !Array.isArray(base)
+        ? (base as Record<string, unknown>)
+        : {};
+    return {
+      ...baseObj,
+      urls: buildLinkedInSearchUrls(context),
+    };
   },
   mapItem(item, context): CreateJobInput | null {
     if (!item || typeof item !== "object" || Array.isArray(item)) return null;

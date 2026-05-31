@@ -29,6 +29,16 @@ export interface ProviderActorTemplate {
    * during input substitution so a small maxJobsPerTerm never 400s the run.
    */
   placeholderMinimums?: Partial<Record<string, number>>;
+  /**
+   * Optional computed-input hook. When present, the provider calls it after
+   * substituting the stored input template and uses its return value as the
+   * actor input. URL-driven actors (e.g. LinkedIn) use this to build their
+   * search URLs from the live run context — search terms + configured
+   * location — instead of a hand-pasted, location-pinned URL. `base` is the
+   * already-substituted stored input, so the hook can preserve per-instance
+   * knobs (scrapeCompany, count, …) and override only the fields it computes.
+   */
+  buildInput?(context: ProviderRunContext, base: unknown): unknown;
   mapItem(
     item: unknown,
     context: { sourceId: string },

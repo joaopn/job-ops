@@ -156,23 +156,37 @@ export function matchJobLocationIntent(
     matchesRequestedCountry(candidate, selectedCountry),
   );
 
-  if (countryMatched) {
-    if (intent.cityLocations.length === 0) {
-      return { matched: true, reasonCode: "selected_location", priority: 1 };
-    }
-
-    const cityMatched = intent.cityLocations.some((requestedCity) => {
-      const strict = shouldApplyStrictCityFilter(
-        requestedCity,
-        selectedCountry,
-      );
-      if (!strict) return true;
+  // A directly-named city is sufficient on its own. Job postings frequently
+  // list one or more cities ("Vienna or Graz or Munich or …") without
+  // repeating the country, so gating the city check behind a country-token
+  // match wrongly rejects them. Treat the location as a contains/"in" test: if
+  // any requested city appears among the job's location candidates, keep it
+  // regardless of whether the country name is also present.
+  const cityMatched =
+    intent.cityLocations.length > 0 &&
+    intent.cityLocations.some((requestedCity) => {
+      // A "city" entry equal to the country name isn't a real city filter — it
+      // only stands in for the country, so it counts only when the country
+      // itself matched.
+      if (!shouldApplyStrictCityFilter(requestedCity, selectedCountry)) {
+        return countryMatched;
+      }
       return candidates.some((candidate) =>
         matchesRequestedCity(candidate, requestedCity),
       );
     });
 
-    if (cityMatched || intent.matchStrictness === "flexible") {
+  if (cityMatched) {
+    return { matched: true, reasonCode: "selected_location", priority: 1 };
+  }
+
+  if (countryMatched) {
+    // Country matched but either no cities were requested, or none matched and
+    // the user opted into flexible matching.
+    if (
+      intent.cityLocations.length === 0 ||
+      intent.matchStrictness === "flexible"
+    ) {
       return { matched: true, reasonCode: "selected_location", priority: 1 };
     }
   }
