@@ -3,7 +3,6 @@ import type { Job } from "@shared/types.js";
 import {
   AlertTriangle,
   Archive,
-  ChevronUp,
   Edit2,
   Loader2,
   RefreshCcw,
@@ -15,12 +14,6 @@ import type React from "react";
 import { useMemo, useState } from "react";
 import { JobDescriptionMarkdown } from "@/client/components/JobDescriptionMarkdown";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
 import { FitAssessment } from "..";
 import { FitIndicator } from "../ScoreIndicator";
@@ -61,9 +54,6 @@ export const DecideMode: React.FC<DecideModeProps> = ({
   const [showDescription, setShowDescription] = useState(false);
   const jobLink = job.applicationLink || job.jobUrl;
   const { renderMarkdownInJobDescriptions } = useSettings();
-  const handleEditDetailsSelect = () => {
-    window.setTimeout(() => onEditDetails(), 0);
-  };
 
   const description = useMemo(
     () => getRenderableJobDescription(job.jobDescription),
@@ -206,33 +196,28 @@ export const DecideMode: React.FC<DecideModeProps> = ({
 
       <Separator className="opacity-40" />
 
-      <div className="pt-4 pb-2 space-y-4">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full h-8 gap-2 text-xs text-muted-foreground hover:text-foreground justify-center"
-            >
-              More actions
-              <ChevronUp className="h-3 w-3 ml-1" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="center" className="w-56">
-            <DropdownMenuItem onSelect={handleEditDetailsSelect}>
-              <Edit2 className="mr-2 h-4 w-4" />
-              Edit details
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={onRescore} disabled={isRescoring}>
-              <RefreshCcw
-                className={
-                  isRescoring ? "mr-2 h-4 w-4 animate-spin" : "mr-2 h-4 w-4"
-                }
-              />
-              {isRescoring ? "Recalculating..." : "Recalculate match"}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+      <div className="flex flex-col gap-2 pt-4 pb-2 sm:flex-row">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onEditDetails}
+          className="flex-1 h-8 gap-2 text-xs text-muted-foreground hover:text-foreground justify-center"
+        >
+          <Edit2 className="h-3.5 w-3.5" />
+          Edit details
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onRescore}
+          disabled={isRescoring}
+          className="flex-1 h-8 gap-2 text-xs text-muted-foreground hover:text-foreground justify-center"
+        >
+          <RefreshCcw
+            className={isRescoring ? "h-3.5 w-3.5 animate-spin" : "h-3.5 w-3.5"}
+          />
+          {isRescoring ? "Recalculating..." : "Recalculate match"}
+        </Button>
       </div>
     </div>
   );
