@@ -413,7 +413,9 @@ export async function discoverJobsStep(args: {
   const totalSources = sourceTasks.length;
   let completedSources = 0;
 
-  progressHelpers.startCrawling(totalSources);
+  progressHelpers.startCrawling(totalSources, {
+    preserveSourceStats: args.mergedConfig.partial === true,
+  });
 
   if (args.shouldCancel?.()) {
     return { discoveredJobs, sourceErrors };

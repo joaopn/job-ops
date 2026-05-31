@@ -44,6 +44,15 @@ export function resetRunJobCapture(): void {
   captureBySource.clear();
 }
 
+/**
+ * Clear one source's captured buckets. Used by a per-source re-run so that
+ * re-running a source drops its stale captures (instead of stacking onto
+ * them) while leaving every other source's captures intact.
+ */
+export function resetRunJobCaptureForSource(source: string): void {
+  captureBySource.delete(source);
+}
+
 /** Append captured jobs to a source's bucket (called as the run progresses). */
 export function captureRunJobs(
   source: string,

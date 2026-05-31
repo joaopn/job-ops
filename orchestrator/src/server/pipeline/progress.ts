@@ -10,6 +10,7 @@ import type {
   PipelineSourceStats,
   PipelineSourceStatus,
 } from "@shared/types";
+import { resetRunJobCaptureForSource } from "./run-job-capture";
 
 /**
  * Pipeline progress tracking with Server-Sent Events.
@@ -260,10 +261,19 @@ export function subscribeToProgress(listener: ProgressListener): () => void {
 /**
  * Reset progress to idle state.
  */
-export function resetProgress(): void {
+export function resetProgress(options?: {
+  preserveSourceStats?: boolean;
+}): void {
+  // `crawlingStatsBySource` is ephemeral live-crawl telemetry (feeds the
+  // aggregate "list pages / job pages" message), not the persisted funnel
+  // rows, so it's always cleared — the re-run source re-seeds its own entry
+  // in startSource. A per-source re-run preserves the funnel rows themselves
+  // so the banner reconciles in place; the re-run sources self-reset on start.
   crawlingStatsBySource.clear();
-  sourceStatsByPlatform.clear();
-  sourceRowFallbackCounter = 0;
+  if (!options?.preserveSourceStats) {
+    sourceStatsByPlatform.clear();
+    sourceRowFallbackCounter = 0;
+  }
   currentProgress = {
     step: "idle",
     message: "Ready",
@@ -275,7 +285,7 @@ export function resetProgress(): void {
     jobsScored: 0,
     jobsProcessed: 0,
     totalToProcess: 0,
-    sourceStats: [],
+    sourceStats: options?.preserveSourceStats ? buildSourceStats() : [],
   };
 }
 
@@ -283,11 +293,19 @@ export function resetProgress(): void {
  * Helper to create progress updates for each step.
  */
 export const progressHelpers = {
-  startCrawling: (sourcesTotal = 0) =>
+  startCrawling: (
+    sourcesTotal = 0,
+    options?: { preserveSourceStats?: boolean },
+  ) =>
     (() => {
+      // On a per-source re-run, keep the existing funnel rows so other sources
+      // stay on the banner; the re-run sources reset in startSource. Live
+      // crawl telemetry is always cleared (see resetProgress).
       crawlingStatsBySource.clear();
-      sourceStatsByPlatform.clear();
-      sourceRowFallbackCounter = 0;
+      if (!options?.preserveSourceStats) {
+        sourceStatsByPlatform.clear();
+        sourceRowFallbackCounter = 0;
+      }
       updateProgress({
         step: "crawling",
         message: "Fetching jobs from sources...",
@@ -337,10 +355,22 @@ export const progressHelpers = {
       // suffix logic falls back to the resolved extractor label.
       const baseLabel = options?.label ?? resolveSourceLabel(platform);
       const row = getOrCreateSourceRow(platform, `${baseLabel}${suffix}`);
-      if (row.status === "pending" || row.status === "running") {
-        row.status = "running";
-        row.startedAt = row.startedAt ?? startedAt;
-      }
+      // (Re-)initialize the row when its source starts. On a full run the row
+      // was just created at zero, so this is a no-op; on a per-source re-run
+      // the row carries last run's terminal status + counts, so we reset it
+      // (and drop its stale captures) to refresh in place.
+      row.status = "running";
+      row.startedAt = startedAt;
+      row.completedAt = undefined;
+      row.durationMs = undefined;
+      row.error = undefined;
+      row.jobsScraped = 0;
+      row.jobsImported = 0;
+      row.jobsReposted = 0;
+      row.jobsDuplicated = 0;
+      row.jobsFiltered = 0;
+      row.jobsRejected = 0;
+      resetRunJobCaptureForSource(platform);
     }
 
     updateProgress({

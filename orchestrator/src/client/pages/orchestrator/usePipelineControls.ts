@@ -88,6 +88,7 @@ export function usePipelineControls(
       workplaceTypes: Array<"remote" | "hybrid" | "onsite">;
       searchScope: AutomaticRunValues["searchScope"];
       matchStrictness: AutomaticRunValues["matchStrictness"];
+      partial?: boolean;
     }) => {
       try {
         setIsPipelineRunning(true);
@@ -104,6 +105,7 @@ export function usePipelineControls(
           workplaceTypes: config.workplaceTypes,
           searchScope: config.searchScope,
           matchStrictness: config.matchStrictness,
+          partial: config.partial,
         });
         const scopeCount =
           config.sources.length + (config.providerInstanceIds?.length ?? 0);
@@ -249,6 +251,9 @@ export function usePipelineControls(
         workplaceTypes,
         searchScope,
         matchStrictness,
+        // Reconcile this one source into the existing banner instead of
+        // wiping the other sources' results.
+        partial: true,
       });
     },
     [refreshSettings, startPipelineRun],

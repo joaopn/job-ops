@@ -15,6 +15,10 @@ export interface PipelineConfig {
   // instance ids. Mirrors the undefined-vs-empty semantics of `sources`.
   providerInstanceIds?: string[];
   maxJobsPerTerm?: number; // Per-run cap that overrides each source's stored max_jobs_per_term
+  // Per-source re-run: reconcile this run's sources into the existing banner
+  // funnel instead of wiping every source's results. Untouched sources keep
+  // their rows + captured jobs; only the re-run sources refresh.
+  partial?: boolean;
   outputDir: string; // Directory for generated PDFs
   locationIntent?: LocationIntent;
   enableCrawling?: boolean;

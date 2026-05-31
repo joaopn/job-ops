@@ -131,8 +131,14 @@ export async function runPipeline(
   isPipelineRunning = true;
   activePipelineRunId = "pending";
   cancelRequestedAt = null;
-  resetProgress();
-  resetRunJobCapture();
+  // A per-source re-run reconciles into the existing banner funnel: preserve
+  // every other source's progress rows and captured jobs; only the re-run
+  // sources reset (handled per-source as each one starts crawling).
+  const partial = config.partial === true;
+  resetProgress(partial ? { preserveSourceStats: true } : undefined);
+  if (!partial) {
+    resetRunJobCapture();
+  }
   const locationIntent = await resolveLocationIntent(config);
   const enableAutoTailoring = await resolveAutoTailoring(
     config.enableAutoTailoring,

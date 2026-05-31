@@ -212,6 +212,9 @@ const runPipelineSchema = z.object({
   searchScope: z.enum(LOCATION_SEARCH_SCOPE_VALUES).optional(),
   matchStrictness: z.enum(LOCATION_MATCH_STRICTNESS_VALUES).optional(),
   enableAutoTailoring: z.boolean().optional(),
+  // Per-source re-run: reconcile the scoped sources into the existing banner
+  // funnel instead of resetting every source's results.
+  partial: z.boolean().optional(),
 });
 
 pipelineRouter.post("/run", async (req: Request, res: Response) => {
@@ -305,6 +308,7 @@ pipelineRouter.post("/run", async (req: Request, res: Response) => {
         maxJobsPerTerm: config.maxJobsPerTerm,
         locationIntent,
         enableAutoTailoring: config.enableAutoTailoring,
+        partial: config.partial,
       }).catch((error) => {
         logger.error("Background pipeline run failed", error);
       });
