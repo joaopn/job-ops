@@ -58,6 +58,7 @@ async function runApifyInstance(
       runGlobals,
       searchTerms,
       placeholderMinimums: template?.placeholderMinimums,
+      maxJobs: instance.maxJobs,
     });
   } catch (error) {
     const message =

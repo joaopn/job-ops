@@ -65,6 +65,7 @@ export function ProviderInstanceCard({
   const [outputMappingJson, setOutputMappingJson] = useState(
     instance.outputMappingJson,
   );
+  const [maxJobs, setMaxJobs] = useState<number | undefined>(instance.maxJobs);
   const [testResult, setTestResult] = useState<ProviderInstanceTestResponse | null>(
     null,
   );
@@ -76,6 +77,7 @@ export function ProviderInstanceCard({
     setActorRef(instance.actorRef);
     setInputTemplateJson(instance.inputTemplateJson);
     setOutputMappingJson(instance.outputMappingJson);
+    setMaxJobs(instance.maxJobs);
   }, [instance]);
 
   const saveMutation = useMutation({
@@ -86,6 +88,7 @@ export function ProviderInstanceCard({
         enabled,
         inputTemplateJson,
         outputMappingJson,
+        maxJobs: maxJobs ?? null,
       }),
     onSuccess: () => {
       toast.success(`Saved ${label}`);
@@ -147,7 +150,8 @@ export function ProviderInstanceCard({
     label !== instance.label ||
     actorRef !== instance.actorRef ||
     inputTemplateJson !== instance.inputTemplateJson ||
-    outputMappingJson !== instance.outputMappingJson;
+    outputMappingJson !== instance.outputMappingJson ||
+    (maxJobs ?? null) !== (instance.maxJobs ?? null);
 
   const isTemplate = instance.templateId !== null;
 
@@ -251,6 +255,33 @@ export function ProviderInstanceCard({
               disabled={isTemplate}
               placeholder="username/actor-name"
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor={`max-jobs-${instance.id}`}>
+              Max jobs per search (optional)
+            </Label>
+            <Input
+              id={`max-jobs-${instance.id}`}
+              type="number"
+              min={1}
+              value={maxJobs ?? ""}
+              onChange={(event) => {
+                const raw = event.target.value.trim();
+                const parsed = Number.parseInt(raw, 10);
+                setMaxJobs(
+                  raw === "" || !Number.isFinite(parsed) ? undefined : parsed,
+                );
+              }}
+              placeholder="Run-budget default"
+              className="max-w-[12rem]"
+            />
+            <p className="text-xs text-muted-foreground">
+              Caps jobs scraped per search (per city, else country) for this
+              actor, overriding the run-budget calculation. Blank = derive from
+              the run budget. Floored at 10 (the actor's minimum). Available to
+              the input template as <code>{"{{maxJobs}}"}</code>.
+            </p>
           </div>
 
           <div className="space-y-2">

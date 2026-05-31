@@ -2,6 +2,16 @@ import { parseSearchCitiesSetting } from "@shared/search-cities.js";
 import type { CreateJobInput, JobSource } from "@shared/types";
 import type { ProviderActorTemplate, ProviderRunContext } from "../../types";
 
+// The curious_coder actor rejects count < 10 and silently caps a missing
+// count at 10 — so an under-sized count is the source of "only 10 jobs back".
+const ACTOR_MIN_COUNT = 10;
+
+function getSearchTerms(context: ProviderRunContext): string[] {
+  return context.searchTerms
+    .map((term) => term.trim())
+    .filter((term) => term.length > 0);
+}
+
 /**
  * Build the LinkedIn jobs-search URLs the curious_coder actor scrapes, from
  * the live run context. Search terms are OR-joined into a single quoted
@@ -9,14 +19,14 @@ import type { ProviderActorTemplate, ProviderRunContext } from "../../types";
  * per configured location (each city, else the country) so LinkedIn's
  * single-place `location` param is respected. Values are URL-encoded.
  */
-function buildLinkedInSearchUrls(context: ProviderRunContext): string[] {
-  const terms = context.searchTerms
-    .map((term) => term.trim())
-    .filter((term) => term.length > 0);
+function buildLinkedInSearchUrls(
+  terms: string[],
+  runGlobals: ProviderRunContext["runGlobals"],
+): string[] {
   const keywords = terms.map((term) => `"${term}"`).join(" OR ");
 
-  const cities = parseSearchCitiesSetting(context.runGlobals.city);
-  const country = (context.runGlobals.country ?? "").trim();
+  const cities = parseSearchCitiesSetting(runGlobals.city);
+  const country = (runGlobals.country ?? "").trim();
   const locations = cities.length > 0 ? cities : country ? [country] : [];
   const locationList = locations.length > 0 ? locations : [""];
 
@@ -37,6 +47,29 @@ function buildLinkedInSearchUrls(context: ProviderRunContext): string[] {
   return urls.length > 0
     ? urls
     : ["https://www.linkedin.com/jobs/search/?pageNum=0"];
+}
+
+/**
+ * Resolve the per-URL `count` (jobs to scrape per location).
+ *  - When the instance sets an explicit `maxJobs`, that IS the per-search cap
+ *    (the exposed override) — used verbatim, not multiplied by term count.
+ *  - Otherwise it's budget-derived: `maxJobsPerTerm` is a per-(term × source)
+ *    budget, but the URL builder OR-joins every term into ONE query per
+ *    location, so the count is multiplied by the term count or the joined
+ *    query returns only a single term's worth (≈ the actor's 10-job floor).
+ *    Mirrors the "per (joined-query × location)" semantics shift.
+ */
+function resolveLinkedInCount(
+  runGlobals: ProviderRunContext["runGlobals"],
+  termCount: number,
+  instanceMaxJobs?: number,
+): number {
+  if (typeof instanceMaxJobs === "number" && instanceMaxJobs > 0) {
+    return Math.max(ACTOR_MIN_COUNT, Math.floor(instanceMaxJobs));
+  }
+  const parsed = Number(runGlobals.maxJobsPerTerm);
+  const perTerm = Number.isFinite(parsed) && parsed > 0 ? parsed : 20;
+  return Math.max(ACTOR_MIN_COUNT, perTerm * Math.max(1, termCount));
 }
 
 function pickString(
@@ -86,11 +119,10 @@ export const linkedinJobsScraperTemplate: ProviderActorTemplate = {
   actorRef: "curious_coder/linkedin-jobs-scraper",
   displayName: "LinkedIn Jobs Scraper (curious_coder)",
   description:
-    "curious_coder/linkedin-jobs-scraper. Search URLs are built automatically from your configured search terms + location (one URL per city, else the country) — you no longer paste LinkedIn URLs here, and any `urls` you set are ignored/overridden. The {{maxJobsPerTerm}} placeholder caps result count (the actor enforces a minimum of 10, so smaller values are bumped up to 10). Set scrapeCompany=true if you want company-side fields populated (costs more CUs).",
+    "curious_coder/linkedin-jobs-scraper. Search URLs and result count are built automatically from your configured search terms + location (one URL per city, else the country) — you no longer paste LinkedIn URLs here, and any `urls`/`count` you set are ignored/overridden. The per-URL count scales with your run budget × number of search terms (the actor enforces a minimum of 10). Set scrapeCompany=true if you want company-side fields populated (costs more CUs).",
   defaultInputTemplate: JSON.stringify(
     {
       scrapeCompany: false,
-      count: "{{maxJobsPerTerm}}",
     },
     null,
     2,
@@ -98,21 +130,25 @@ export const linkedinJobsScraperTemplate: ProviderActorTemplate = {
   defaultMappings: {
     maxJobsPerTerm: true,
   },
-  placeholderMinimums: {
-    maxJobsPerTerm: 10,
-  },
   buildInput(context, base) {
-    // Honor the configured location/terms by computing the search URLs here;
-    // preserve per-instance knobs (scrapeCompany, count) from the substituted
-    // stored input and override only `urls`. Self-heals instances created
-    // from the old location-pinned default template.
+    // Honor the configured location/terms by computing the search URLs and
+    // count here; preserve per-instance knobs (scrapeCompany) from the
+    // substituted stored input and override only the computed fields.
+    // Self-heals instances created from the old location-pinned default and
+    // fixes the joined-query count under-sizing (the "only 10 jobs" cap).
     const baseObj =
       base && typeof base === "object" && !Array.isArray(base)
         ? (base as Record<string, unknown>)
         : {};
+    const terms = getSearchTerms(context);
     return {
       ...baseObj,
-      urls: buildLinkedInSearchUrls(context),
+      urls: buildLinkedInSearchUrls(terms, context.runGlobals),
+      count: resolveLinkedInCount(
+        context.runGlobals,
+        terms.length,
+        context.instance.maxJobs,
+      ),
     };
   },
   mapItem(item, context): CreateJobInput | null {

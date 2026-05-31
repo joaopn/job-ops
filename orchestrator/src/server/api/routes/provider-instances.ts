@@ -26,6 +26,7 @@ const createSchema = z.object({
   inputTemplateJson: z.string().min(1).max(50_000),
   outputMappingJson: z.string().max(50_000).optional(),
   mappings: z.record(globalFieldEnum, z.boolean()).optional(),
+  maxJobs: z.number().int().positive().max(10_000).optional(),
 });
 
 const updateSchema = z.object({
@@ -36,6 +37,8 @@ const updateSchema = z.object({
   inputTemplateJson: z.string().min(1).max(50_000).optional(),
   outputMappingJson: z.string().max(50_000).optional(),
   mappings: z.record(globalFieldEnum, z.boolean()).optional(),
+  // null clears the per-instance override; omit to leave unchanged.
+  maxJobs: z.number().int().positive().max(10_000).nullable().optional(),
 });
 
 providerInstancesRouter.get("/", async (_req: Request, res: Response) => {

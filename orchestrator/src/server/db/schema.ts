@@ -358,6 +358,7 @@ export const providerInstances = sqliteTable(
     mappingsJson: text("mappings_json", { mode: "json" })
       .notNull()
       .default(sql`('{}')`),
+    maxJobs: integer("max_jobs"),
     updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
   },
   (table) => ({

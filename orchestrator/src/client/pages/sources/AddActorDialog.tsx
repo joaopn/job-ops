@@ -40,7 +40,7 @@ const FREEFORM_INPUT_STARTER = JSON.stringify(
   {
     keywords: "{{searchTerms}}",
     location: "{{city}}",
-    limit: "{{maxJobsPerTerm}}",
+    limit: "{{maxJobs}}",
   },
   null,
   2,
@@ -82,6 +82,7 @@ export function AddActorDialog({
   const [outputMappingJson, setOutputMappingJson] = useState(
     FREEFORM_OUTPUT_STARTER,
   );
+  const [maxJobs, setMaxJobs] = useState<number | undefined>(undefined);
 
   const selectedTemplate = useMemo(
     () => templates.find((t) => t.id === templateId) ?? null,
@@ -149,6 +150,7 @@ export function AddActorDialog({
       outputMappingJson: mode === "template" ? "{}" : outputMappingJson,
       mappings:
         mode === "template" ? (selectedTemplate?.defaultMappings ?? {}) : {},
+      maxJobs,
     });
   };
 
@@ -247,6 +249,32 @@ export function AddActorDialog({
               <code>{"{{maxJobsPerTerm}}"}</code>
               . Each placeholder must be the entire string value of its JSON
               field; arrays/numbers substitute structurally.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="add-actor-max-jobs">
+              Max jobs per search (optional)
+            </Label>
+            <Input
+              id="add-actor-max-jobs"
+              type="number"
+              min={1}
+              value={maxJobs ?? ""}
+              onChange={(event) => {
+                const raw = event.target.value.trim();
+                const parsed = Number.parseInt(raw, 10);
+                setMaxJobs(
+                  raw === "" || !Number.isFinite(parsed) ? undefined : parsed,
+                );
+              }}
+              placeholder="Run-budget default"
+              className="max-w-[12rem]"
+            />
+            <p className="text-xs text-muted-foreground">
+              Caps jobs scraped per search, overriding the run-budget
+              calculation (also available as <code>{"{{maxJobs}}"}</code>).
+              Blank = derive from the run budget.
             </p>
           </div>
 

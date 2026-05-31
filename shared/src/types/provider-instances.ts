@@ -10,6 +10,10 @@ export interface ProviderInstanceRow {
   inputTemplateJson: string;
   outputMappingJson: string;
   mappings: Partial<Record<SourceConfigGlobalField, boolean>>;
+  // Optional per-instance cap on jobs scraped per search, exposed directly to
+  // the user. When set it overrides the run-budget-derived max for this actor;
+  // also available to input templates as the `{{maxJobs}}` placeholder.
+  maxJobs?: number;
   updatedAt: string;
 }
 
@@ -22,6 +26,7 @@ export interface CreateProviderInstanceInput {
   inputTemplateJson: string;
   outputMappingJson?: string;
   mappings?: Partial<Record<SourceConfigGlobalField, boolean>>;
+  maxJobs?: number;
 }
 
 export interface UpdateProviderInstanceInput {
@@ -32,6 +37,8 @@ export interface UpdateProviderInstanceInput {
   inputTemplateJson?: string;
   outputMappingJson?: string;
   mappings?: Partial<Record<SourceConfigGlobalField, boolean>>;
+  // `null` clears the override; `undefined` leaves it untouched.
+  maxJobs?: number | null;
 }
 
 export interface ProviderActorTemplateSummary {

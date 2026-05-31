@@ -17,6 +17,12 @@ interface SubstituteArgs {
    * satisfies the actor's input schema.
    */
   placeholderMinimums?: Partial<Record<string, number>>;
+  /**
+   * Per-instance jobs cap. Exposed as the `{{maxJobs}}` placeholder; when
+   * unset it falls back to the budget-derived `maxJobsPerTerm` so the
+   * placeholder always resolves to a sensible number.
+   */
+  maxJobs?: number;
 }
 
 /**
@@ -69,6 +75,18 @@ function buildPlaceholders(args: SubstituteArgs): Record<string, Placeholder> {
     // pipeline runs without an explicit per-run budget, etc.).
     out.maxJobsPerTerm = { kind: "number", value: 20 };
   }
+
+  // `{{maxJobs}}` = the per-instance override when set, else the (possibly
+  // floored) per-term budget so freeform templates always get a usable number.
+  const perTermValue =
+    out.maxJobsPerTerm.kind === "number" ? out.maxJobsPerTerm.value : 20;
+  out.maxJobs = {
+    kind: "number",
+    value:
+      typeof args.maxJobs === "number" && args.maxJobs > 0
+        ? Math.floor(args.maxJobs)
+        : perTermValue,
+  };
 
   if (placeholderMinimums) {
     for (const [name, minimum] of Object.entries(placeholderMinimums)) {
