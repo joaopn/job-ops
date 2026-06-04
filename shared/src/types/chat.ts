@@ -53,9 +53,22 @@ export interface JobChatProposedBriefEdit {
   rationale: string;
 }
 
+/**
+ * A proposed rewrite of the per-job cover-letter draft (`jobs.cover_letter_draft`).
+ * `draft` is the COMPLETE revised letter — accepting it replaces the draft
+ * wholesale (no partial/append semantics; the cover letter is short enough to
+ * regenerate in full each turn).
+ */
+export interface JobChatProposedCoverLetterEdit {
+  kind: "cover-letter-edit";
+  draft: string;
+  rationale: string;
+}
+
 export type JobChatProposedEdit =
   | JobChatProposedCvEdit
-  | JobChatProposedBriefEdit;
+  | JobChatProposedBriefEdit
+  | JobChatProposedCoverLetterEdit;
 
 export interface JobChatThread {
   id: string;

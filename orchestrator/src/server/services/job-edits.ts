@@ -35,7 +35,8 @@ async function loadAcceptableMessage(input: {
 
 export type AcceptEditResult =
   | { kind: "cv-edit"; message: JobChatMessage; job: Job }
-  | { kind: "brief-edit"; message: JobChatMessage; cv: CvDocument };
+  | { kind: "brief-edit"; message: JobChatMessage; cv: CvDocument }
+  | { kind: "cover-letter-edit"; message: JobChatMessage; job: Job };
 
 export async function acceptEditForJob(input: {
   jobId: string;
@@ -108,6 +109,23 @@ export async function acceptEditForJob(input: {
       throw new Error("Failed to load message/job after accept-edit");
     }
     return { kind: "cv-edit", message: updatedMessage, job: updatedJob };
+  }
+
+  if (proposed.kind === "cover-letter-edit") {
+    const job = await jobsRepo.getJobById(input.jobId);
+    if (!job) throw notFound("Job not found");
+
+    await jobsRepo.updateJob(job.id, { coverLetterDraft: proposed.draft });
+
+    const updatedMessage = await jobChatRepo.setMessageEditStatus(
+      message.id,
+      "accepted",
+    );
+    const updatedJob = await jobsRepo.getJobById(job.id);
+    if (!updatedMessage || !updatedJob) {
+      throw new Error("Failed to load message/job after accept-edit");
+    }
+    return { kind: "cover-letter-edit", message: updatedMessage, job: updatedJob };
   }
 
   // brief-edit: write through to the active CV document's personal_brief.

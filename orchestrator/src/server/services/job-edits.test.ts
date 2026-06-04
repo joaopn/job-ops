@@ -6,6 +6,7 @@ import type {
   Job,
   JobChatMessage,
   JobChatProposedBriefEdit,
+  JobChatProposedCoverLetterEdit,
   JobChatProposedCvEdit,
 } from "@shared/types";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -95,7 +96,11 @@ const baseCvDocument: CvDocument = {
 };
 
 function makeMessage(
-  proposed: JobChatProposedCvEdit | JobChatProposedBriefEdit | null,
+  proposed:
+    | JobChatProposedCvEdit
+    | JobChatProposedBriefEdit
+    | JobChatProposedCoverLetterEdit
+    | null,
   overrides: Partial<JobChatMessage> = {},
 ): JobChatMessage {
   return {
@@ -276,6 +281,41 @@ describe("acceptEditForJob: brief-edit", () => {
     expect(mocks.cvRepo.updateCvDocument).toHaveBeenCalledWith("cv-1", {
       personalBrief: "First paragraph.\n\nSecond paragraph.",
     });
+    expect(mocks.jobChatRepo.setMessageEditStatus).toHaveBeenCalledWith(
+      "msg-1",
+      "accepted",
+    );
+  });
+});
+
+describe("acceptEditForJob: cover-letter-edit", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.jobsRepo.updateJob.mockResolvedValue(baseJob);
+    mocks.jobsRepo.getJobById.mockResolvedValue(baseJob);
+  });
+
+  it("writes the revised draft to coverLetterDraft and marks accepted", async () => {
+    const proposed: JobChatProposedCoverLetterEdit = {
+      kind: "cover-letter-edit",
+      rationale: "drop the RAG claim",
+      draft: "Dear hiring team,\n\nRevised letter body.\n\nRegards,\nAlice",
+    };
+    const acceptedMessage = makeMessage(proposed, { editStatus: "accepted" });
+
+    mocks.jobChatRepo.getMessageById.mockResolvedValue(makeMessage(proposed));
+    mocks.jobChatRepo.setMessageEditStatus.mockResolvedValue(acceptedMessage);
+
+    const result = await acceptEditForJob({
+      jobId: "job-1",
+      messageId: "msg-1",
+    });
+
+    expect(result.kind).toBe("cover-letter-edit");
+    expect(mocks.jobsRepo.updateJob).toHaveBeenCalledWith("job-1", {
+      coverLetterDraft: proposed.draft,
+    });
+    expect(mocks.pdf.generatePdf).not.toHaveBeenCalled();
     expect(mocks.jobChatRepo.setMessageEditStatus).toHaveBeenCalledWith(
       "msg-1",
       "accepted",

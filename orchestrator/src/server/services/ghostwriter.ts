@@ -11,6 +11,7 @@ import type {
   BranchInfo,
   JobChatMessage,
   JobChatProposedBriefEdit,
+  JobChatProposedCoverLetterEdit,
   JobChatProposedCvEdit,
   JobChatProposedCvEditOp,
   JobChatProposedEdit,
@@ -55,11 +56,16 @@ const CHAT_RESPONSE_SCHEMA: JsonSchemaDefinition = {
     properties: {
       kind: {
         type: "string",
-        enum: ["text", "cv-edit", "brief-edit"],
+        enum: ["text", "cv-edit", "brief-edit", "cover-letter-edit"],
       },
       response: {
         type: "string",
         description: "Free-form chat reply (only when kind = 'text').",
+      },
+      coverLetter: {
+        type: "string",
+        description:
+          "The COMPLETE revised cover-letter draft (only when kind = 'cover-letter-edit'). Full letter text, never a description of what changed.",
       },
       rationale: {
         type: "string",
@@ -107,7 +113,7 @@ const CHAT_RESPONSE_SCHEMA: JsonSchemaDefinition = {
 };
 
 type ChatResponse = {
-  kind: "text" | "cv-edit" | "brief-edit";
+  kind: "text" | "cv-edit" | "brief-edit" | "cover-letter-edit";
   response?: string;
   rationale?: string;
   edits?: Array<{
@@ -117,6 +123,7 @@ type ChatResponse = {
   }>;
   append?: string;
   replace?: string;
+  coverLetter?: string;
 };
 
 type DispatchedReply = {
@@ -174,6 +181,27 @@ function dispatchChatResponse(raw: ChatResponse): DispatchedReply {
     return {
       text: briefEdit.rationale || "Proposed brief edit.",
       proposedEdit: briefEdit,
+    };
+  }
+
+  if (raw.kind === "cover-letter-edit") {
+    const draft = raw.coverLetter?.trim() ?? "";
+    if (!draft) {
+      // The model narrated a change without emitting the actual letter — fall
+      // back to a plain reply rather than persisting an empty draft.
+      return {
+        text: (raw.rationale ?? raw.response ?? "").trim(),
+        proposedEdit: null,
+      };
+    }
+    const coverLetterEdit: JobChatProposedCoverLetterEdit = {
+      kind: "cover-letter-edit",
+      draft,
+      rationale: (raw.rationale ?? "").trim(),
+    };
+    return {
+      text: coverLetterEdit.rationale || "Proposed cover-letter revision.",
+      proposedEdit: coverLetterEdit,
     };
   }
 

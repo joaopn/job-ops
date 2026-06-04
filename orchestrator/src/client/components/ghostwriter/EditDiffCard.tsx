@@ -47,7 +47,9 @@ export const EditDiffCard: React.FC<EditDiffCardProps> = ({
       toast.success(
         proposedEdit.kind === "cv-edit"
           ? "CV edit applied — PDF re-rendered"
-          : "Brief updated",
+          : proposedEdit.kind === "brief-edit"
+            ? "Brief updated"
+            : "Cover letter updated",
       );
       await onAccepted?.();
     },
@@ -83,7 +85,11 @@ export const EditDiffCard: React.FC<EditDiffCardProps> = ({
     <div className="mt-2 rounded-md border border-border/60 bg-muted/30 p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="rounded-sm bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
-          {proposedEdit.kind === "cv-edit" ? "CV edit" : "Brief edit"}
+          {proposedEdit.kind === "cv-edit"
+            ? "CV edit"
+            : proposedEdit.kind === "brief-edit"
+              ? "Brief edit"
+              : "Cover letter"}
         </span>
         {statusLabel ? (
           <span className="text-[11px] font-medium text-muted-foreground">
@@ -119,7 +125,7 @@ export const EditDiffCard: React.FC<EditDiffCardProps> = ({
             );
           })}
         </ul>
-      ) : (
+      ) : proposedEdit.kind === "brief-edit" ? (
         <div className="space-y-1 text-xs">
           {proposedEdit.append ? (
             <>
@@ -141,6 +147,15 @@ export const EditDiffCard: React.FC<EditDiffCardProps> = ({
               </div>
             </>
           ) : null}
+        </div>
+      ) : (
+        <div className="space-y-1 text-xs">
+          <div className="text-[11px] text-muted-foreground">
+            New cover-letter draft:
+          </div>
+          <div className="max-h-72 overflow-y-auto rounded-sm border border-emerald-200 bg-emerald-50 px-2 py-1 text-emerald-900 whitespace-pre-wrap">
+            {proposedEdit.draft}
+          </div>
         </div>
       )}
 
