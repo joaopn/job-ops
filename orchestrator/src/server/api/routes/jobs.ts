@@ -20,7 +20,12 @@ import * as settingsRepo from "@server/repositories/settings";
 import { getActivePersonalBrief } from "@server/services/brief";
 import { generateCoverLetter } from "@server/services/cover-letter/generate";
 import { renderCoverLetterPdf } from "@server/services/cover-letter/render";
+import {
+  buildCvText,
+  recomputeAtsCoverage,
+} from "@server/services/cv/ats-coverage";
 import { renderCvPdf } from "@server/services/cv/render-cv";
+import { getActiveCvDocument } from "@server/services/cv-active";
 import { scoreJobSuitability } from "@server/services/scorer";
 import { getEffectiveSettings } from "@server/services/settings";
 import { asyncPool } from "@server/utils/async-pool";
@@ -1084,6 +1089,50 @@ jobsRouter.post("/:id/rescore", async (req: Request, res: Response) => {
   });
   if (!result.ok) return fail(res, mapJobActionFailure(result));
   ok(res, result.job);
+});
+
+// Recompute ATS keyword coverage against the CURRENT CV (per-job overrides
+// else source defaults) without re-tailoring or regenerating the PDF. Pure
+// string match over the job's existing keyword universe (matched ∪ skipped).
+jobsRouter.post("/:id/refresh-ats", async (req: Request, res: Response) => {
+  try {
+    const job = await jobsRepo.getJobById(req.params.id);
+    if (!job) return fail(res, notFound("Job not found"));
+
+    const keywords = [
+      ...(job.tailoringMatched ?? []),
+      ...(job.tailoringSkipped ?? []),
+    ];
+    if (keywords.length === 0) {
+      return fail(
+        res,
+        badRequest(
+          "No ATS keywords on this job yet — tailor it first to populate them.",
+        ),
+      );
+    }
+
+    const cv = await getActiveCvDocument();
+    if (!cv) {
+      return fail(
+        res,
+        conflict("No CV uploaded yet. Upload a LaTeX CV before tailoring."),
+      );
+    }
+
+    const cvText = buildCvText(cv.fields, job.tailoredFields ?? {});
+    const { matched, skipped } = recomputeAtsCoverage(cvText, keywords);
+
+    const updated = await jobsRepo.updateJob(job.id, {
+      tailoringMatched: matched,
+      tailoringSkipped: skipped,
+      tailoringFailureReason: null,
+    });
+    if (!updated) return fail(res, notFound("Job not found"));
+    ok(res, updated);
+  } catch (error) {
+    fail(res, toAppError(error));
+  }
 });
 
 /**

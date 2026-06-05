@@ -985,6 +985,12 @@ export async function reTailorJob(id: string): Promise<Job> {
   });
 }
 
+export async function refreshAtsCoverage(id: string): Promise<Job> {
+  return fetchApi<Job>(`/jobs/${id}/refresh-ats`, {
+    method: "POST",
+  });
+}
+
 export async function generateCoverLetter(id: string): Promise<Job> {
   return fetchApi<Job>(`/jobs/${id}/generate-cover-letter`, {
     method: "POST",
