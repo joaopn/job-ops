@@ -1,13 +1,13 @@
 import type { Job } from "@shared/types.js";
 import {
   CheckCircle2,
-  ChevronUp,
   Copy,
   Download,
   Edit2,
   ExternalLink,
   FileText,
   Loader2,
+  MoreHorizontal,
   RefreshCcw,
   Undo2,
   XCircle,
@@ -87,6 +87,7 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
 }) => {
   const [isMarkingApplied, setIsMarkingApplied] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [isRefreshingAts, setIsRefreshingAts] = useState(false);
   const [isEditDetailsOpen, setIsEditDetailsOpen] = useState(false);
   const [isMovingBackToSelected, setIsMovingBackToSelected] = useState(false);
   const [showDescription, setShowDescription] = useState(false);
@@ -148,6 +149,9 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
     : "#";
 
   const hasCoverPdf = Boolean(job?.coverLetterPdfPath);
+
+  const atsKeywordCount =
+    (job?.tailoringMatched?.length ?? 0) + (job?.tailoringSkipped?.length ?? 0);
 
   const jobLink = job ? job.applicationLink || job.jobUrl : "#";
 
@@ -244,6 +248,22 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
     () => rescoreJob(job?.id),
     [job?.id, rescoreJob],
   );
+
+  const handleRefreshAts = useCallback(async () => {
+    if (!job) return;
+    try {
+      setIsRefreshingAts(true);
+      await api.refreshAtsCoverage(job.id);
+      toast.success("ATS coverage refreshed");
+      await onJobUpdated();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to refresh ATS coverage";
+      toast.error(message);
+    } finally {
+      setIsRefreshingAts(false);
+    }
+  }, [job, onJobUpdated]);
 
   const handleSkip = useCallback(async () => {
     if (!job) return;
@@ -457,6 +477,85 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
           >
             Details
           </TabTrigger>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                aria-label="More actions"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56">
+              <DropdownMenuItem onSelect={openEditDetails}>
+                <Edit2 className="mr-2 h-4 w-4" />
+                Edit details
+              </DropdownMenuItem>
+
+              <DropdownMenuItem
+                onSelect={handleRegenerate}
+                disabled={isRegenerating}
+              >
+                <RefreshCcw
+                  className={cn(
+                    "mr-2 h-4 w-4",
+                    isRegenerating && "animate-spin",
+                  )}
+                />
+                {isRegenerating ? "Regenerating..." : "Regenerate PDF"}
+              </DropdownMenuItem>
+
+              <DropdownMenuItem onSelect={handleRescore} disabled={isRescoring}>
+                <RefreshCcw
+                  className={cn("mr-2 h-4 w-4", isRescoring && "animate-spin")}
+                />
+                {isRescoring ? "Recalculating..." : "Recalculate fit"}
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator />
+
+              {/* Utility actions */}
+              <DropdownMenuItem
+                onSelect={() =>
+                  window.open(pdfHref, "_blank", "noopener,noreferrer")
+                }
+              >
+                <FileText className="mr-2 h-4 w-4" />
+                View PDF
+              </DropdownMenuItem>
+
+              <DropdownMenuItem onSelect={handleCopyInfo}>
+                <Copy className="mr-2 h-4 w-4" />
+                Copy job info
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator />
+
+              <DropdownMenuItem
+                onSelect={handleMoveBackToSelected}
+                disabled={isMovingBackToSelected}
+              >
+                <Undo2 className="mr-2 h-4 w-4" />
+                {isMovingBackToSelected
+                  ? "Moving back..."
+                  : "Move back to Selected"}
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator />
+
+              {/* Destructive actions */}
+              <DropdownMenuItem
+                onSelect={handleSkip}
+                className="text-destructive focus:text-destructive"
+              >
+                <XCircle className="mr-2 h-4 w-4" />
+                Skip this job
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <div
@@ -466,11 +565,31 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
           <div className="flex min-h-0 min-w-0 flex-col">
             {activeTab === "tailor-cv" ? (
               <div className="flex h-full min-h-0 flex-col gap-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <AtsCoverageBadge job={job} />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1 px-2 text-xs"
+                    onClick={handleRefreshAts}
+                    disabled={isRefreshingAts || atsKeywordCount === 0}
+                    title={
+                      atsKeywordCount === 0
+                        ? "Tailor the job first to populate keywords."
+                        : "Recompute coverage against the current CV"
+                    }
+                  >
+                    <RefreshCcw
+                      className={cn(
+                        "h-3.5 w-3.5",
+                        isRefreshingAts && "animate-spin",
+                      )}
+                    />
+                    Refresh
+                  </Button>
+                </div>
                 <div className="min-h-[420px] flex-1">
                   <CvPane job={job} onJobUpdated={onJobUpdated} />
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <AtsCoverageBadge job={job} />
                 </div>
                 <BriefDrawer
                   jobId={job.id}
@@ -565,88 +684,6 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
             </div>
           ) : null}
         </div>
-      </div>
-
-      {/* ─────────────────────────────────────────────────────────────────────
-          SECONDARY ACTIONS
-          Fix/More menu - all non-critical actions demoted here
-      ───────────────────────────────────────────────────────────────────── */}
-      <div className="pt-3 border-t border-border/40">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full h-8 gap-2 text-xs text-muted-foreground hover:text-foreground justify-center"
-            >
-              More actions
-              <ChevronUp className="h-3 w-3 ml-1" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="center" className="w-56">
-            <DropdownMenuItem onSelect={openEditDetails}>
-              <Edit2 className="mr-2 h-4 w-4" />
-              Edit details
-            </DropdownMenuItem>
-
-            <DropdownMenuItem
-              onSelect={handleRegenerate}
-              disabled={isRegenerating}
-            >
-              <RefreshCcw
-                className={cn("mr-2 h-4 w-4", isRegenerating && "animate-spin")}
-              />
-              {isRegenerating ? "Regenerating..." : "Regenerate PDF"}
-            </DropdownMenuItem>
-
-            <DropdownMenuItem onSelect={handleRescore} disabled={isRescoring}>
-              <RefreshCcw
-                className={cn("mr-2 h-4 w-4", isRescoring && "animate-spin")}
-              />
-              {isRescoring ? "Recalculating..." : "Recalculate match"}
-            </DropdownMenuItem>
-
-            <DropdownMenuSeparator />
-
-            {/* Utility actions */}
-            <DropdownMenuItem
-              onSelect={() =>
-                window.open(pdfHref, "_blank", "noopener,noreferrer")
-              }
-            >
-              <FileText className="mr-2 h-4 w-4" />
-              View PDF
-            </DropdownMenuItem>
-
-            <DropdownMenuItem onSelect={handleCopyInfo}>
-              <Copy className="mr-2 h-4 w-4" />
-              Copy job info
-            </DropdownMenuItem>
-
-            <DropdownMenuSeparator />
-
-            <DropdownMenuItem
-              onSelect={handleMoveBackToSelected}
-              disabled={isMovingBackToSelected}
-            >
-              <Undo2 className="mr-2 h-4 w-4" />
-              {isMovingBackToSelected
-                ? "Moving back..."
-                : "Move back to Selected"}
-            </DropdownMenuItem>
-
-            <DropdownMenuSeparator />
-
-            {/* Destructive actions */}
-            <DropdownMenuItem
-              onSelect={handleSkip}
-              className="text-destructive focus:text-destructive"
-            >
-              <XCircle className="mr-2 h-4 w-4" />
-              Skip this job
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
       </div>
 
       <JobDetailsEditDrawer
