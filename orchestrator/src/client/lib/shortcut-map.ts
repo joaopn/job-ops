@@ -169,7 +169,7 @@ export const SHORTCUTS = {
   downloadPdf: {
     key: "d",
     displayKey: "d",
-    label: "Download PDF",
+    label: "Download CV",
     group: "actions",
     scope: ["ready"],
   },

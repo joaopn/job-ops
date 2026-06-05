@@ -53,6 +53,17 @@ interface JobListPanelProps {
 
 const ROW_ESTIMATE = 84;
 
+// Tabs that surface the fit-tag filter chips. The filter itself is applied
+// globally in useFilteredJobs; these are the tabs where the chips are visible
+// and clearable.
+const FIT_CHIP_TABS: FilterTab[] = [
+  "inbox",
+  "selected",
+  "ready",
+  "live",
+  "backlog",
+];
+
 export const JobListPanel = forwardRef<VirtualListHandle, JobListPanelProps>(
   (
     {
@@ -120,7 +131,7 @@ export const JobListPanel = forwardRef<VirtualListHandle, JobListPanelProps>(
       activeJobs.length > 0 &&
       activeJobs.every((job) => selectedJobIds.has(job.id));
     const showFitChips =
-      activeTab === "inbox" && !!fitFilter && !!onFitFilterChange;
+      FIT_CHIP_TABS.includes(activeTab) && !!fitFilter && !!onFitFilterChange;
 
     const listHeader = (
       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/40 px-4 py-2">

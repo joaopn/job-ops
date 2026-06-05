@@ -143,6 +143,12 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
     ? `/pdfs/resume_${job.id}.pdf?v=${encodeURIComponent(job.updatedAt)}`
     : "#";
 
+  const coverPdfHref = job
+    ? `/pdfs/cover_letter_${job.id}.pdf?v=${encodeURIComponent(job.updatedAt)}`
+    : "#";
+
+  const hasCoverPdf = Boolean(job?.coverLetterPdfPath);
+
   const jobLink = job ? job.applicationLink || job.jobUrl : "#";
 
   const googleDorks = useMemo(
@@ -372,10 +378,36 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
                 download={`${safeFilenamePart(personName || "Unknown")}_${safeFilenamePart(job.employer || "Unknown")}.pdf`}
               >
                 <Download className="h-3.5 w-3.5 shrink-0" />
-                <span>Download PDF</span>
+                <span>Download CV</span>
                 <KbdHint shortcut="d" className="ml-1" />
               </a>
             </Button>
+
+            {hasCoverPdf ? (
+              <Button
+                asChild
+                variant="outline"
+                className="h-9 gap-1 px-2 text-xs"
+              >
+                <a
+                  href={coverPdfHref}
+                  download={`${safeFilenamePart(personName || "Unknown")}_${safeFilenamePart(job.employer || "Unknown")}_Cover.pdf`}
+                >
+                  <Download className="h-3.5 w-3.5 shrink-0" />
+                  <span>Download Cover</span>
+                </a>
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                className="h-9 gap-1 px-2 text-xs"
+                disabled
+                title="Render the cover letter first (Tailor Cover Letter tab)"
+              >
+                <Download className="h-3.5 w-3.5 shrink-0" />
+                <span>Download Cover</span>
+              </Button>
+            )}
 
             <OpenJobListingButton
               href={jobLink}

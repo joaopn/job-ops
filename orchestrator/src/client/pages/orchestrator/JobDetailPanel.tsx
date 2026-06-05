@@ -304,11 +304,15 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
   );
 
   const selectedHasPdf = !!selectedJob?.pdfPath;
+  const selectedHasCover = !!selectedJob?.coverLetterPdfPath;
   const selectedJobLink = selectedJob
     ? selectedJob.applicationLink || selectedJob.jobUrl
     : "#";
   const selectedPdfHref = selectedJob
     ? `/pdfs/resume_${selectedJob.id}.pdf?v=${encodeURIComponent(selectedJob.updatedAt)}`
+    : "#";
+  const selectedCoverHref = selectedJob
+    ? `/pdfs/cover_letter_${selectedJob.id}.pdf?v=${encodeURIComponent(selectedJob.updatedAt)}`
     : "#";
   const canApply = selectedJob?.status === "ready";
   const canMoveToInProgress = selectedJob?.status === "applied";
@@ -572,10 +576,21 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
                     download={`${safeFilenamePart(personName || "Unknown")}_${safeFilenamePart(selectedJob.employer || "Unknown")}.pdf`}
                   >
                     <FileText className="mr-2 h-4 w-4" />
-                    Download PDF
+                    Download CV
                   </a>
                 </DropdownMenuItem>
               </>
+            )}
+            {selectedHasCover && (
+              <DropdownMenuItem asChild>
+                <a
+                  href={selectedCoverHref}
+                  download={`${safeFilenamePart(personName || "Unknown")}_${safeFilenamePart(selectedJob.employer || "Unknown")}_Cover.pdf`}
+                >
+                  <FileText className="mr-2 h-4 w-4" />
+                  Download Cover
+                </a>
+              </DropdownMenuItem>
             )}
             {canSkip && (
               <>
