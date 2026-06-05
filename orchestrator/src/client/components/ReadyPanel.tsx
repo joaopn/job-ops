@@ -42,7 +42,7 @@ import { useSettings } from "../hooks/useSettings";
 import { FitAssessment } from ".";
 import { CollapsibleSection } from "./discovered-panel/CollapsibleSection";
 import { AtsCoverageBadge } from "./ghostwriter/AtsCoverageBadge";
-import { BriefDrawer } from "./ghostwriter/BriefDrawer";
+import { BriefPane } from "./ghostwriter/BriefPane";
 import { CoverLetterPane } from "./ghostwriter/CoverLetterPane";
 import { CvPane } from "./ghostwriter/CvPane";
 import { GhostwriterPanel } from "./ghostwriter/GhostwriterPanel";
@@ -61,12 +61,17 @@ const TAILOR_PANEL_MIN_WIDTH = 200;
 const TAILOR_PANEL_MAX_WIDTH = 4000;
 
 const READY_TAB_STORAGE_KEY = "jobops:ready-tab";
-type ReadyTab = "tailor-cv" | "tailor-cover" | "details";
+type ReadyTab = "tailor-cv" | "tailor-cover" | "brief" | "details";
 
 function readInitialReadyTab(): ReadyTab {
   if (typeof window === "undefined") return "tailor-cv";
   const raw = window.localStorage.getItem(READY_TAB_STORAGE_KEY);
-  if (raw === "tailor-cv" || raw === "tailor-cover" || raw === "details") {
+  if (
+    raw === "tailor-cv" ||
+    raw === "tailor-cover" ||
+    raw === "brief" ||
+    raw === "details"
+  ) {
     return raw;
   }
   return "tailor-cv";
@@ -472,6 +477,12 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
             Tailor Cover Letter
           </TabTrigger>
           <TabTrigger
+            active={activeTab === "brief"}
+            onClick={() => setActiveTab("brief")}
+          >
+            Personal Brief
+          </TabTrigger>
+          <TabTrigger
             active={activeTab === "details"}
             onClick={() => setActiveTab("details")}
           >
@@ -591,12 +602,6 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
                 <div className="min-h-[420px] flex-1">
                   <CvPane job={job} onJobUpdated={onJobUpdated} />
                 </div>
-                <BriefDrawer
-                  jobId={job.id}
-                  cvId={cv?.id ?? null}
-                  brief={cv?.personalBrief ?? ""}
-                  onJobUpdated={onJobUpdated}
-                />
               </div>
             ) : null}
 
@@ -604,6 +609,17 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
               <div className="flex h-full min-h-[420px] flex-col">
                 <CoverLetterPane
                   job={coverLetterJob}
+                  onJobUpdated={onJobUpdated}
+                />
+              </div>
+            ) : null}
+
+            {activeTab === "brief" ? (
+              <div className="flex h-full min-h-[420px] flex-col">
+                <BriefPane
+                  jobId={job.id}
+                  cvId={cv?.id ?? null}
+                  brief={cv?.personalBrief ?? ""}
                   onJobUpdated={onJobUpdated}
                 />
               </div>

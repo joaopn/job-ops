@@ -34,7 +34,6 @@ export const JobListSplitter: React.FC<JobListSplitterProps> = ({
       onPointerDown={onDrag}
       className={cn(
         "group relative flex cursor-col-resize select-none items-stretch justify-center self-stretch px-1",
-        "lg:sticky lg:top-24 lg:h-[calc(100vh-14rem)]",
         isDragging && "bg-foreground/5",
       )}
     >
@@ -74,7 +73,6 @@ export const JobListToggleBar: React.FC<JobListToggleBarProps> = ({
         "flex w-6 cursor-pointer items-center justify-center self-stretch",
         "rounded-l-md border border-r-0 border-border/40 bg-muted/30 text-muted-foreground",
         "transition-colors hover:bg-muted/60 hover:text-foreground",
-        "lg:sticky lg:top-24 lg:h-[calc(100vh-14rem)] lg:self-start",
       )}
     >
       {isVisible ? (

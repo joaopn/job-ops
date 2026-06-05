@@ -1,28 +1,32 @@
 import * as api from "@client/api";
 import { queryKeys } from "@client/lib/queryKeys";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, Loader2, RefreshCcw, Save } from "lucide-react";
+import { Loader2, Mail, RefreshCcw, Save } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "@client/lib/toast";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
 
-type BriefDrawerProps = {
+type BriefPaneProps = {
   jobId: string;
   cvId: string | null;
   brief: string;
   onJobUpdated?: () => void | Promise<void>;
 };
 
-export const BriefDrawer: React.FC<BriefDrawerProps> = ({
+/**
+ * Full-height personal-brief editor used as a top-level tab in the Ready
+ * panel. The brief lives on the active CV document (shared across jobs);
+ * "Re-tailor with brief" re-runs tailoring for this job against the saved
+ * brief.
+ */
+export const BriefPane: React.FC<BriefPaneProps> = ({
   jobId,
   cvId,
   brief,
   onJobUpdated,
 }) => {
-  const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(brief);
   const [isReTailoring, setIsReTailoring] = useState(false);
   const queryClient = useQueryClient();
@@ -76,65 +80,58 @@ export const BriefDrawer: React.FC<BriefDrawerProps> = ({
   const canSave = isDirty && !saveMutation.isPending && Boolean(cvId);
 
   return (
-    <div className="rounded-md border border-border/60 bg-background">
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
-        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left"
-      >
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium">Personal brief</span>
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-sm font-medium">Personal brief</span>
+          <span className="text-xs text-muted-foreground">
             ({brief.length} chars)
           </span>
         </div>
-        <ChevronDown
-          className={cn(
-            "h-3.5 w-3.5 text-muted-foreground transition-transform",
-            open && "rotate-180",
-          )}
-        />
-      </button>
-      {open ? (
-        <div className="border-t border-border/60 px-3 pb-3 pt-2">
-          <Textarea
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            placeholder="Paste a free-form summary of your background — projects, side gigs, soft skills, anything the CV doesn't capture verbatim."
-            className="min-h-[160px] resize-y text-sm"
-          />
-          <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 gap-1 text-xs"
-              onClick={reTailor}
-              disabled={isReTailoring || !cvId}
-            >
-              {isReTailoring ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <RefreshCcw className="h-3.5 w-3.5" />
-              )}
-              Re-tailor with brief
-            </Button>
-            <Button
-              size="sm"
-              className="h-8 gap-1 text-xs"
-              disabled={!canSave}
-              onClick={() => saveMutation.mutate(draft)}
-            >
-              {saveMutation.isPending ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Save className="h-3.5 w-3.5" />
-              )}
-              Save brief
-            </Button>
-          </div>
+        <div className="flex flex-wrap items-center gap-1">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1 px-2 text-xs"
+            onClick={reTailor}
+            disabled={isReTailoring || !cvId}
+          >
+            {isReTailoring ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCcw className="h-3.5 w-3.5" />
+            )}
+            Re-tailor with brief
+          </Button>
+          <Button
+            size="sm"
+            className="h-7 gap-1 px-2 text-xs"
+            disabled={!canSave}
+            onClick={() => saveMutation.mutate(draft)}
+          >
+            {saveMutation.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Save className="h-3.5 w-3.5" />
+            )}
+            Save brief
+          </Button>
+        </div>
+      </div>
+
+      {!cvId ? (
+        <div className="mb-2 flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
+          <Mail className="h-3.5 w-3.5" />
+          No active CV — upload a CV from the CV page to save a brief.
         </div>
       ) : null}
+
+      <Textarea
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        placeholder="Paste a free-form summary of your background — projects, side gigs, soft skills, anything the CV doesn't capture verbatim."
+        className="h-full min-h-[320px] flex-1 resize-none text-sm"
+      />
     </div>
   );
 };

@@ -460,31 +460,36 @@ export const OrchestratorPage: React.FC = () => {
 
   return (
     <>
-      <OrchestratorHeader
-        navOpen={navOpen}
-        onNavOpenChange={setNavOpen}
-        isPipelineRunning={isPipelineRunning}
-        isCancelling={isCancelling}
-        pipelineSources={enabledSources}
-        onOpenAutomaticRun={() => openRunMode()}
-        onOpenBatchUrlImport={() => setIsBatchUrlImportOpen(true)}
-        onOpenLlmQueue={() => setIsLlmQueueOpen(true)}
-        llmActiveCount={llmQueue.active.length}
-        onCancelPipeline={handleCancelPipeline}
-      />
+      {/* Desktop: viewport-height app shell so the list/detail region fills
+          exactly the space left under the header/banner/filters — no magic
+          `100vh - Nrem` math, no document scroll. Below lg the `lg:` classes
+          drop off and the page scrolls normally. */}
+      <div className="lg:flex lg:h-screen lg:flex-col lg:overflow-hidden">
+        <OrchestratorHeader
+          navOpen={navOpen}
+          onNavOpenChange={setNavOpen}
+          isPipelineRunning={isPipelineRunning}
+          isCancelling={isCancelling}
+          pipelineSources={enabledSources}
+          onOpenAutomaticRun={() => openRunMode()}
+          onOpenBatchUrlImport={() => setIsBatchUrlImportOpen(true)}
+          onOpenLlmQueue={() => setIsLlmQueueOpen(true)}
+          llmActiveCount={llmQueue.active.length}
+          onCancelPipeline={handleCancelPipeline}
+        />
 
-      <PipelineRunBanner
-        isRunning={isPipelineRunning}
-        onRerunSource={handleRerunSource}
-      />
+        <PipelineRunBanner
+          isRunning={isPipelineRunning}
+          onRerunSource={handleRerunSource}
+        />
 
-      <main
-        className={`space-y-6 px-4 py-6 ${
-          selectedJobIds.size > 0 ? "pb-36 lg:pb-12" : "pb-12"
-        }`}
-      >
-        {/* Main content: tabs/filters -> list/detail */}
-        <section className="space-y-4">
+        <main
+          className={`space-y-6 px-4 py-6 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:space-y-0 lg:overflow-hidden lg:pb-6 ${
+            selectedJobIds.size > 0 ? "pb-36" : "pb-12"
+          }`}
+        >
+          {/* Main content: tabs/filters -> list/detail */}
+          <section className="space-y-4 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
           <JobCommandBar
             jobs={jobs}
             onSelectJob={handleCommandSelectJob}
@@ -518,13 +523,14 @@ export const OrchestratorPage: React.FC = () => {
 
           {/* List/Detail grid - directly under tabs, no extra section */}
           <div
-            className={isDesktop ? "grid gap-0" : "grid gap-4"}
+            className={isDesktop ? "grid min-h-0 flex-1 gap-0" : "grid gap-4"}
             style={
               isDesktop
                 ? {
                     gridTemplateColumns: isListPanelVisible
                       ? `${listPanelWidth}px 12px 24px minmax(0, 1fr)`
                       : "24px minmax(0, 1fr)",
+                    gridTemplateRows: "minmax(0, 1fr)",
                   }
                 : undefined
             }
@@ -589,7 +595,7 @@ export const OrchestratorPage: React.FC = () => {
 
             {/* Inspector panel: visually subordinate to list */}
             {isDesktop && (
-              <div className="min-w-0 rounded-lg border border-border/40 bg-muted/5 p-4 lg:sticky lg:top-24 lg:self-start lg:h-[calc(100vh-14rem)] lg:overflow-y-auto">
+              <div className="min-w-0 rounded-lg border border-border/40 bg-muted/5 p-4 lg:h-full lg:overflow-y-auto">
                 <JobDetailPanel
                   activeTab={activeTab}
                   activeJobs={activeJobs}
@@ -602,7 +608,8 @@ export const OrchestratorPage: React.FC = () => {
             )}
           </div>
         </section>
-      </main>
+        </main>
+      </div>
 
       <FloatingJobActionsBar
         activeTab={activeTab}

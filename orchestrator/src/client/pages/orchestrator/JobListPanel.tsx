@@ -239,7 +239,7 @@ export const JobListPanel = forwardRef<VirtualListHandle, JobListPanelProps>(
     const virtualItems = virtualizer.getVirtualItems();
 
     return (
-      <div className="flex min-w-0 flex-col rounded-xl border border-border bg-card shadow-sm lg:h-[calc(100vh-14rem)]">
+      <div className="flex min-w-0 flex-col rounded-xl border border-border bg-card shadow-sm lg:h-full">
         {closedFilterChips ? (
           <div className="shrink-0 border-b border-border/40">
             {closedFilterChips}
