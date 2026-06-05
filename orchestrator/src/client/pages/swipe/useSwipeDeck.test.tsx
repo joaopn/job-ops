@@ -1,0 +1,121 @@
+import * as api from "@client/api";
+import { createJob } from "@shared/testing/factories.js";
+import type { Job } from "@shared/types.js";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, renderHook, waitFor } from "@testing-library/react";
+import type React from "react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { useSwipeDeck } from "./useSwipeDeck";
+
+vi.mock("@client/api", () => ({
+  getJobs: vi.fn(),
+  streamJobAction: vi.fn(),
+}));
+
+vi.mock("@client/lib/toast", () => ({
+  toast: { error: vi.fn(), success: vi.fn() },
+}));
+
+const job = (overrides: Partial<Job>): Job =>
+  createJob({ status: "discovered", ...overrides });
+
+const wrapper = ({ children }: { children: React.ReactNode }) => {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+};
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(api.streamJobAction).mockResolvedValue(undefined);
+});
+
+describe("useSwipeDeck", () => {
+  it("orders cards fit-first then newest-posted", async () => {
+    vi.mocked(api.getJobs).mockResolvedValue({
+      jobs: [
+        job({ id: "bad", suitabilityCategory: "bad_fit", datePosted: null }),
+        job({
+          id: "good-old",
+          suitabilityCategory: "good_fit",
+          datePosted: "2026-01-01T00:00:00.000Z",
+        }),
+        job({
+          id: "great",
+          suitabilityCategory: "very_good_fit",
+          datePosted: "2026-01-01T00:00:00.000Z",
+        }),
+        job({
+          id: "good-new",
+          suitabilityCategory: "good_fit",
+          datePosted: "2026-06-01T00:00:00.000Z",
+        }),
+        job({ id: "unscored", suitabilityCategory: null, datePosted: null }),
+      ],
+    } as Awaited<ReturnType<typeof api.getJobs>>);
+
+    const { result } = renderHook(
+      () => useSwipeDeck({ pipelineTerminalEvent: null }),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.cards.map((c) => c.id)).toEqual([
+      "great",
+      "good-new",
+      "good-old",
+      "bad",
+      "unscored",
+    ]);
+  });
+
+  it("fires the mapped action with a single jobId and removes the card", async () => {
+    vi.mocked(api.getJobs).mockResolvedValue({
+      jobs: [
+        job({ id: "a", suitabilityCategory: "very_good_fit" }),
+        job({ id: "b", suitabilityCategory: "good_fit" }),
+      ],
+    } as Awaited<ReturnType<typeof api.getJobs>>);
+
+    const { result } = renderHook(
+      () => useSwipeDeck({ pipelineTerminalEvent: null }),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(result.current.cards).toHaveLength(2));
+
+    await act(async () => {
+      await result.current.act(result.current.cards[0], "move_to_selected");
+    });
+
+    expect(api.streamJobAction).toHaveBeenCalledWith(
+      { action: "move_to_selected", jobIds: ["a"] },
+      expect.anything(),
+    );
+    expect(result.current.cards.map((c) => c.id)).toEqual(["b"]);
+  });
+
+  it("restores the card when the action fails", async () => {
+    vi.mocked(api.getJobs).mockResolvedValue({
+      jobs: [job({ id: "a", suitabilityCategory: "good_fit" })],
+    } as Awaited<ReturnType<typeof api.getJobs>>);
+    vi.mocked(api.streamJobAction).mockRejectedValue(new Error("boom"));
+
+    const { result } = renderHook(
+      () => useSwipeDeck({ pipelineTerminalEvent: null }),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(result.current.cards).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.act(result.current.cards[0], "skip");
+    });
+
+    expect(result.current.cards.map((c) => c.id)).toEqual(["a"]);
+  });
+});

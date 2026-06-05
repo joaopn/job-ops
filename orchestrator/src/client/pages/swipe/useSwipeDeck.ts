@@ -1,0 +1,123 @@
+/**
+ * Data + action layer for the mobile Swipe deck.
+ *
+ * Fetches the discovered-job inbox as FULL jobs (the fit assessment and the
+ * description are the card's centerpiece, and JobListItem omits both), orders
+ * them fit-first, and exposes an optimistic `act()` that drives the existing
+ * `POST /api/jobs/actions` dispatcher with a single jobId.
+ */
+
+import * as api from "@client/api";
+import { toast } from "@client/lib/toast";
+import { useQuery } from "@tanstack/react-query";
+import type { Job, SuitabilityCategory } from "@shared/types.js";
+import { useCallback, useEffect, useState } from "react";
+
+/** Actions reachable from the deck — all accept a `discovered` source job. */
+export type SwipeAction = "move_to_selected" | "skip" | "move_to_backlog";
+
+const FIT_RANK: Record<SuitabilityCategory, number> = {
+  very_good_fit: 0,
+  good_fit: 1,
+  bad_fit: 2,
+};
+
+/** Best-effort ms timestamp; tolerates ISO or all-digit Unix-ms strings. */
+const dateMs = (value: string | null): number => {
+  if (!value) return 0;
+  if (/^\d+$/.test(value)) return Number(value);
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
+/** Fit-first, then newest-posted first. */
+const byFitThenDate = (a: Job, b: Job): number => {
+  const ra = a.suitabilityCategory ? FIT_RANK[a.suitabilityCategory] : 3;
+  const rb = b.suitabilityCategory ? FIT_RANK[b.suitabilityCategory] : 3;
+  if (ra !== rb) return ra - rb;
+  return dateMs(b.datePosted) - dateMs(a.datePosted);
+};
+
+export const SWIPE_DECK_QUERY_KEY = ["swipe-deck", "discovered"] as const;
+
+interface UseSwipeDeckArgs {
+  /** Terminal pipeline event from useOrchestratorData; refetches the deck. */
+  pipelineTerminalEvent: { status: string; errorMessage: string | null } | null;
+}
+
+export interface UseSwipeDeckResult {
+  cards: Job[];
+  isLoading: boolean;
+  isError: boolean;
+  act: (job: Job, action: SwipeAction) => Promise<void>;
+  refetch: () => void;
+}
+
+export function useSwipeDeck({
+  pipelineTerminalEvent,
+}: UseSwipeDeckArgs): UseSwipeDeckResult {
+  // Jobs the user has already swiped this session — hidden optimistically so
+  // the card leaves immediately, before the network round-trip resolves.
+  const [committed, setCommitted] = useState<Set<string>>(() => new Set());
+
+  const query = useQuery({
+    queryKey: SWIPE_DECK_QUERY_KEY,
+    queryFn: async () => {
+      const data = await api.getJobs({
+        statuses: ["discovered"],
+        view: "full",
+      });
+      return data.jobs;
+    },
+  });
+
+  // Refetch when a pipeline run terminates (new discovered jobs may exist).
+  useEffect(() => {
+    if (!pipelineTerminalEvent) return;
+    if (pipelineTerminalEvent.status === "completed") {
+      setCommitted(new Set());
+      query.refetch();
+    }
+  }, [pipelineTerminalEvent, query.refetch]);
+
+  const cards = (query.data ?? [])
+    .filter((job) => !committed.has(job.id))
+    .sort(byFitThenDate);
+
+  const act = useCallback(async (job: Job, action: SwipeAction) => {
+    setCommitted((prev) => new Set(prev).add(job.id));
+
+    let failed = false;
+    try {
+      await api.streamJobAction(
+        { action, jobIds: [job.id] },
+        {
+          onEvent: (event) => {
+            if (event.type === "progress" && !event.result.ok) failed = true;
+            if (event.type === "error") failed = true;
+          },
+        },
+      );
+    } catch {
+      failed = true;
+    }
+
+    if (failed) {
+      // Roll back: surface the card again so the user can retry.
+      setCommitted((prev) => {
+        const next = new Set(prev);
+        next.delete(job.id);
+        return next;
+      });
+      toast.error(`Couldn't update "${job.title}"`);
+    }
+  }, []);
+
+  return {
+    cards,
+    isLoading: query.isLoading,
+    isError: query.isError,
+    act,
+    refetch: () => query.refetch(),
+  };
+}

@@ -1,5 +1,6 @@
 import { ActivityLogButton } from "@client/components/ActivityLogButton";
 import { PageHeader, StatusIndicator } from "@client/components/layout";
+import { ViewToggle } from "@client/components/ViewToggle";
 import type { JobSource } from "@shared/types.js";
 import { Activity, Link as LinkIcon, Loader2, Play, Square } from "lucide-react";
 import type React from "react";
@@ -102,6 +103,7 @@ export const OrchestratorHeader: React.FC<OrchestratorHeaderProps> = ({
       )}
       title="Job Ops"
       subtitle="Orchestrator"
+      titleSlot={<ViewToggle />}
       navOpen={navOpen}
       onNavOpenChange={onNavOpenChange}
       statusIndicator={

@@ -1,6 +1,7 @@
 import {
   FileText,
   LayoutDashboard,
+  Layers,
   Mail,
   Network,
   Settings,
@@ -25,6 +26,7 @@ export const NAV_LINKS: NavLink[] = [
       "/jobs/all",
     ],
   },
+  { to: "/swipe", label: "Swipe", icon: Layers },
   { to: "/cv", label: "My CV", icon: FileText },
   { to: "/cover-letter", label: "Cover Letter", icon: Mail },
   { to: "/sources", label: "Sources", icon: Network },

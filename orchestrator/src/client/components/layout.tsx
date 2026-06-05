@@ -29,6 +29,11 @@ interface PageHeaderProps {
   icon: LucideIcon | React.FC<{ className?: string }>;
   title: string;
   subtitle: string;
+  /**
+   * When provided, renders in place of the title/subtitle text block (the
+   * brand icon stays to its left). Used to host the Swipe|Manage toggle.
+   */
+  titleSlot?: React.ReactNode;
   badge?: string;
   statusIndicator?: React.ReactNode;
   actions?: React.ReactNode;
@@ -42,12 +47,19 @@ interface PageHeaderProps {
    * goes edge-to-edge (e.g. OrchestratorPage).
    */
   fullWidth?: boolean;
+  /**
+   * Keep the brand/title and the actions on a single row at all widths
+   * (instead of the default stack-on-mobile). Used by the mobile Swipe
+   * header so the Run-pipeline button stays top-right next to the toggle.
+   */
+  inlineActions?: boolean;
 }
 
 export const PageHeader: React.FC<PageHeaderProps> = ({
   icon: Icon,
   title,
   subtitle,
+  titleSlot,
   badge,
   statusIndicator,
   actions,
@@ -55,6 +67,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   navOpen: controlledNavOpen,
   onNavOpenChange,
   fullWidth = false,
+  inlineActions = false,
 }) => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -76,7 +89,10 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
     <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div
         className={cn(
-          "flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4",
+          "flex px-4 py-4",
+          inlineActions
+            ? "flex-row items-center justify-between gap-2"
+            : "flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4",
           fullWidth ? "w-full" : "container mx-auto",
         )}
       >
@@ -138,10 +154,14 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
           <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-border/60 bg-muted/30">
             <Icon className="h-4 w-4 text-muted-foreground" />
           </div>
-          <div className="min-w-0 leading-tight">
-            <div className="text-sm font-semibold tracking-tight">{title}</div>
-            <div className="text-xs text-muted-foreground">{subtitle}</div>
-          </div>
+          {titleSlot ?? (
+            <div className="min-w-0 leading-tight">
+              <div className="text-sm font-semibold tracking-tight">
+                {title}
+              </div>
+              <div className="text-xs text-muted-foreground">{subtitle}</div>
+            </div>
+          )}
           {badge && (
             <Badge variant="outline" className="uppercase tracking-wide">
               {badge}
@@ -150,7 +170,14 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
           {statusIndicator}
         </div>
 
-        <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap sm:justify-end">
+        <div
+          className={cn(
+            "flex min-w-0 items-center gap-2",
+            inlineActions
+              ? "w-auto flex-nowrap justify-end"
+              : "w-full flex-wrap sm:w-auto sm:flex-nowrap sm:justify-end",
+          )}
+        >
           {actions}
         </div>
       </div>

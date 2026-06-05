@@ -22,6 +22,7 @@ import { OrchestratorPage } from "./pages/OrchestratorPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SourcesPage } from "./pages/SourcesPage";
 import { SignInPage } from "./pages/SignInPage";
+import { SwipePage } from "./pages/SwipePage";
 
 /** Backwards-compatibility redirects: old URL paths -> new URL paths */
 const REDIRECTS: Array<{ from: string; to: string }> = [
@@ -103,6 +104,7 @@ export const App: React.FC = () => {
                   element={<CoverLetterPage />}
                 />
                 <Route path="/sources" element={<SourcesPage />} />
+                <Route path="/swipe" element={<SwipePage />} />
                 <Route path="/jobs/:tab" element={<OrchestratorPage />} />
                 <Route
                   path="/jobs/:tab/:jobId"
