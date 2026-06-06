@@ -57,6 +57,8 @@ export interface UseSwipeDeckResult {
   isLoading: boolean;
   isError: boolean;
   act: (job: Job, action: SwipeAction) => Promise<void>;
+  canUndo: boolean;
+  undo: () => Promise<void>;
   refetch: () => void;
 }
 
@@ -67,6 +69,8 @@ export function useSwipeDeck({
   // Jobs the user has already swiped this session — hidden optimistically so
   // the card leaves immediately, before the network round-trip resolves.
   const [committed, setCommitted] = useState<Set<string>>(() => new Set());
+  // The most recent successfully-swiped job, available for a single-level undo.
+  const [lastSwipe, setLastSwipe] = useState<Job | null>(null);
 
   const query = useQuery({
     queryKey: SWIPE_DECK_QUERY_KEY,
@@ -121,14 +125,41 @@ export function useSwipeDeck({
         return next;
       });
       toast.error(`Couldn't update "${job.title}"`);
+      return;
     }
+
+    setLastSwipe(job);
   }, []);
+
+  const undo = useCallback(async () => {
+    if (!lastSwipe) return;
+    try {
+      await api.updateJob(lastSwipe.id, {
+        status: "discovered",
+        outcome: null,
+        closedAt: null,
+      });
+    } catch {
+      toast.error(`Couldn't undo "${lastSwipe.title}"`);
+      return;
+    }
+    // Drop it from `committed` so the refetched card re-enters the deck.
+    setCommitted((prev) => {
+      const next = new Set(prev);
+      next.delete(lastSwipe.id);
+      return next;
+    });
+    setLastSwipe(null);
+    await query.refetch();
+  }, [lastSwipe, query.refetch]);
 
   return {
     cards,
     isLoading: query.isLoading,
     isError: query.isError,
     act,
+    canUndo: lastSwipe !== null,
+    undo,
     refetch: () => query.refetch(),
   };
 }

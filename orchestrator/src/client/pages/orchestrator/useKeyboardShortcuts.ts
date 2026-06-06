@@ -32,6 +32,7 @@ type UseKeyboardShortcutsArgs = {
   toggleSelectJob: (id: string, options?: { range?: boolean }) => void;
   runJobAction: (action: Exclude<JobAction, "mark_closed">) => Promise<void>;
   loadJobs: () => Promise<void>;
+  onUndo: () => void;
 };
 
 export function useKeyboardShortcuts(args: UseKeyboardShortcutsArgs): void {
@@ -54,6 +55,7 @@ export function useKeyboardShortcuts(args: UseKeyboardShortcutsArgs): void {
     toggleSelectJob,
     runJobAction,
     loadJobs,
+    onUndo,
   } = args;
 
   const shortcutActionInFlight = useRef(false);
@@ -134,6 +136,25 @@ export function useKeyboardShortcuts(args: UseKeyboardShortcutsArgs): void {
       [SHORTCUTS.nextTabArrow.key]: (e) => {
         e.preventDefault();
         navigateTab(1);
+      },
+
+      // ── Undo ────────────────────────────────────────────────────────────
+      [SHORTCUTS.undo.key]: (e) => {
+        // The hotkey wrapper lets $mod+ shortcuts fire inside inputs; for undo
+        // we must NOT clobber the browser's native text-undo, so bail when an
+        // editable element is focused.
+        const el = document.activeElement as HTMLElement | null;
+        const tag = el?.tagName;
+        if (
+          tag === "INPUT" ||
+          tag === "TEXTAREA" ||
+          tag === "SELECT" ||
+          el?.isContentEditable
+        ) {
+          return;
+        }
+        e.preventDefault();
+        onUndo();
       },
 
       // ── Context actions ─────────────────────────────────────────────────

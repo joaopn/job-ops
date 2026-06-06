@@ -38,6 +38,9 @@ const renderHeader = (
     onOpenLlmQueue: vi.fn(),
     llmActiveCount: 0,
     onCancelPipeline: vi.fn(),
+    canUndo: false,
+    undoLabel: null,
+    onUndo: vi.fn(),
     ...overrides,
   };
 

@@ -8,6 +8,7 @@ import type {
 } from "@shared/types.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@client/lib/toast";
+import { type JobStateSnapshot, restoreJobStates, snapshotJob } from "@client/lib/undo";
 import type { FilterTab } from "./constants";
 import { JobActionProgressToast } from "./JobActionProgressToast";
 import {
@@ -53,17 +54,39 @@ const jobActionSuccessLabel: Record<JobAction, string> = {
   reopen: "jobs reopened",
 };
 
+// Triage status moves whose prior {status, outcome, closedAt} can be restored.
+// Tailor (move_to_ready) and rescore are excluded — they create PDFs/scores a
+// status-revert can't cleanly undo.
+const undoActionLabel: Partial<Record<JobAction, string>> = {
+  skip: "Skip",
+  move_to_selected: "Move to Selected",
+  unselect: "Move to Inbox",
+  move_to_backlog: "Move to Backlog",
+  move_to_stale: "Move to Stale",
+  move_to_inbox: "Move to Inbox",
+  mark_closed: "Close application",
+  reopen: "Reopen",
+};
+
 interface UseJobSelectionActionsArgs {
   activeJobs: JobListItem[];
   activeTab: FilterTab;
   loadJobs: () => Promise<void>;
+  pushUndo?: (entry: { label: string; restore: () => Promise<void> }) => void;
+  undo?: () => void;
 }
 
 export function useJobSelectionActions({
   activeJobs,
   activeTab,
   loadJobs,
+  pushUndo,
+  undo,
 }: UseJobSelectionActionsArgs) {
+  // Always-fresh view of the list so the streaming callback (whose useCallback
+  // deps deliberately omit activeJobs) can snapshot pre-action state.
+  const activeJobsRef = useRef(activeJobs);
+  activeJobsRef.current = activeJobs;
   const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -212,6 +235,14 @@ export function useJobSelectionActions({
       }
 
       const selectedAtStartSet = new Set(selectedAtStart);
+      // Snapshot pre-action state for undoable triage moves (before the action
+      // mutates the rows), keyed off the always-fresh list ref.
+      const undoLabel = undoActionLabel[action];
+      const preSnapshots: JobStateSnapshot[] = undoLabel
+        ? activeJobsRef.current
+            .filter((job) => selectedAtStartSet.has(job.id))
+            .map(snapshotJob)
+        : [];
       let progressToastId: string | number | undefined;
       let finalResult: JobActionResponse | null = null;
       let streamError: string | null = null;
@@ -308,8 +339,28 @@ export function useJobSelectionActions({
         const failedIds = getFailedJobIds(result);
         const successLabel = jobActionSuccessLabel[action];
 
+        // Register undo for the rows that actually changed.
+        const undoSnapshots = preSnapshots.filter(
+          (snap) => !failedIds.has(snap.jobId),
+        );
+        const undoAction =
+          undoLabel && undoSnapshots.length > 0
+            ? { label: "Undo", onClick: () => undo?.() }
+            : undefined;
+        if (pushUndo && undoLabel && undoSnapshots.length > 0) {
+          pushUndo({
+            label: `${undoLabel} (${undoSnapshots.length})`,
+            restore: async () => {
+              await restoreJobStates(undoSnapshots);
+            },
+          });
+        }
+
         if (result.failed === 0) {
-          toast.success(`${result.succeeded} ${successLabel}`);
+          toast.success(
+            `${result.succeeded} ${successLabel}`,
+            undoAction ? { action: undoAction } : undefined,
+          );
         } else {
           const firstFailure = result.results.find(
             (entry): entry is Extract<typeof entry, { ok: false }> =>
@@ -324,6 +375,7 @@ export function useJobSelectionActions({
             `${result.succeeded} succeeded, ${result.failed} failed.${
               truncated ? ` First error: ${truncated}` : ""
             }`,
+            undoAction ? { action: undoAction } : undefined,
           );
         }
 
@@ -353,7 +405,7 @@ export function useJobSelectionActions({
         setJobActionInFlight(null);
       }
     },
-    [loadJobs],
+    [loadJobs, pushUndo, undo],
   );
 
   // Option-less variants. mark_closed needs an outcome and goes through

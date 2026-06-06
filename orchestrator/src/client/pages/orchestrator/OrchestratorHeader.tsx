@@ -2,7 +2,14 @@ import { ActivityLogButton } from "@client/components/ActivityLogButton";
 import { PageHeader, StatusIndicator } from "@client/components/layout";
 import { ViewToggle } from "@client/components/ViewToggle";
 import type { JobSource } from "@shared/types.js";
-import { Activity, Link as LinkIcon, Loader2, Play, Square } from "lucide-react";
+import {
+  Activity,
+  Link as LinkIcon,
+  Loader2,
+  Play,
+  RotateCcw,
+  Square,
+} from "lucide-react";
 import type React from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,6 +25,9 @@ interface OrchestratorHeaderProps {
   onOpenLlmQueue: () => void;
   llmActiveCount: number;
   onCancelPipeline: () => void;
+  canUndo: boolean;
+  undoLabel: string | null;
+  onUndo: () => void;
 }
 
 export const OrchestratorHeader: React.FC<OrchestratorHeaderProps> = ({
@@ -31,7 +41,25 @@ export const OrchestratorHeader: React.FC<OrchestratorHeaderProps> = ({
   onOpenLlmQueue,
   llmActiveCount,
   onCancelPipeline,
+  canUndo,
+  undoLabel,
+  onUndo,
 }) => {
+  const undoButton = (
+    <Button
+      size="sm"
+      variant="ghost"
+      onClick={onUndo}
+      disabled={!canUndo}
+      className="gap-2"
+      title={canUndo ? `Undo: ${undoLabel}` : "Nothing to undo"}
+      aria-label="Undo last action"
+    >
+      <RotateCcw className="h-4 w-4" />
+      <span className="hidden sm:inline">Undo</span>
+    </Button>
+  );
+
   const queueButton = (
     <Button
       size="sm"
@@ -55,6 +83,7 @@ export const OrchestratorHeader: React.FC<OrchestratorHeaderProps> = ({
 
   const actions = isPipelineRunning ? (
     <div className="flex items-center gap-2">
+      {undoButton}
       <ActivityLogButton />
       {queueButton}
       <Button
@@ -78,6 +107,7 @@ export const OrchestratorHeader: React.FC<OrchestratorHeaderProps> = ({
     </div>
   ) : (
     <div className="flex items-center gap-2">
+      {undoButton}
       <ActivityLogButton />
       {queueButton}
       <Button

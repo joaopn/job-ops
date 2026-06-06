@@ -45,8 +45,10 @@ import {
   formatJobForWebhook,
   safeFilenamePart,
 } from "@/lib/utils";
+import { restoreJobStates, snapshotJob } from "@client/lib/undo";
 import type { FilterTab } from "./constants";
 import { MarkClosedPopover } from "./MarkClosedPopover";
+import { useUndo } from "./useUndoController";
 
 interface JobDetailPanelProps {
   activeTab: FilterTab;
@@ -76,6 +78,24 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
   const previousSelectedJobIdRef = useRef<string | null>(null);
   const markAsAppliedMutation = useMarkAsAppliedMutation();
   const skipJobMutation = useSkipJobMutation();
+
+  const { pushUndo, undo } = useUndo();
+  const registerUndo = useCallback(
+    (job: Job, label: string) => {
+      const snap = snapshotJob(job);
+      pushUndo({
+        label,
+        restore: async () => {
+          await restoreJobStates([snap]);
+        },
+      });
+    },
+    [pushUndo],
+  );
+  const undoToastAction = useMemo(
+    () => ({ label: "Undo", onClick: () => undo() }),
+    [undo],
+  );
 
   const { personName } = useActiveCv();
   const { renderMarkdownInJobDescriptions } = useSettings();
@@ -200,7 +220,8 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
     if (!selectedJob) return;
     try {
       await markAsAppliedMutation.mutateAsync(selectedJob.id);
-      toast.success("Marked as applied");
+      registerUndo(selectedJob, "Mark applied");
+      toast.success("Marked as applied", { action: undoToastAction });
       await onJobUpdated();
     } catch (error) {
       const message =
@@ -213,7 +234,8 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
     if (!selectedJob) return;
     try {
       await skipJobMutation.mutateAsync(selectedJob.id);
-      toast.message("Job skipped");
+      registerUndo(selectedJob, "Skip");
+      toast.message("Job skipped", { action: undoToastAction });
       await onJobUpdated();
     } catch (error) {
       const message =
@@ -226,7 +248,8 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
     if (!selectedJob) return;
     try {
       await api.updateJob(selectedJob.id, { status: "in_progress" });
-      toast.success("Moved to in progress");
+      registerUndo(selectedJob, "Move to In Progress");
+      toast.success("Moved to in progress", { action: undoToastAction });
       await onJobUpdated();
     } catch (error) {
       const message =
@@ -242,7 +265,8 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
     try {
       await api.updateJobOutcome(selectedJob.id, { outcome });
       await api.updateJob(selectedJob.id, { status: "closed" });
-      toast.success("Application closed");
+      registerUndo(selectedJob, "Close application");
+      toast.success("Application closed", { action: undoToastAction });
       await onJobUpdated();
     } catch (error) {
       const message =
@@ -255,7 +279,8 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
     if (!selectedJob) return;
     try {
       await api.updateJob(selectedJob.id, { status: "selected" });
-      toast.message("Moved to Selected");
+      registerUndo(selectedJob, "Move to Selected");
+      toast.message("Moved to Selected", { action: undoToastAction });
       await onJobUpdated();
     } catch (error) {
       const message =
@@ -272,7 +297,8 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
         outcome: null,
         closedAt: null,
       });
-      toast.success("Job reopened");
+      registerUndo(selectedJob, "Reopen");
+      toast.success("Job reopened", { action: undoToastAction });
       await onJobUpdated();
     } catch (error) {
       const message =

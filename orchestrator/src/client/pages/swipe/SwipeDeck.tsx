@@ -23,10 +23,11 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
   isPipelineRunning,
   onRunPipeline,
 }) => {
-  const { cards, isLoading, isError, act, refetch } = useSwipeDeck({
-    pipelineTerminalEvent,
-    isPipelineRunning,
-  });
+  const { cards, isLoading, isError, act, canUndo, undo, refetch } =
+    useSwipeDeck({
+      pipelineTerminalEvent,
+      isPipelineRunning,
+    });
   const cardRef = useRef<SwipeCardHandle>(null);
 
   if (isLoading) {
@@ -88,9 +89,11 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
       </div>
       <SwipeActionBar
         disabled={false}
+        canUndo={canUndo}
         onSkip={() => cardRef.current?.flyOut("skip")}
         onBacklog={() => cardRef.current?.flyOut("move_to_backlog")}
         onSelect={() => cardRef.current?.flyOut("move_to_selected")}
+        onUndo={undo}
       />
     </div>
   );

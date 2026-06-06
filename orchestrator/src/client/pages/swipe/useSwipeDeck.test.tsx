@@ -10,6 +10,7 @@ import { useSwipeDeck } from "./useSwipeDeck";
 vi.mock("@client/api", () => ({
   getJobs: vi.fn(),
   streamJobAction: vi.fn(),
+  updateJob: vi.fn(),
 }));
 
 vi.mock("@client/lib/toast", () => ({
@@ -31,6 +32,9 @@ const wrapper = ({ children }: { children: React.ReactNode }) => {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(api.streamJobAction).mockResolvedValue(undefined);
+  vi.mocked(api.updateJob).mockResolvedValue(
+    createJob({ id: "x" }) as Awaited<ReturnType<typeof api.updateJob>>,
+  );
 });
 
 describe("useSwipeDeck", () => {
@@ -117,5 +121,37 @@ describe("useSwipeDeck", () => {
     });
 
     expect(result.current.cards.map((c) => c.id)).toEqual(["a"]);
+  });
+
+  it("undoes the last swipe: PATCHes back to discovered and re-enters the deck", async () => {
+    vi.mocked(api.getJobs).mockResolvedValue({
+      jobs: [job({ id: "a", suitabilityCategory: "very_good_fit" })],
+    } as Awaited<ReturnType<typeof api.getJobs>>);
+
+    const { result } = renderHook(
+      () => useSwipeDeck({ pipelineTerminalEvent: null }),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(result.current.cards).toHaveLength(1));
+    expect(result.current.canUndo).toBe(false);
+
+    await act(async () => {
+      await result.current.act(result.current.cards[0], "skip");
+    });
+    expect(result.current.cards).toHaveLength(0);
+    expect(result.current.canUndo).toBe(true);
+
+    await act(async () => {
+      await result.current.undo();
+    });
+
+    expect(api.updateJob).toHaveBeenCalledWith("a", {
+      status: "discovered",
+      outcome: null,
+      closedAt: null,
+    });
+    expect(result.current.cards.map((c) => c.id)).toEqual(["a"]);
+    expect(result.current.canUndo).toBe(false);
   });
 });

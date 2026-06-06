@@ -211,6 +211,12 @@ export const SHORTCUTS = {
     label: "Keyboard shortcuts",
     group: "meta",
   },
+  undo: {
+    key: "$mod+z",
+    displayKey: "$mod+Z",
+    label: "Undo last action",
+    group: "actions",
+  },
 } as const satisfies Record<string, ShortcutDef>;
 
 export type ShortcutId = keyof typeof SHORTCUTS;

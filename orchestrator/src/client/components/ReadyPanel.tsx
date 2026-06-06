@@ -30,6 +30,8 @@ import {
   safeFilenamePart,
 } from "@/lib/utils";
 import { getRenderableJobDescription } from "@/client/lib/jobDescription";
+import { restoreJobStates, snapshotJob } from "@client/lib/undo";
+import { useUndo } from "@client/pages/orchestrator/useUndoController";
 import * as api from "../api";
 import {
   useMarkAsAppliedMutation,
@@ -98,12 +100,7 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
   const [showDescription, setShowDescription] = useState(false);
   const { isRescoring, rescoreJob } = useRescoreJob(onJobUpdated);
   const { renderMarkdownInJobDescriptions } = useSettings();
-  const [recentlyApplied, setRecentlyApplied] = useState<{
-    jobId: string;
-    jobTitle: string;
-    employer: string;
-    timeoutId: ReturnType<typeof setTimeout>;
-  } | null>(null);
+  const { pushUndo, undo } = useUndo();
   const previousJobIdRef = useRef<string | null>(null);
   const markAsAppliedMutation = useMarkAsAppliedMutation();
   const skipJobMutation = useSkipJobMutation();
@@ -170,45 +167,21 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
     [job?.jobDescription],
   );
 
-  const handleUndoApplied = useCallback(
-    async (jobId: string) => {
-      try {
-        // Revert to ready status
-        await api.updateJob(jobId, { status: "ready" });
-        toast.success("Reverted to Ready");
-
-        if (recentlyApplied?.timeoutId) {
-          clearTimeout(recentlyApplied.timeoutId);
-        }
-        setRecentlyApplied(null);
-        await onJobUpdated();
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Failed to undo";
-        toast.error(message);
-      }
-    },
-    [onJobUpdated, recentlyApplied],
-  );
-
-  // Handle mark as applied with undo capability
+  // Handle mark as applied with undo (routed through the shared controller so
+  // the toolbar button + Ctrl/Cmd+Z also revert it).
   const handleMarkApplied = useCallback(async () => {
     if (!job) return;
 
     try {
       setIsMarkingApplied(true);
+      const snap = snapshotJob(job);
       await markAsAppliedMutation.mutateAsync(job.id);
 
-      // Store for undo
-      const timeoutId = setTimeout(() => {
-        setRecentlyApplied(null);
-      }, 8000);
-
-      setRecentlyApplied({
-        jobId: job.id,
-        jobTitle: job.title,
-        employer: job.employer,
-        timeoutId,
+      pushUndo({
+        label: "Mark applied",
+        restore: async () => {
+          await restoreJobStates([snap]);
+        },
       });
 
       // Notify parent to move to next job
@@ -217,11 +190,7 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
 
       toast.success("Marked as applied", {
         description: `${job.title} at ${job.employer}`,
-        action: {
-          label: "Undo",
-          onClick: () => handleUndoApplied(job.id),
-        },
-        duration: 6000,
+        action: { label: "Undo", onClick: () => undo() },
       });
     } catch (error) {
       const message =
@@ -230,7 +199,7 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
     } finally {
       setIsMarkingApplied(false);
     }
-  }, [job, markAsAppliedMutation, onJobMoved, onJobUpdated, handleUndoApplied]);
+  }, [job, markAsAppliedMutation, onJobMoved, onJobUpdated, pushUndo, undo]);
 
   const handleRegenerate = useCallback(async () => {
     if (!job) return;
@@ -708,31 +677,6 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
         job={job}
         onJobUpdated={onJobUpdated}
       />
-
-      {/* ─────────────────────────────────────────────────────────────────────
-          UNDO BAR (conditional)
-          Lightweight undo option after marking applied
-      ───────────────────────────────────────────────────────────────────── */}
-      {recentlyApplied && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] max-w-xl">
-          <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-card px-4 py-2 shadow-lg">
-            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-            <span className="min-w-0 flex-1 truncate text-sm">
-              <span className="font-medium">{recentlyApplied.jobTitle}</span>
-              <span className="text-muted-foreground"> marked applied</span>
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 gap-1.5 text-xs"
-              onClick={() => handleUndoApplied(recentlyApplied.jobId)}
-            >
-              <Undo2 className="h-3.5 w-3.5" />
-              Undo
-            </Button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

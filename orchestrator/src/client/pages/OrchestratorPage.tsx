@@ -38,6 +38,7 @@ import { useOrchestratorData } from "./orchestrator/useOrchestratorData";
 import { useOrchestratorFilters } from "./orchestrator/useOrchestratorFilters";
 import { usePipelineControls } from "./orchestrator/usePipelineControls";
 import { useScrollToJobItem } from "./orchestrator/useScrollToJobItem";
+import { UndoProvider, useUndoController } from "./orchestrator/useUndoController";
 import {
 	getEnabledSources,
 	getJobCounts,
@@ -179,6 +180,8 @@ export const OrchestratorPage: React.FC = () => {
 		[settings],
 	);
 
+	const undoController = useUndoController(loadJobs);
+
 	const {
 		isRunModeModalOpen,
 		setIsRunModeModalOpen,
@@ -259,6 +262,8 @@ export const OrchestratorPage: React.FC = () => {
 		activeJobs,
 		activeTab,
 		loadJobs,
+		pushUndo: undoController.pushUndo,
+		undo: undoController.undo,
 	});
 
 	useEffect(() => {
@@ -330,6 +335,7 @@ export const OrchestratorPage: React.FC = () => {
 		toggleSelectJob,
 		runJobAction,
 		loadJobs,
+		onUndo: undoController.undo,
 	});
 
 	const handleCommandSelectJob = useCallback(
@@ -462,7 +468,7 @@ export const OrchestratorPage: React.FC = () => {
 	}, [dateFilter.dimensions.length]);
 
 	return (
-		<>
+		<UndoProvider value={undoController}>
 			{/* Desktop: viewport-height app shell so the list/detail region fills
           exactly the space left under the header/banner/filters — no magic
           `100vh - Nrem` math, no document scroll. Below lg the `lg:` classes
@@ -479,6 +485,9 @@ export const OrchestratorPage: React.FC = () => {
 					onOpenLlmQueue={() => setIsLlmQueueOpen(true)}
 					llmActiveCount={llmQueue.active.length}
 					onCancelPipeline={handleCancelPipeline}
+					canUndo={undoController.canUndo}
+					undoLabel={undoController.pendingLabel}
+					onUndo={undoController.undo}
 				/>
 
 				<PipelineRunBanner
@@ -702,6 +711,6 @@ export const OrchestratorPage: React.FC = () => {
 				}}
 				activeTab={activeTab}
 			/>
-		</>
+		</UndoProvider>
 	);
 };

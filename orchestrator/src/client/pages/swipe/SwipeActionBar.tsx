@@ -3,25 +3,40 @@
  * swipe gestures, plus the gesture-less Backlog action.
  */
 
-import { Archive, Check, X } from "lucide-react";
+import { Archive, Check, RotateCcw, X } from "lucide-react";
 import type React from "react";
 import { Button } from "@/components/ui/button";
 
 interface SwipeActionBarProps {
   disabled: boolean;
+  canUndo: boolean;
   onSkip: () => void;
   onBacklog: () => void;
   onSelect: () => void;
+  onUndo: () => void;
 }
 
 export const SwipeActionBar: React.FC<SwipeActionBarProps> = ({
   disabled,
+  canUndo,
   onSkip,
   onBacklog,
   onSelect,
+  onUndo,
 }) => {
   return (
-    <div className="flex items-center justify-center gap-6 px-4">
+    <div className="relative flex items-center justify-center gap-6 px-4">
+      <Button
+        type="button"
+        size="icon"
+        variant="ghost"
+        disabled={!canUndo}
+        onClick={onUndo}
+        aria-label="Undo last swipe"
+        className="absolute left-4 top-1/2 h-10 w-10 -translate-y-1/2 rounded-full text-muted-foreground"
+      >
+        <RotateCcw className="h-4 w-4" />
+      </Button>
       <Button
         type="button"
         size="icon"
