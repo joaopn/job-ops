@@ -4,6 +4,7 @@ import { restoreJobStates, snapshotJob } from "@client/lib/undo";
 import {
   type DuplicateJobGroup,
   type JobListItem,
+  type JobStatus,
   SUITABILITY_CATEGORY_RANK,
 } from "@shared/types";
 import type React from "react";
@@ -20,6 +21,14 @@ import {
 } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
+import { tabs } from "./constants";
+
+// Map each triage status to the tab it lives under in Manage, so the reviewer
+// can see where each copy currently sits. Derived from the canonical `tabs`
+// list (excluding the catch-all "all" tab, which has no statuses).
+const STATUS_TAB_LABEL: Partial<Record<JobStatus, string>> = Object.fromEntries(
+  tabs.flatMap((tab) => tab.statuses.map((status) => [status, tab.label])),
+);
 
 interface DuplicateReviewModalProps {
   open: boolean;
@@ -210,6 +219,9 @@ export const DuplicateReviewModal: React.FC<DuplicateReviewModalProps> = ({
                         <span className="truncate font-medium">
                           {job.sourceLabel ?? job.source}
                         </span>
+                        <Badge variant="secondary" className="font-normal">
+                          {STATUS_TAB_LABEL[job.status] ?? job.status}
+                        </Badge>
                         {isKeeper && (
                           <Badge
                             variant="outline"
