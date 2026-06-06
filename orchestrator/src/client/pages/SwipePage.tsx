@@ -5,6 +5,7 @@
  */
 
 import { PageHeader } from "@client/components/layout";
+import { PipelineProgressStrip } from "@client/components/PipelineProgressStrip";
 import { ViewToggle } from "@client/components/ViewToggle";
 import { useSettings } from "@client/hooks/useSettings";
 import { Loader2, Play, Square } from "lucide-react";
@@ -75,6 +76,8 @@ export const SwipePage: React.FC = () => {
         fullWidth
         inlineActions
       />
+
+      <PipelineProgressStrip isRunning={isPipelineRunning} />
 
       <main className="flex min-h-0 flex-1 flex-col px-4 pb-[env(safe-area-inset-bottom)] pt-4">
         <SwipeDeck

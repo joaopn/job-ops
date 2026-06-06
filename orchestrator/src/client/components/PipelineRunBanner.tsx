@@ -56,7 +56,7 @@ interface PipelineRunBannerProps {
   onRerunSource?: (source: JobSource) => void;
 }
 
-const stepLabels: Record<PipelineProgressEvent["step"], string> = {
+export const stepLabels: Record<PipelineProgressEvent["step"], string> = {
   idle: "Ready",
   crawling: "Crawling",
   importing: "Importing",
@@ -81,7 +81,7 @@ const stepBadgeClasses: Record<PipelineProgressEvent["step"], string> = {
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
 
-function computePercentage(progress: PipelineProgressEvent): number {
+export function computePercentage(progress: PipelineProgressEvent): number {
   switch (progress.step) {
     case "crawling": {
       if (progress.crawlingTermsTotal > 0) {

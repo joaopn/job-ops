@@ -5,9 +5,11 @@
 
 import { Loader2, Play } from "lucide-react";
 import type React from "react";
+import { useRef } from "react";
 import { Button } from "@/components/ui/button";
+import { FitCountChips } from "./FitCountChips";
 import { SwipeActionBar } from "./SwipeActionBar";
-import { SwipeCard } from "./SwipeCard";
+import { SwipeCard, SwipeCardContent, type SwipeCardHandle } from "./SwipeCard";
 import { useSwipeDeck } from "./useSwipeDeck";
 
 interface SwipeDeckProps {
@@ -23,7 +25,9 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
 }) => {
   const { cards, isLoading, isError, act, refetch } = useSwipeDeck({
     pipelineTerminalEvent,
+    isPipelineRunning,
   });
+  const cardRef = useRef<SwipeCardHandle>(null);
 
   if (isLoading) {
     return (
@@ -67,23 +71,26 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 pb-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 pb-4">
+      <FitCountChips jobs={cards} />
       <div className="relative mx-auto min-h-0 w-full max-w-md flex-1">
         {next && (
-          <div className="absolute inset-0 translate-y-2 scale-[0.96] rounded-xl border bg-card/60" />
+          <div className="pointer-events-none absolute inset-0 scale-[0.97] opacity-90">
+            <SwipeCardContent job={next} />
+          </div>
         )}
         <SwipeCard
           key={top.id}
+          ref={cardRef}
           job={top}
-          onSelect={() => act(top, "move_to_selected")}
-          onSkip={() => act(top, "skip")}
+          onCommit={(action) => act(top, action)}
         />
       </div>
       <SwipeActionBar
         disabled={false}
-        onSkip={() => act(top, "skip")}
-        onBacklog={() => act(top, "move_to_backlog")}
-        onSelect={() => act(top, "move_to_selected")}
+        onSkip={() => cardRef.current?.flyOut("skip")}
+        onBacklog={() => cardRef.current?.flyOut("move_to_backlog")}
+        onSelect={() => cardRef.current?.flyOut("move_to_selected")}
       />
     </div>
   );

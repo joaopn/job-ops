@@ -15,7 +15,7 @@ interface FitIndicatorProps {
   className?: string;
 }
 
-const PILL_CLASS: Record<SuitabilityCategory, string> = {
+export const PILL_CLASS: Record<SuitabilityCategory, string> = {
   very_good_fit:
     "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
   good_fit: "bg-sky-500/10 text-sky-300 border-sky-500/30",

@@ -43,6 +43,13 @@ export const SWIPE_DECK_QUERY_KEY = ["swipe-deck", "discovered"] as const;
 interface UseSwipeDeckArgs {
   /** Terminal pipeline event from useOrchestratorData; refetches the deck. */
   pipelineTerminalEvent: { status: string; errorMessage: string | null } | null;
+  /**
+   * While a run is in progress, poll so newly-discovered jobs populate an
+   * empty deck. Polling is suppressed once cards exist so an active swipe
+   * isn't yanked out from under the user (the final list syncs on the
+   * terminal event regardless).
+   */
+  isPipelineRunning?: boolean;
 }
 
 export interface UseSwipeDeckResult {
@@ -55,6 +62,7 @@ export interface UseSwipeDeckResult {
 
 export function useSwipeDeck({
   pipelineTerminalEvent,
+  isPipelineRunning = false,
 }: UseSwipeDeckArgs): UseSwipeDeckResult {
   // Jobs the user has already swiped this session — hidden optimistically so
   // the card leaves immediately, before the network round-trip resolves.
@@ -69,6 +77,9 @@ export function useSwipeDeck({
       });
       return data.jobs;
     },
+    // Populate an empty deck live during a run; don't poll once cards exist.
+    refetchInterval: (query) =>
+      isPipelineRunning && (query.state.data?.length ?? 0) === 0 ? 3000 : false,
   });
 
   // Refetch when a pipeline run terminates (new discovered jobs may exist).

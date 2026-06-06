@@ -25,6 +25,12 @@ let virtualizationEnvironment: ReturnType<
 > | null = null;
 
 beforeEach(() => {
+  // Run this file under fake timers (auto-advanced so real-time-based
+  // `waitFor`/async still progress normally). This makes @tanstack/virtual-core's
+  // debounced `maybeNotify` setTimeout a FAKE timer we can cancel at teardown —
+  // otherwise it occasionally fires after jsdom is torn down and crashes with
+  // `ReferenceError: window is not defined` from React's `getCurrentEventPriority`.
+  vi.useFakeTimers({ shouldAdvanceTime: true });
   // Default environment: the element-mode virtualizer needs ResizeObserver
   // and a non-zero `getBoundingClientRect` on its scroll container, or it
   // sees an empty viewport in jsdom and renders zero rows. Individual
@@ -33,22 +39,16 @@ beforeEach(() => {
   virtualizationEnvironment = setupWindowVirtualizerTestEnvironment();
 });
 
-afterEach(async () => {
+afterEach(() => {
   virtualizationEnvironment?.cleanup();
   virtualizationEnvironment = null;
-  // Unmount before draining so react-virtual's listener is unsubscribed.
+  // Unmount before clearing so react-virtual's listener is unsubscribed.
   cleanup();
-  // @tanstack/virtual-core's `maybeNotify` schedules a setTimeout that calls
-  // back into React's reducer dispatch. If jsdom tears down before that timer
-  // fires we get `ReferenceError: window is not defined` from
-  // `getCurrentEventPriority`. A single tick isn't always enough — when the
-  // notify fires it dispatches a React reducer action, which schedules a
-  // follow-up microtask/timer; a few tick+microtask cycles drain the chain
-  // while jsdom is still alive.
-  for (let i = 0; i < 5; i++) {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    await Promise.resolve();
-  }
+  // Cancel virtual-core's pending debounced notify (and any other queued timer)
+  // deterministically, while jsdom is still alive, so it can't dispatch into
+  // React after teardown.
+  vi.clearAllTimers();
+  vi.useRealTimers();
 });
 
 describe("JobListPanel", () => {
