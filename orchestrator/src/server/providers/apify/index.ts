@@ -59,6 +59,7 @@ async function runApifyInstance(
       searchTerms,
       placeholderMinimums: template?.placeholderMinimums,
       maxJobs: instance.maxJobs,
+      maxAgeDays: instance.maxAgeDays,
     });
   } catch (error) {
     const message =

@@ -46,6 +46,7 @@ function mapRow(row: ProviderInstanceDbRow): ProviderInstanceRow {
     outputMappingJson: row.outputMappingJson,
     mappings: parseMappingsJson(row.mappingsJson),
     maxJobs: row.maxJobs ?? undefined,
+    maxAgeDays: row.maxAgeDays ?? undefined,
     updatedAt: row.updatedAt,
   };
 }
@@ -98,6 +99,7 @@ export async function createProviderInstance(
     outputMappingJson: input.outputMappingJson ?? "{}",
     mappingsJson: input.mappings ?? {},
     maxJobs: input.maxJobs ?? null,
+    maxAgeDays: input.maxAgeDays ?? null,
     updatedAt: now,
   });
   const created = await getProviderInstance(id);
@@ -132,6 +134,7 @@ export async function updateProviderInstance(
   }
   // `null` clears the override; `undefined` leaves it untouched.
   if (patch.maxJobs !== undefined) next.maxJobs = patch.maxJobs;
+  if (patch.maxAgeDays !== undefined) next.maxAgeDays = patch.maxAgeDays;
 
   await db
     .update(providerInstances)

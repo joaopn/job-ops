@@ -71,6 +71,7 @@ const DEFAULT_FORM_VALUES: UpdateSettingsInput = {
   autoTailoringEnabled: null,
   enableJobScoring: null,
   inboxStaleThresholdDays: null,
+  scrapeMaxAgeDays: null,
   maxBriefChars: null,
   maxJobDescriptionChars: null,
   maxTailoredContentChars: null,
@@ -248,6 +249,7 @@ const SECTION_FIELD_MAP: Record<
     "autoTailoringEnabled",
     "enableJobScoring",
     "inboxStaleThresholdDays",
+    "scrapeMaxAgeDays",
     "manualJobFetchTimeoutMs",
     "manualJobFetchMinExtractedChars",
     "manualJobFetchBrowserSettleMs",
@@ -301,6 +303,7 @@ const NULL_SETTINGS_PAYLOAD: UpdateSettingsInput = {
   autoTailoringEnabled: null,
   enableJobScoring: null,
   inboxStaleThresholdDays: null,
+  scrapeMaxAgeDays: null,
   maxBriefChars: null,
   maxJobDescriptionChars: null,
   maxTailoredContentChars: null,
@@ -345,6 +348,7 @@ const mapSettingsToForm = (data: AppSettings): UpdateSettingsInput => ({
   autoTailoringEnabled: data.autoTailoringEnabled.override,
   enableJobScoring: data.enableJobScoring.override,
   inboxStaleThresholdDays: data.inboxStaleThresholdDays.override,
+  scrapeMaxAgeDays: data.scrapeMaxAgeDays.override ?? null,
   maxBriefChars: data.maxBriefChars.override,
   maxJobDescriptionChars: data.maxJobDescriptionChars.override,
   maxTailoredContentChars: data.maxTailoredContentChars.override,
@@ -464,6 +468,10 @@ const getDerivedSettings = (settings: AppSettings | null) => {
       inboxStaleThresholdDays: {
         effective: settings?.inboxStaleThresholdDays?.value ?? 7,
         default: settings?.inboxStaleThresholdDays?.default ?? 7,
+      },
+      scrapeMaxAgeDays: {
+        effective: settings?.scrapeMaxAgeDays?.value ?? null,
+        default: settings?.scrapeMaxAgeDays?.default ?? null,
       },
       manualJobFetchTimeoutMs: {
         effective: settings?.manualJobFetchTimeoutMs?.value ?? 15_000,
@@ -702,6 +710,10 @@ export const SettingsPage: React.FC = () => {
         inboxStaleThresholdDays: nullIfSame(
           data.inboxStaleThresholdDays,
           pipeline.inboxStaleThresholdDays.default,
+        ),
+        scrapeMaxAgeDays: nullIfSame(
+          data.scrapeMaxAgeDays,
+          pipeline.scrapeMaxAgeDays.default,
         ),
         manualJobFetchTimeoutMs: nullIfSame(
           data.manualJobFetchTimeoutMs,

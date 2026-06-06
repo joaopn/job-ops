@@ -23,6 +23,11 @@ interface SubstituteArgs {
    * placeholder always resolves to a sensible number.
    */
   maxJobs?: number;
+  /**
+   * Per-instance max job age in days. Exposed as the `{{maxAgeDays}}`
+   * placeholder; takes precedence over the global `maxAgeDays` setting.
+   */
+  maxAgeDays?: number;
 }
 
 /**
@@ -87,6 +92,19 @@ function buildPlaceholders(args: SubstituteArgs): Record<string, Placeholder> {
         ? Math.floor(args.maxJobs)
         : perTermValue,
   };
+
+  // Max-age-to-scrape, in days: per-instance override first, else the global
+  // setting. Only present when one is set — there's no sensible numeric
+  // default for "no filter", so an unset value leaves `{{maxAgeDays}}` to
+  // resolve to "" (a freeform actor that needs a recency bound should only
+  // reference it once an age is configured).
+  const resolvedMaxAge =
+    typeof args.maxAgeDays === "number" && args.maxAgeDays > 0
+      ? args.maxAgeDays
+      : Number(runGlobals.maxAgeDays);
+  if (Number.isFinite(resolvedMaxAge) && resolvedMaxAge > 0) {
+    out.maxAgeDays = { kind: "number", value: Math.floor(resolvedMaxAge) };
+  }
 
   if (placeholderMinimums) {
     for (const [name, minimum] of Object.entries(placeholderMinimums)) {

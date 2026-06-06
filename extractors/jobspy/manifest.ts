@@ -38,6 +38,14 @@ const jobspyConfigSchema: SourceConfigSchema = {
       description:
         'JSON-encoded array of "remote" | "hybrid" | "onsite". Used when the Run modal\'s workplace-types mapping is disabled.',
     },
+    {
+      key: "max_age_days",
+      label: "Max job age (days)",
+      type: "number",
+      default: "",
+      description:
+        "Only request postings newer than this many days (maps to JobSpy's hours_old = days × 24). Leave blank to use JobSpy's default window.",
+    },
   ],
   globalMappings: [
     {
@@ -60,8 +68,19 @@ const jobspyConfigSchema: SourceConfigSchema = {
       sourceField: "max_jobs_per_term",
       enabledByDefault: true,
     },
+    {
+      globalField: "maxAgeDays",
+      sourceField: "max_age_days",
+      enabledByDefault: true,
+    },
   ],
 };
+
+function parseMaxAgeDays(raw: string | undefined): number | undefined {
+  if (!raw) return undefined;
+  const parsed = parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
 
 type JobSpySite = NonNullable<Parameters<typeof runJobSpy>[0]["sites"]>[number];
 
@@ -84,6 +103,8 @@ export const manifest: ExtractorManifest = {
 
     const sites = context.selectedSources.filter(isJobSpySite);
 
+    const maxAgeDays = parseMaxAgeDays(context.settings.max_age_days);
+
     const result = await runJobSpy({
       sites,
       searchTerms: context.searchTerms,
@@ -91,6 +112,7 @@ export const manifest: ExtractorManifest = {
       resultsWanted: context.settings.max_jobs_per_term
         ? parseInt(context.settings.max_jobs_per_term, 10)
         : undefined,
+      hoursOld: maxAgeDays !== undefined ? maxAgeDays * 24 : undefined,
       countryIndeed: context.settings.country_indeed,
       workplaceTypes: context.settings.workplaceTypes
         ? JSON.parse(context.settings.workplaceTypes)

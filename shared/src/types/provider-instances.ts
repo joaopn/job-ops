@@ -14,6 +14,10 @@ export interface ProviderInstanceRow {
   // the user. When set it overrides the run-budget-derived max for this actor;
   // also available to input templates as the `{{maxJobs}}` placeholder.
   maxJobs?: number;
+  // Optional per-instance max job age in days. When set it overrides the
+  // global "Max job age to scrape" setting for this actor; also available to
+  // input templates as the `{{maxAgeDays}}` placeholder.
+  maxAgeDays?: number;
   updatedAt: string;
 }
 
@@ -27,6 +31,7 @@ export interface CreateProviderInstanceInput {
   outputMappingJson?: string;
   mappings?: Partial<Record<SourceConfigGlobalField, boolean>>;
   maxJobs?: number;
+  maxAgeDays?: number;
 }
 
 export interface UpdateProviderInstanceInput {
@@ -39,6 +44,7 @@ export interface UpdateProviderInstanceInput {
   mappings?: Partial<Record<SourceConfigGlobalField, boolean>>;
   // `null` clears the override; `undefined` leaves it untouched.
   maxJobs?: number | null;
+  maxAgeDays?: number | null;
 }
 
 export interface ProviderActorTemplateSummary {

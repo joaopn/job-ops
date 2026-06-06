@@ -39,6 +39,7 @@ const GLOBAL_FIELD_LABELS: Record<SourceConfigGlobalField, string> = {
   workplaceTypes: "Workplace types",
   country: "Country",
   maxJobsPerTerm: "Max jobs per term (budget)",
+  maxAgeDays: "Max job age (days)",
 };
 
 function platformLabel(platform: string): string {

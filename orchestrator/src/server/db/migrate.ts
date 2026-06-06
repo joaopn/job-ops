@@ -514,12 +514,15 @@ const migrations: string[] = [
      output_mapping_json TEXT NOT NULL DEFAULT '{}',
      mappings_json TEXT NOT NULL DEFAULT '{}',
      max_jobs INTEGER,
+     max_age_days INTEGER,
      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
    )`,
   `CREATE INDEX IF NOT EXISTS idx_provider_instances_provider
      ON provider_instances(provider_id)`,
   // Additive: existing DBs predate max_jobs (skipped on dup-column, see loop).
   `ALTER TABLE provider_instances ADD COLUMN max_jobs INTEGER`,
+  // Additive: existing DBs predate max_age_days (skipped on dup-column).
+  `ALTER TABLE provider_instances ADD COLUMN max_age_days INTEGER`,
 ];
 
 console.log("🔧 Running database migrations...");

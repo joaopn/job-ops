@@ -83,6 +83,7 @@ export function AddActorDialog({
     FREEFORM_OUTPUT_STARTER,
   );
   const [maxJobs, setMaxJobs] = useState<number | undefined>(undefined);
+  const [maxAgeDays, setMaxAgeDays] = useState<number | undefined>(undefined);
 
   const selectedTemplate = useMemo(
     () => templates.find((t) => t.id === templateId) ?? null,
@@ -151,6 +152,7 @@ export function AddActorDialog({
       mappings:
         mode === "template" ? (selectedTemplate?.defaultMappings ?? {}) : {},
       maxJobs,
+      maxAgeDays,
     });
   };
 
@@ -275,6 +277,33 @@ export function AddActorDialog({
               Caps jobs scraped per search, overriding the run-budget
               calculation (also available as <code>{"{{maxJobs}}"}</code>).
               Blank = derive from the run budget.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="add-actor-max-age">
+              Max job age in days (optional)
+            </Label>
+            <Input
+              id="add-actor-max-age"
+              type="number"
+              min={1}
+              max={365}
+              value={maxAgeDays ?? ""}
+              onChange={(event) => {
+                const raw = event.target.value.trim();
+                const parsed = Number.parseInt(raw, 10);
+                setMaxAgeDays(
+                  raw === "" || !Number.isFinite(parsed) ? undefined : parsed,
+                );
+              }}
+              placeholder="Global default"
+              className="max-w-[12rem]"
+            />
+            <p className="text-xs text-muted-foreground">
+              Only scrape postings newer than this many days, overriding the
+              global "Max job age to scrape" setting (also available as{" "}
+              <code>{"{{maxAgeDays}}"}</code>). Blank = use the global setting.
             </p>
           </div>
 

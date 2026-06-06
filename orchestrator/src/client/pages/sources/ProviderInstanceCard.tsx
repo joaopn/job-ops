@@ -44,6 +44,7 @@ const GLOBAL_FIELD_LABELS: Record<SourceConfigGlobalField, string> = {
   workplaceTypes: "Workplace types",
   country: "Country",
   maxJobsPerTerm: "Max jobs per term (budget)",
+  maxAgeDays: "Max job age (days)",
 };
 
 interface ProviderInstanceCardProps {
@@ -66,6 +67,9 @@ export function ProviderInstanceCard({
     instance.outputMappingJson,
   );
   const [maxJobs, setMaxJobs] = useState<number | undefined>(instance.maxJobs);
+  const [maxAgeDays, setMaxAgeDays] = useState<number | undefined>(
+    instance.maxAgeDays,
+  );
   const [testResult, setTestResult] = useState<ProviderInstanceTestResponse | null>(
     null,
   );
@@ -78,6 +82,7 @@ export function ProviderInstanceCard({
     setInputTemplateJson(instance.inputTemplateJson);
     setOutputMappingJson(instance.outputMappingJson);
     setMaxJobs(instance.maxJobs);
+    setMaxAgeDays(instance.maxAgeDays);
   }, [instance]);
 
   const saveMutation = useMutation({
@@ -89,6 +94,7 @@ export function ProviderInstanceCard({
         inputTemplateJson,
         outputMappingJson,
         maxJobs: maxJobs ?? null,
+        maxAgeDays: maxAgeDays ?? null,
       }),
     onSuccess: () => {
       toast.success(`Saved ${label}`);
@@ -151,7 +157,8 @@ export function ProviderInstanceCard({
     actorRef !== instance.actorRef ||
     inputTemplateJson !== instance.inputTemplateJson ||
     outputMappingJson !== instance.outputMappingJson ||
-    (maxJobs ?? null) !== (instance.maxJobs ?? null);
+    (maxJobs ?? null) !== (instance.maxJobs ?? null) ||
+    (maxAgeDays ?? null) !== (instance.maxAgeDays ?? null);
 
   const isTemplate = instance.templateId !== null;
 
@@ -281,6 +288,35 @@ export function ProviderInstanceCard({
               actor, overriding the run-budget calculation. Blank = derive from
               the run budget. Floored at 10 (the actor's minimum). Available to
               the input template as <code>{"{{maxJobs}}"}</code>.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor={`max-age-${instance.id}`}>
+              Max job age in days (optional)
+            </Label>
+            <Input
+              id={`max-age-${instance.id}`}
+              type="number"
+              min={1}
+              max={365}
+              value={maxAgeDays ?? ""}
+              onChange={(event) => {
+                const raw = event.target.value.trim();
+                const parsed = Number.parseInt(raw, 10);
+                setMaxAgeDays(
+                  raw === "" || !Number.isFinite(parsed) ? undefined : parsed,
+                );
+              }}
+              placeholder="Global default"
+              className="max-w-[12rem]"
+            />
+            <p className="text-xs text-muted-foreground">
+              Only scrape postings newer than this many days, overriding the
+              global "Max job age to scrape" setting for this actor. Blank = use
+              the global setting (or no limit if it's unset). For LinkedIn it's
+              applied via the f_TPR date filter; freeform actors can reference it
+              as <code>{"{{maxAgeDays}}"}</code>.
             </p>
           </div>
 

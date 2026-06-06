@@ -359,6 +359,7 @@ export const providerInstances = sqliteTable(
       .notNull()
       .default(sql`('{}')`),
     maxJobs: integer("max_jobs"),
+    maxAgeDays: integer("max_age_days"),
     updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
   },
   (table) => ({

@@ -19,9 +19,33 @@ function getSearchTerms(context: ProviderRunContext): string[] {
  * per configured location (each city, else the country) so LinkedIn's
  * single-place `location` param is respected. Values are URL-encoded.
  */
+// Resolve the effective max job age in days: the per-instance override when
+// set, else the global "Max job age to scrape" setting (runGlobals), else
+// undefined (no recency filter).
+function resolveMaxAgeDays(
+  runGlobals: ProviderRunContext["runGlobals"],
+  instanceMaxAgeDays?: number,
+): number | undefined {
+  if (typeof instanceMaxAgeDays === "number" && instanceMaxAgeDays > 0) {
+    return Math.floor(instanceMaxAgeDays);
+  }
+  const parsed = Number(runGlobals.maxAgeDays);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : undefined;
+}
+
+// LinkedIn encodes the "Date posted" filter in the search URL as
+// `f_TPR=r<seconds>` (e.g. r86400 = 24h, r604800 = 7d, r2592000 = 30d). The
+// curious_coder actor only consumes search URLs (it has no date input field),
+// so the resolved max-age-to-scrape has to ride in the URL here.
+function postedWithinSecondsFor(maxAgeDays: number | undefined): number | null {
+  if (typeof maxAgeDays !== "number" || maxAgeDays <= 0) return null;
+  return maxAgeDays * 86_400;
+}
+
 function buildLinkedInSearchUrls(
   terms: string[],
   runGlobals: ProviderRunContext["runGlobals"],
+  maxAgeDays: number | undefined,
 ): string[] {
   const keywords = terms.map((term) => `"${term}"`).join(" OR ");
 
@@ -30,12 +54,17 @@ function buildLinkedInSearchUrls(
   const locations = cities.length > 0 ? cities : country ? [country] : [];
   const locationList = locations.length > 0 ? locations : [""];
 
+  const postedWithinSeconds = postedWithinSecondsFor(maxAgeDays);
+
   const urls: string[] = [];
   const seen = new Set<string>();
   for (const location of locationList) {
     const params: string[] = [];
     if (keywords) params.push(`keywords=${encodeURIComponent(keywords)}`);
     if (location) params.push(`location=${encodeURIComponent(location)}`);
+    if (postedWithinSeconds !== null) {
+      params.push(`f_TPR=r${postedWithinSeconds}`);
+    }
     params.push("pageNum=0");
     const url = `https://www.linkedin.com/jobs/search/?${params.join("&")}`;
     if (!seen.has(url)) {
@@ -119,7 +148,7 @@ export const linkedinJobsScraperTemplate: ProviderActorTemplate = {
   actorRef: "curious_coder/linkedin-jobs-scraper",
   displayName: "LinkedIn Jobs Scraper (curious_coder)",
   description:
-    "curious_coder/linkedin-jobs-scraper. Search URLs and result count are built automatically from your configured search terms + location (one URL per city, else the country) — you no longer paste LinkedIn URLs here, and any `urls`/`count` you set are ignored/overridden. The per-URL count scales with your run budget × number of search terms (the actor enforces a minimum of 10). Set scrapeCompany=true if you want company-side fields populated (costs more CUs).",
+    "curious_coder/linkedin-jobs-scraper. Search URLs and result count are built automatically from your configured search terms + location (one URL per city, else the country) — you no longer paste LinkedIn URLs here, and any `urls`/`count` you set are ignored/overridden. The per-URL count scales with your run budget × number of search terms (the actor enforces a minimum of 10). The global \"Max job age to scrape\" setting is applied via LinkedIn's f_TPR date filter on the built URLs when set. Set scrapeCompany=true if you want company-side fields populated (costs more CUs).",
   defaultInputTemplate: JSON.stringify(
     {
       scrapeCompany: false,
@@ -129,6 +158,7 @@ export const linkedinJobsScraperTemplate: ProviderActorTemplate = {
   ),
   defaultMappings: {
     maxJobsPerTerm: true,
+    maxAgeDays: true,
   },
   buildInput(context, base) {
     // Honor the configured location/terms by computing the search URLs and
@@ -141,9 +171,13 @@ export const linkedinJobsScraperTemplate: ProviderActorTemplate = {
         ? (base as Record<string, unknown>)
         : {};
     const terms = getSearchTerms(context);
+    const maxAgeDays = resolveMaxAgeDays(
+      context.runGlobals,
+      context.instance.maxAgeDays,
+    );
     return {
       ...baseObj,
-      urls: buildLinkedInSearchUrls(terms, context.runGlobals),
+      urls: buildLinkedInSearchUrls(terms, context.runGlobals, maxAgeDays),
       count: resolveLinkedInCount(
         context.runGlobals,
         terms.length,

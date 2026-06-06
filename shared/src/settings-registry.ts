@@ -458,6 +458,17 @@ export const settingsRegistry = {
     },
     serialize: serializeNullableNumber,
   },
+  // Global "max age to scrape" — only postings newer than N days are
+  // requested. Threaded into every extractor's run via the `maxAgeDays`
+  // global mapping; extractors that lack a recency parameter ignore it.
+  // null (default) means no global cap — each extractor keeps its own default.
+  scrapeMaxAgeDays: {
+    kind: "typed" as const,
+    schema: z.number().int().min(1).max(365).nullable(),
+    default: (): number | null => null,
+    parse: parseIntOrNull,
+    serialize: serializeNullableNumber,
+  },
   // --- Context limits (LLM-bound character caps) ---
   // Enforced at the write boundary; exceeding a cap returns 422 with the
   // observed length rather than silently truncating into the prompt.

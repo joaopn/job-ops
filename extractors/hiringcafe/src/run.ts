@@ -57,6 +57,7 @@ export interface RunHiringCafeOptions {
   workplaceTypes?: Array<"remote" | "hybrid" | "onsite">;
   locationRadiusMiles?: number;
   maxJobsPerTerm?: number;
+  maxAgeDays?: number;
   onProgress?: (event: HiringCafeProgressEvent) => void;
 }
 
@@ -221,6 +222,13 @@ export async function runHiringCafe(
             options.workplaceTypes ?? ["remote", "hybrid", "onsite"],
           ),
           HIRING_CAFE_MAX_JOBS_PER_TERM: String(maxJobsPerTerm),
+          ...(options.maxAgeDays && options.maxAgeDays > 0
+            ? {
+                HIRING_CAFE_DATE_FETCHED_PAST_N_DAYS: String(
+                  Math.floor(options.maxAgeDays),
+                ),
+              }
+            : {}),
           HIRING_CAFE_OUTPUT_JSON: DATASET_PATH,
           HIRING_CAFE_LOCATION_QUERY: strictLocationFilter ? location : "",
           HIRING_CAFE_LOCATION_RADIUS_MILES: strictLocationFilter

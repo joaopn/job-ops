@@ -30,6 +30,14 @@ const hiringcafeConfigSchema: SourceConfigSchema = {
       description:
         'JSON-encoded array of "remote" | "hybrid" | "onsite". Used when the Run modal\'s workplace-types mapping is disabled.',
     },
+    {
+      key: "max_age_days",
+      label: "Max job age (days)",
+      type: "number",
+      default: "",
+      description:
+        "Only request postings fetched in the last N days (maps to Hiring Cafe's dateFetchedPastNDays). Leave blank to use the default 30-day window.",
+    },
   ],
   globalMappings: [
     {
@@ -47,8 +55,19 @@ const hiringcafeConfigSchema: SourceConfigSchema = {
       sourceField: "max_jobs_per_term",
       enabledByDefault: true,
     },
+    {
+      globalField: "maxAgeDays",
+      sourceField: "max_age_days",
+      enabledByDefault: true,
+    },
   ],
 };
+
+function parseMaxAgeDays(raw: string | undefined): number | undefined {
+  if (!raw) return undefined;
+  const parsed = parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
 
 function toProgress(event: {
   type: string;
@@ -118,6 +137,7 @@ export const manifest: ExtractorManifest = {
         ? JSON.parse(context.settings.workplaceTypes)
         : undefined,
       maxJobsPerTerm,
+      maxAgeDays: parseMaxAgeDays(context.settings.max_age_days),
       onProgress: (event) => {
         if (context.shouldCancel?.()) return;
 

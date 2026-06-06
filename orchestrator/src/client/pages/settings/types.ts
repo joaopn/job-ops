@@ -55,6 +55,7 @@ export type PipelineSettingsValues = {
   autoTailoringEnabled: EffectiveDefault<boolean>;
   enableJobScoring: EffectiveDefault<boolean>;
   inboxStaleThresholdDays: EffectiveDefault<number>;
+  scrapeMaxAgeDays: EffectiveDefault<number | null>;
   manualJobFetchTimeoutMs: EffectiveDefault<number>;
   manualJobFetchMinExtractedChars: EffectiveDefault<number>;
   manualJobFetchBrowserSettleMs: EffectiveDefault<number>;

@@ -194,6 +194,12 @@ export async function discoverJobsStep(args: {
     ...(args.mergedConfig.maxJobsPerTerm !== undefined
       ? { maxJobsPerTerm: String(args.mergedConfig.maxJobsPerTerm) }
       : {}),
+    // Only emit the max-age global when the user set one. Unset → no key →
+    // each extractor keeps its own default; supporting extractors that opted
+    // into the mapping read it, the rest ignore it.
+    ...(settings.scrapeMaxAgeDays
+      ? { maxAgeDays: settings.scrapeMaxAgeDays }
+      : {}),
   };
 
   const sourcePlans = requestedSources.map((source) => ({

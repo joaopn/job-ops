@@ -50,6 +50,9 @@ sourceConfigsRouter.get("/", async (_req: Request, res: Response) => {
       city: settings.searchCities ?? "",
       country: settings.searchCountry ?? "",
       workplaceTypes: settings.workplaceTypes ?? "[]",
+      ...(settings.scrapeMaxAgeDays
+        ? { maxAgeDays: settings.scrapeMaxAgeDays }
+        : {}),
     };
 
     type ExtractorEntry = {
