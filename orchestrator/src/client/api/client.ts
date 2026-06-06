@@ -16,6 +16,7 @@ import type {
   CvDocument,
   CvDocumentSummary,
   CvUploadTemplateResponse,
+  DuplicateJobGroupsResponse,
   Job,
   JobActionRequest,
   JobActionResponse,
@@ -544,6 +545,10 @@ export async function getJobsRevision(options?: {
   return fetchApi<JobsRevisionResponse>(
     `/jobs/revision${query ? `?${query}` : ""}`,
   );
+}
+
+export async function getDuplicateGroups(): Promise<DuplicateJobGroupsResponse> {
+  return fetchApi<DuplicateJobGroupsResponse>("/jobs/duplicates");
 }
 
 export async function getJob(id: string): Promise<Job> {

@@ -342,7 +342,7 @@ const migrations: string[] = [
     starting TEXT,
     job_description TEXT,
     status TEXT NOT NULL DEFAULT 'discovered' CHECK(status IN ('discovered', 'selected', 'processing', 'ready', 'applied', 'in_progress', 'backlog', 'stale', 'skipped', 'closed')),
-    outcome TEXT CHECK(outcome IS NULL OR outcome IN ('rejected', 'withdrawn', 'ghosted', 'other')),
+    outcome TEXT CHECK(outcome IS NULL OR outcome IN ('rejected', 'withdrawn', 'ghosted', 'duplicated', 'other')),
     closed_at INTEGER,
     suitability_category TEXT CHECK(suitability_category IS NULL OR suitability_category IN ('very_good_fit', 'good_fit', 'bad_fit')),
     suitability_reason TEXT,

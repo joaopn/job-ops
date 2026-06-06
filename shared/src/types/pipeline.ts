@@ -264,6 +264,7 @@ export type JobAction =
   | "move_to_stale"
   | "move_to_inbox"
   | "mark_closed"
+  | "mark_duplicated"
   | "reopen";
 
 export type JobActionRequest =
@@ -276,6 +277,7 @@ export type JobActionRequest =
         | "move_to_backlog"
         | "move_to_stale"
         | "move_to_inbox"
+        | "mark_duplicated"
         | "reopen";
       jobIds: string[];
     }

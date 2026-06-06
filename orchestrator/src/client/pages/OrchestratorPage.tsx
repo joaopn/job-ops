@@ -18,6 +18,7 @@ import { type FilterTab, tabs } from "./orchestrator/constants";
 import { FloatingJobActionsBar } from "./orchestrator/FloatingJobActionsBar";
 import { BatchUrlImportSheet } from "./orchestrator/BatchUrlImportSheet";
 import { ClosedFilterChips } from "./orchestrator/ClosedFilterChips";
+import { DuplicateReviewModal } from "./orchestrator/DuplicateReviewModal";
 import { StaleControlBar } from "./orchestrator/StaleControlBar";
 import { LlmCallQueueSheet } from "./orchestrator/LlmCallQueueSheet";
 import { JobCommandBar } from "./orchestrator/JobCommandBar";
@@ -34,6 +35,7 @@ import { RunModeModal } from "./orchestrator/RunModeModal";
 import { useFilteredJobs } from "./orchestrator/useFilteredJobs";
 import { useJobSelectionActions } from "./orchestrator/useJobSelectionActions";
 import { useKeyboardShortcuts } from "./orchestrator/useKeyboardShortcuts";
+import { useDuplicateGroups } from "./orchestrator/useDuplicateGroups";
 import { useOrchestratorData } from "./orchestrator/useOrchestratorData";
 import { useOrchestratorFilters } from "./orchestrator/useOrchestratorFilters";
 import { usePipelineControls } from "./orchestrator/usePipelineControls";
@@ -182,6 +184,26 @@ export const OrchestratorPage: React.FC = () => {
 
 	const undoController = useUndoController(loadJobs);
 
+	const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
+	const [isDuplicateBannerDismissed, setIsDuplicateBannerDismissed] =
+		useState(false);
+	const {
+		groups: duplicateGroups,
+		count: duplicateCount,
+		refetch: refetchDuplicates,
+	} = useDuplicateGroups();
+
+	// Keep the banner count in sync with the job list (new finds, resolutions,
+	// status moves all change `jobs`).
+	useEffect(() => {
+		void refetchDuplicates();
+	}, [jobs, refetchDuplicates]);
+
+	const handleDuplicatesResolved = useCallback(() => {
+		void loadJobs();
+		void refetchDuplicates();
+	}, [loadJobs, refetchDuplicates]);
+
 	const {
 		isRunModeModalOpen,
 		setIsRunModeModalOpen,
@@ -296,6 +318,7 @@ export const OrchestratorPage: React.FC = () => {
 		isDetailDrawerOpen ||
 		isBatchUrlImportOpen ||
 		isLlmQueueOpen ||
+		isDuplicateModalOpen ||
 		navOpen;
 
 	const isAnyModalOpenExcludingCommandBar =
@@ -305,6 +328,7 @@ export const OrchestratorPage: React.FC = () => {
 		isDetailDrawerOpen ||
 		isBatchUrlImportOpen ||
 		isLlmQueueOpen ||
+		isDuplicateModalOpen ||
 		navOpen;
 
 	const isAnyModalOpenExcludingHelp =
@@ -314,6 +338,7 @@ export const OrchestratorPage: React.FC = () => {
 		isDetailDrawerOpen ||
 		isBatchUrlImportOpen ||
 		isLlmQueueOpen ||
+		isDuplicateModalOpen ||
 		navOpen;
 
 	useKeyboardShortcuts({
@@ -533,6 +558,32 @@ export const OrchestratorPage: React.FC = () => {
 							filteredCount={activeJobs.length}
 						/>
 
+						{duplicateCount > 0 && !isDuplicateBannerDismissed && (
+							<div className="flex items-center justify-between gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm">
+								<span className="text-amber-200">
+									{duplicateCount} possible duplicate{" "}
+									{duplicateCount === 1 ? "group" : "groups"} (same title &
+									company across sources)
+								</span>
+								<div className="flex shrink-0 items-center gap-2">
+									<Button
+										size="sm"
+										variant="outline"
+										onClick={() => setIsDuplicateModalOpen(true)}
+									>
+										Review duplicates
+									</Button>
+									<Button
+										size="sm"
+										variant="ghost"
+										onClick={() => setIsDuplicateBannerDismissed(true)}
+									>
+										Dismiss
+									</Button>
+								</div>
+							</div>
+						)}
+
 						{/* List/Detail grid - directly under tabs, no extra section */}
 						<div
 							className={isDesktop ? "grid min-h-0 flex-1 gap-0" : "grid gap-4"}
@@ -657,6 +708,14 @@ export const OrchestratorPage: React.FC = () => {
 				isPipelineRunning={isPipelineRunning}
 				onOpenChange={setIsRunModeModalOpen}
 				onSaveAndRunAutomatic={handleSaveAndRunAutomatic}
+			/>
+
+			<DuplicateReviewModal
+				open={isDuplicateModalOpen}
+				onOpenChange={setIsDuplicateModalOpen}
+				groups={duplicateGroups}
+				onResolved={handleDuplicatesResolved}
+				pushUndo={undoController.pushUndo}
 			/>
 
 			<BatchUrlImportSheet

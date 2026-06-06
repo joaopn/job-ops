@@ -173,6 +173,35 @@ describe.sequential("POST /api/jobs/actions — 5g action variants", () => {
     expect(body.data.failed).toBe(1);
   });
 
+  it("mark_duplicated closes active rows with the duplicated outcome", async () => {
+    await seedJob({ id: "job-dup-1", status: "discovered" });
+    await seedJob({ id: "job-dup-2", status: "selected" });
+
+    const { body } = await postAction({
+      action: "mark_duplicated",
+      jobIds: ["job-dup-1", "job-dup-2"],
+    });
+
+    expect(body.data.succeeded).toBe(2);
+    for (const result of body.data.results) {
+      expect(result.job.status).toBe("closed");
+      expect(result.job.outcome).toBe("duplicated");
+      expect(result.job.closedAt).toBeGreaterThan(0);
+    }
+  });
+
+  it("mark_duplicated rejects terminal statuses", async () => {
+    await seedJob({ id: "job-dup-3", status: "closed", outcome: "rejected" });
+
+    const { body } = await postAction({
+      action: "mark_duplicated",
+      jobIds: ["job-dup-3"],
+    });
+
+    expect(body.data.failed).toBe(1);
+    expect(body.data.results[0].error.code).toBe("INVALID_REQUEST");
+  });
+
   it("reopen rotates skipped/closed back to selected and clears outcome", async () => {
     await seedJob({
       id: "job-9a",
@@ -471,5 +500,27 @@ describe.sequential("POST /api/jobs/actions — 5g action variants", () => {
     expect(payload.error.code).toBe("UNPROCESSABLE_ENTITY");
     expect(payload.error.details.field).toBe("coverLetterDraft");
     expect(payload.error.details.max).toBe(50_000);
+  });
+
+  it("GET /duplicates returns active-triage jobs grouped by title + company", async () => {
+    // seedJob uses the same title/employer for every row, so two active rows
+    // form one duplicate group.
+    await seedJob({ id: "dups-a", status: "discovered" });
+    await seedJob({ id: "dups-b", status: "selected" });
+    // A terminal row with the same identity must NOT join the group.
+    await seedJob({ id: "dups-c", status: "closed", outcome: "rejected" });
+
+    const res = await fetch(`${baseUrl}/api/jobs/duplicates`);
+    expect(res.status).toBe(200);
+    const payload = (await res.json()) as {
+      ok: boolean;
+      data: { groups: Array<{ jobs: Array<{ id: string }> }> };
+    };
+    expect(payload.ok).toBe(true);
+    expect(payload.data.groups).toHaveLength(1);
+    expect(payload.data.groups[0].jobs.map((j) => j.id).sort()).toEqual([
+      "dups-a",
+      "dups-b",
+    ]);
   });
 });

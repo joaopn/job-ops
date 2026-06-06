@@ -38,6 +38,7 @@ const jobActionLabel: Record<JobAction, string> = {
   move_to_stale: "Moving to Stale...",
   move_to_inbox: "Moving to Inbox...",
   mark_closed: "Closing applications...",
+  mark_duplicated: "Marking duplicates...",
   reopen: "Reopening...",
 };
 
@@ -51,6 +52,7 @@ const jobActionSuccessLabel: Record<JobAction, string> = {
   move_to_stale: "jobs moved to Stale",
   move_to_inbox: "jobs moved to Inbox",
   mark_closed: "applications closed",
+  mark_duplicated: "duplicates closed",
   reopen: "jobs reopened",
 };
 

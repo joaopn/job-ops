@@ -32,6 +32,7 @@ import { asyncPool } from "@server/utils/async-pool";
 import {
   APPLICATION_OUTCOMES,
   SUITABILITY_CATEGORIES,
+  type DuplicateJobGroupsResponse,
   type Job,
   type JobAction,
   type JobActionResponse,
@@ -150,6 +151,10 @@ const jobActionRequestSchema = z.discriminatedUnion("action", [
     }),
   }),
   z.object({
+    action: z.literal("mark_duplicated"),
+    jobIds: z.array(z.string().min(1)).min(1).max(100),
+  }),
+  z.object({
     action: z.literal("reopen"),
     jobIds: z.array(z.string().min(1)).min(1).max(100),
   }),
@@ -201,6 +206,12 @@ const REOPENABLE_STATUSES: ReadonlySet<JobStatus> = new Set([
 const CLOSABLE_STATUSES: ReadonlySet<JobStatus> = new Set([
   "applied",
   "in_progress",
+]);
+const DUPLICATE_FROM_STATUSES: ReadonlySet<JobStatus> = new Set([
+  "discovered",
+  "selected",
+  "processing",
+  "ready",
 ]);
 const JOBS_BENCHMARK_ENABLED =
   process.env.BENCHMARK_JOBS_TIMING === "1" ||
@@ -511,6 +522,34 @@ async function executeJobActionForJob(
       return { jobId, ok: true, job: updated };
     }
 
+    if (action === "mark_duplicated") {
+      if (!DUPLICATE_FROM_STATUSES.has(job.status)) {
+        throw badRequest(
+          `Job is not markable as duplicate from status "${job.status}"`,
+          {
+            jobId,
+            status: job.status,
+            allowedStatuses: Array.from(DUPLICATE_FROM_STATUSES),
+          },
+        );
+      }
+
+      const updated = await jobsRepo.updateJob(jobId, {
+        status: "closed",
+        outcome: "duplicated",
+        closedAt: Math.floor(Date.now() / 1000),
+      });
+      if (!updated) {
+        throw new AppError({
+          status: 404,
+          code: "NOT_FOUND",
+          message: "Job not found",
+        });
+      }
+
+      return { jobId, ok: true, job: updated };
+    }
+
     if (action === "reopen") {
       if (!REOPENABLE_STATUSES.has(job.status)) {
         throw badRequest(`Job is not reopenable from status "${job.status}"`, {
@@ -736,6 +775,34 @@ jobsRouter.get("/revision", async (req: Request, res: Response) => {
       statusFilter: revision.statusFilter,
       revision: revision.revision,
       total: revision.total,
+    });
+
+    ok(res, response);
+  } catch (error) {
+    const err =
+      error instanceof AppError
+        ? error
+        : new AppError({
+            status: 500,
+            code: "INTERNAL_ERROR",
+            message: error instanceof Error ? error.message : "Unknown error",
+          });
+    fail(res, err);
+  }
+});
+
+/**
+ * GET /api/jobs/duplicates - Active-triage jobs grouped by normalized
+ * title + company (groups of 2+). On-demand cleanup surface.
+ */
+jobsRouter.get("/duplicates", async (_req: Request, res: Response) => {
+  try {
+    const groups = await jobsRepo.getDuplicateGroups();
+    const response: DuplicateJobGroupsResponse = { groups };
+
+    logger.info("Job duplicate groups fetched", {
+      route: "GET /api/jobs/duplicates",
+      groupCount: groups.length,
     });
 
     ok(res, response);

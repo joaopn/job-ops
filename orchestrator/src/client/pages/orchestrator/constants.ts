@@ -220,6 +220,7 @@ export type ClosedSubFilter =
   | "rejected"
   | "withdrawn"
   | "ghosted"
+  | "duplicated"
   | "other";
 
 export const ALLOWED_CLOSED_SUB_FILTERS: ClosedSubFilter[] = [
@@ -228,6 +229,7 @@ export const ALLOWED_CLOSED_SUB_FILTERS: ClosedSubFilter[] = [
   "rejected",
   "withdrawn",
   "ghosted",
+  "duplicated",
   "other",
 ];
 

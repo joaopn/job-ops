@@ -48,6 +48,7 @@ export const APPLICATION_OUTCOMES = [
   "rejected",
   "withdrawn",
   "ghosted",
+  "duplicated",
   "other",
 ] as const;
 
@@ -296,6 +297,18 @@ export type JobListItem = Pick<
   // Optional so non-list callers / fixtures don't need to supply it.
   sourceLabel?: string;
 };
+
+// A cluster of active-triage jobs sharing a normalized title + company.
+export interface DuplicateJobGroup {
+  key: string; // normalizeDuplicateKey(title, employer)
+  title: string; // representative (first member's) title
+  employer: string; // representative (first member's) employer
+  jobs: JobListItem[];
+}
+
+export interface DuplicateJobGroupsResponse {
+  groups: DuplicateJobGroup[];
+}
 
 export interface CreateJobInput {
   source: JobSource;

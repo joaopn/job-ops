@@ -8,6 +8,7 @@ const CHIPS: Array<{ value: ClosedSubFilter; label: string }> = [
   { value: "rejected", label: "Rejected" },
   { value: "withdrawn", label: "Withdrawn" },
   { value: "ghosted", label: "Ghosted" },
+  { value: "duplicated", label: "Duplicated" },
   { value: "other", label: "Other" },
 ];
 

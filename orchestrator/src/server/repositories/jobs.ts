@@ -7,12 +7,14 @@ import {
   DateNormalizationError,
   normalizeDatePosted,
 } from "@shared/date-normalize";
+import { normalizeDuplicateKey } from "@shared/duplicate-key";
 import { buildLocationEvidence } from "@shared/location-domain.js";
 import { logger } from "@infra/logger";
 import type {
   CreateJobInput,
   CreateJobNoteInput,
   CvFieldOverrides,
+  DuplicateJobGroup,
   Job,
   JobListItem,
   JobLocationEvidence,
@@ -174,6 +176,53 @@ export async function getJobListItems(
       providerInstances,
     }),
   }));
+}
+
+// Statuses the user is actively triaging — duplicate detection is scoped here
+// so aged/terminal rows don't pollute the review surface.
+const DUPLICATE_SCOPE_STATUSES: JobStatus[] = [
+  "discovered",
+  "selected",
+  "processing",
+  "ready",
+];
+
+/**
+ * Group active-triage jobs that share a normalized title + company. On-demand
+ * only (not part of the hot list-fetch path), so the JS grouping is cheap.
+ * Returns groups of 2+ members, each ordered as the list query returns them
+ * (newest discovered first); empty-key rows are excluded.
+ */
+export async function getDuplicateGroups(): Promise<DuplicateJobGroup[]> {
+  const items = await getJobListItems(DUPLICATE_SCOPE_STATUSES);
+  const byKey = new Map<string, JobListItem[]>();
+
+  for (const item of items) {
+    const key = normalizeDuplicateKey(item.title, item.employer);
+    if (!key) continue;
+    const bucket = byKey.get(key);
+    if (bucket) {
+      bucket.push(item);
+    } else {
+      byKey.set(key, [item]);
+    }
+  }
+
+  const groups: DuplicateJobGroup[] = [];
+  for (const [key, jobsInGroup] of byKey) {
+    if (jobsInGroup.length < 2) continue;
+    const first = jobsInGroup[0];
+    groups.push({
+      key,
+      title: first.title,
+      employer: first.employer,
+      jobs: jobsInGroup,
+    });
+  }
+
+  // Largest clusters first so the most-impactful cleanups lead.
+  groups.sort((a, b) => b.jobs.length - a.jobs.length);
+  return groups;
 }
 
 export async function getAppliedDuplicateMatchCandidates(): Promise<
