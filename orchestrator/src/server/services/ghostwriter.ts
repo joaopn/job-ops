@@ -9,6 +9,8 @@ import { logger } from "@infra/logger";
 import { getRequestId } from "@infra/request-context";
 import type {
   BranchInfo,
+  CvField,
+  CvFieldOverrides,
   JobChatMessage,
   JobChatProposedBriefEdit,
   JobChatProposedCoverLetterEdit,
@@ -33,183 +35,269 @@ type LlmRuntimeSettings = {
 const abortControllers = new Map<string, AbortController>();
 
 /**
- * The LLM may answer in one of three modes:
- *
- *  - `text`: a free-form chat reply (renders directly to the cover-letter
- *    pane or as a normal chat message).
- *  - `cv-edit`: a structured proposal to replace one or more CvField values.
- *    Each edit references a field by `fieldId`; `from`/`to` carry the
- *    current and proposed verbatim LaTeX. The `rationale` becomes the
- *    chat-pane text; the structured payload is persisted in
- *    `job_chat_messages.proposed_edit` for the user to accept.
- *  - `brief-edit`: a structured proposal to edit `cv_documents.personal_brief`.
- *
- * We use a single object schema with optional fields rather than a JSON Schema
- * `oneOf` because not all providers we target support `oneOf` reliably under
- * strict structured-output mode. The dispatcher validates the discriminator
- * (`kind`) at runtime.
+ * How many times we ask the model for a schema-valid reply before failing the
+ * turn. The first attempt is the normal call; each subsequent attempt re-sends
+ * the conversation with the concrete validation error appended (corrective
+ * retry), which fixes far more wrong-shape replies than a blind resend. Strict:
+ * after this many attempts an invalid reply fails the turn rather than
+ * degrading to a phantom no-op.
  */
+const MAX_VALIDATION_ATTEMPTS = 2;
+
+/**
+ * The ghostwriter speaks ONE protocol regardless of provider: every reply is a
+ * single JSON object with a chat `message` (always present) plus zero or more
+ * `toolCalls` (proposed edits). This is tool-calling expressed as structured
+ * output so it works on every backend — native tool-calling transports differ
+ * per provider and weak/local models lack them, whereas this rides on the
+ * `json_schema -> json_object -> none` degradation chain `callJson` already
+ * implements.
+ *
+ * Why this exact shape:
+ *
+ *  - Decoupling `message` from `toolCalls` lets the model chat AND edit in the
+ *    same turn. The old design forced a single exclusive `kind`, so the model
+ *    would narrate a change as a `text` reply that mutated nothing — the
+ *    "ghostwriter says it edited but does nothing" bug.
+ *
+ *  - Strict structured-output mode (OpenAI / OpenRouter / Gemini) requires
+ *    EVERY property to be `required` and rejects optional / nested-optional
+ *    shapes with a 400 that the capability-fallback layer misreads as "mode
+ *    unsupported", silently dropping schema enforcement. So every property is
+ *    required and each tool call is a flat `{ name, argumentsJson }` pair whose
+ *    per-tool argument shape lives in a JSON STRING (the repo's `patchesJson`
+ *    convention). The server JSON-parses + validates `argumentsJson` per tool
+ *    name; an invalid call is a hard validation failure (see
+ *    `validateChatResponse`) — never a phantom "I edited it".
+ */
+const CHAT_TOOL_NAMES = [
+  "propose_cv_edit",
+  "rewrite_cover_letter",
+  "edit_brief",
+] as const;
+type ChatToolName = (typeof CHAT_TOOL_NAMES)[number];
+
 const CHAT_RESPONSE_SCHEMA: JsonSchemaDefinition = {
   name: "job_chat_response",
   schema: {
     type: "object",
     properties: {
-      kind: {
-        type: "string",
-        enum: ["text", "cv-edit", "brief-edit", "cover-letter-edit"],
-      },
-      response: {
-        type: "string",
-        description: "Free-form chat reply (only when kind = 'text').",
-      },
-      coverLetter: {
+      message: {
         type: "string",
         description:
-          "The COMPLETE revised cover-letter draft (only when kind = 'cover-letter-edit'). Full letter text, never a description of what changed.",
+          "Your chat reply to the user — ALWAYS present. Explain what you did or answer the question. When you attach an edit, this is where you describe it (one or two sentences). Never leave empty.",
       },
-      rationale: {
-        type: "string",
-        description:
-          "One-sentence justification (required when kind = 'cv-edit' or 'brief-edit').",
-      },
-      edits: {
+      toolCalls: {
         type: "array",
-        description: "CV edits (only when kind = 'cv-edit').",
+        description:
+          "Proposed edits attached to this reply. Use an EMPTY array when the user only wants to chat. Each call proposes a change to ONE document that the user must accept or reject — only include a call when the user asked for a concrete change.",
         items: {
           type: "object",
           properties: {
-            fieldId: {
+            name: {
+              type: "string",
+              enum: [...CHAT_TOOL_NAMES],
+              description:
+                "Which document to edit: propose_cv_edit | rewrite_cover_letter | edit_brief.",
+            },
+            argumentsJson: {
               type: "string",
               description:
-                "The id of the CvField being replaced. Must match an id in the CV State 'fields' list.",
-            },
-            from: {
-              type: "string",
-              description:
-                "The current value of the field (must match the field's effective value verbatim, including LaTeX commands).",
-            },
-            to: {
-              type: "string",
-              description: "The replacement value (verbatim LaTeX).",
+                'Stringified JSON arguments for the named tool. propose_cv_edit: {"edits":[{"fieldId":"...","to":"..."}]} — fieldId MUST match an id in the CV State fields list; `to` is the full replacement value (verbatim LaTeX); NEVER include a `from` field. rewrite_cover_letter: {"draft":"...the complete ready-to-send letter..."}. edit_brief: {"append":"..."} (preferred) or {"replace":"...the full rewritten brief..."}.',
             },
           },
-          required: ["fieldId", "from", "to"],
+          required: ["name", "argumentsJson"],
           additionalProperties: false,
         },
       },
-      append: {
-        type: "string",
-        description: "Text to append to personal_brief (kind = 'brief-edit').",
-      },
-      replace: {
-        type: "string",
-        description:
-          "Replacement text for the entire personal_brief (kind = 'brief-edit'). Mutually exclusive with append.",
-      },
     },
-    required: ["kind"],
+    required: ["message", "toolCalls"],
     additionalProperties: false,
   },
 };
 
-type ChatResponse = {
-  kind: "text" | "cv-edit" | "brief-edit" | "cover-letter-edit";
-  response?: string;
-  rationale?: string;
-  edits?: Array<{
-    fieldId: string;
-    from: string;
-    to: string;
-  }>;
-  append?: string;
-  replace?: string;
-  coverLetter?: string;
-};
+/** Shape we expect back from the LLM, before validation. */
+type RawChatToolCall = { name?: unknown; argumentsJson?: unknown };
+type RawChatResponse = { message?: unknown; toolCalls?: unknown };
 
-type DispatchedReply = {
-  /** Text streamed to and persisted as `content` on the assistant message. */
-  text: string;
-  /** Structured edit, or null for a plain text reply. */
+type ValidatedReply = {
+  /** The chat reply, persisted as the assistant message `content`. */
+  message: string;
+  /** The single proposed edit attached to this turn, or null. */
   proposedEdit: JobChatProposedEdit | null;
 };
 
-function dispatchChatResponse(raw: ChatResponse): DispatchedReply {
-  if (raw.kind === "cv-edit") {
-    const edits = (raw.edits ?? []).filter(
-      (op): op is { fieldId: string; from: string; to: string } =>
-        typeof op?.fieldId === "string" &&
-        op.fieldId.length > 0 &&
-        typeof op?.from === "string" &&
-        typeof op?.to === "string",
-    );
-    if (edits.length === 0) {
+type ValidationResult =
+  | { ok: true; reply: ValidatedReply }
+  | { ok: false; error: string };
+
+type CvEditContext = {
+  fields: CvField[];
+  overrides: CvFieldOverrides;
+};
+
+function currentFieldValue(
+  fieldId: string,
+  ctx: CvEditContext,
+): string | undefined {
+  const field = ctx.fields.find((f) => f.id === fieldId);
+  if (!field) return undefined;
+  return Object.hasOwn(ctx.overrides, fieldId)
+    ? ctx.overrides[fieldId]
+    : field.value;
+}
+
+/**
+ * Validate one `propose_cv_edit` call. The model only supplies `{ fieldId, to }`
+ * — the server resolves `from` from the field's CURRENT effective value, so the
+ * model never has to reproduce verbatim LaTeX, and `from` becomes a real
+ * concurrency guard at accept time (`applyCvEditOps`).
+ */
+function validateCvEditArgs(
+  args: unknown,
+  ctx: CvEditContext,
+): { ok: true; edit: JobChatProposedCvEdit } | { ok: false; error: string } {
+  const edits =
+    args && typeof args === "object"
+      ? (args as { edits?: unknown }).edits
+      : undefined;
+  if (!Array.isArray(edits) || edits.length === 0) {
+    return { ok: false, error: "propose_cv_edit.edits must be a non-empty array" };
+  }
+  const ops: JobChatProposedCvEditOp[] = [];
+  for (const raw of edits) {
+    const fieldId =
+      raw && typeof raw === "object"
+        ? (raw as { fieldId?: unknown }).fieldId
+        : undefined;
+    const to =
+      raw && typeof raw === "object"
+        ? (raw as { to?: unknown }).to
+        : undefined;
+    if (typeof fieldId !== "string" || !fieldId) {
+      return { ok: false, error: "each CV edit needs a non-empty string fieldId" };
+    }
+    if (typeof to !== "string" || !to.trim()) {
       return {
-        text: (raw.rationale ?? raw.response ?? "").trim(),
-        proposedEdit: null,
+        ok: false,
+        error: `CV edit for fieldId '${fieldId}' needs a non-empty 'to' value`,
       };
     }
-    const cvEdit: JobChatProposedCvEdit = {
-      kind: "cv-edit",
-      rationale: (raw.rationale ?? "").trim(),
-      edits: edits.map<JobChatProposedCvEditOp>((op) => ({
-        fieldId: op.fieldId,
-        from: op.from,
-        to: op.to,
-      })),
-    };
-    return {
-      text: cvEdit.rationale || "Proposed CV edit.",
-      proposedEdit: cvEdit,
-    };
-  }
-
-  if (raw.kind === "brief-edit") {
-    const append = raw.append?.trim() ?? "";
-    const replace = raw.replace?.trim() ?? "";
-    if (!append && !replace) {
+    const from = currentFieldValue(fieldId, ctx);
+    if (from === undefined) {
+      const validIds = ctx.fields.map((f) => f.id).join(", ");
       return {
-        text: (raw.rationale ?? raw.response ?? "").trim(),
-        proposedEdit: null,
+        ok: false,
+        error: `fieldId '${fieldId}' is not in the CV fields list. Valid ids: [${validIds}]`,
       };
     }
-    const briefEdit: JobChatProposedBriefEdit = {
-      kind: "brief-edit",
-      rationale: (raw.rationale ?? "").trim(),
-      ...(append ? { append } : {}),
-      ...(!append && replace ? { replace } : {}),
-    };
-    return {
-      text: briefEdit.rationale || "Proposed brief edit.",
-      proposedEdit: briefEdit,
-    };
+    ops.push({ fieldId, from, to });
   }
-
-  if (raw.kind === "cover-letter-edit") {
-    const draft = raw.coverLetter?.trim() ?? "";
-    if (!draft) {
-      // The model narrated a change without emitting the actual letter — fall
-      // back to a plain reply rather than persisting an empty draft.
-      return {
-        text: (raw.rationale ?? raw.response ?? "").trim(),
-        proposedEdit: null,
-      };
-    }
-    const coverLetterEdit: JobChatProposedCoverLetterEdit = {
-      kind: "cover-letter-edit",
-      draft,
-      rationale: (raw.rationale ?? "").trim(),
-    };
-    return {
-      text: coverLetterEdit.rationale || "Proposed cover-letter revision.",
-      proposedEdit: coverLetterEdit,
-    };
-  }
-
-  // kind === "text" or unknown — treat as free-form text.
   return {
-    text: (raw.response ?? raw.rationale ?? "").trim(),
-    proposedEdit: null,
+    ok: true,
+    edit: { kind: "cv-edit", rationale: "", edits: ops },
   };
+}
+
+function validateChatResponse(
+  raw: RawChatResponse,
+  ctx: CvEditContext,
+): ValidationResult {
+  if (!raw || typeof raw !== "object") {
+    return { ok: false, error: "response was not a JSON object" };
+  }
+  if (typeof raw.message !== "string" || !raw.message.trim()) {
+    return { ok: false, error: "missing required non-empty string 'message'" };
+  }
+  if (!Array.isArray(raw.toolCalls)) {
+    return { ok: false, error: "'toolCalls' must be an array (use [] for none)" };
+  }
+
+  const message = raw.message.trim();
+
+  if (raw.toolCalls.length === 0) {
+    return { ok: true, reply: { message, proposedEdit: null } };
+  }
+
+  // The store holds one proposed edit per message; take the first call and
+  // ignore extras (the prompt asks the model to edit one document per turn).
+  if (raw.toolCalls.length > 1) {
+    logger.warn("Ghostwriter returned multiple tool calls; using the first", {
+      count: raw.toolCalls.length,
+    });
+  }
+
+  const call = raw.toolCalls[0] as RawChatToolCall;
+  const name = call?.name;
+  if (
+    typeof name !== "string" ||
+    !CHAT_TOOL_NAMES.includes(name as ChatToolName)
+  ) {
+    return {
+      ok: false,
+      error: `toolCalls[0].name must be one of ${CHAT_TOOL_NAMES.join(" | ")}`,
+    };
+  }
+  if (typeof call.argumentsJson !== "string" || !call.argumentsJson.trim()) {
+    return {
+      ok: false,
+      error: "toolCalls[0].argumentsJson must be a non-empty JSON string",
+    };
+  }
+
+  let args: unknown;
+  try {
+    args = JSON.parse(call.argumentsJson);
+  } catch {
+    return {
+      ok: false,
+      error: "toolCalls[0].argumentsJson was not parseable JSON",
+    };
+  }
+
+  if (name === "propose_cv_edit") {
+    const result = validateCvEditArgs(args, ctx);
+    if (!result.ok) return result;
+    // rationale stays empty — the chat `message` bubble already explains the
+    // edit, so the card's "Rationale:" line would just duplicate it.
+    return { ok: true, reply: { message, proposedEdit: result.edit } };
+  }
+
+  if (name === "rewrite_cover_letter") {
+    const draft =
+      args && typeof args === "object"
+        ? (args as { draft?: unknown }).draft
+        : undefined;
+    if (typeof draft !== "string" || !draft.trim()) {
+      return {
+        ok: false,
+        error: "rewrite_cover_letter needs a non-empty 'draft' string",
+      };
+    }
+    const edit: JobChatProposedCoverLetterEdit = {
+      kind: "cover-letter-edit",
+      draft: draft.trim(),
+      rationale: "",
+    };
+    return { ok: true, reply: { message, proposedEdit: edit } };
+  }
+
+  // name === "edit_brief"
+  const obj = args && typeof args === "object" ? (args as Record<string, unknown>) : {};
+  const append = typeof obj.append === "string" ? obj.append.trim() : "";
+  const replace = typeof obj.replace === "string" ? obj.replace.trim() : "";
+  if (!append && !replace) {
+    return {
+      ok: false,
+      error: "edit_brief needs a non-empty 'append' or 'replace' string",
+    };
+  }
+  const edit: JobChatProposedBriefEdit = {
+    kind: "brief-edit",
+    rationale: "",
+    ...(append ? { append } : { replace }),
+  };
+  return { ok: true, reply: { message, proposedEdit: edit } };
 }
 
 function estimateTokenCount(value: string): number {
@@ -444,55 +532,100 @@ async function runAssistantReply(
       apiKey: llmConfig.apiKey,
     });
 
-    const llmResult = await llm.callJson<ChatResponse>({
-      model: llmConfig.model,
-      messages: [
+    const cvEditCtx: CvEditContext = {
+      fields: context.cv?.fields ?? [],
+      overrides: context.job.tailoredFields ?? {},
+    };
+
+    let conversation: Array<{
+      role: "user" | "system" | "assistant";
+      content: string;
+    }> = [
+      { role: "system", content: context.systemPrompt },
+      { role: "system", content: `Job Context (JSON):\n${context.jobSnapshot}` },
+      {
+        role: "system",
+        content: `Candidate Brief:\n${context.briefSnapshot || "No personal brief available."}`,
+      },
+      {
+        role: "system",
+        content: `CV State (JSON):\n${context.cvSnapshot || "No active CV."}`,
+      },
+      {
+        role: "system",
+        content: `Cover Letter Draft:\n${context.coverLetterSnapshot || "(no cover letter draft yet)"}`,
+      },
+      ...history,
+      { role: "user", content: options.prompt },
+    ];
+
+    let validated: ValidatedReply | null = null;
+    let lastValidationError = "";
+
+    for (let attempt = 1; attempt <= MAX_VALIDATION_ATTEMPTS; attempt++) {
+      const llmResult = await llm.callJson<RawChatResponse>({
+        model: llmConfig.model,
+        messages: conversation,
+        jsonSchema: CHAT_RESPONSE_SCHEMA,
+        maxRetries: 1,
+        retryDelayMs: 300,
+        jobId: options.jobId,
+        signal: controller.signal,
+        label: "chat with assistant",
+        subject: `${context.job.title} @ ${context.job.employer}`,
+      });
+
+      if (!llmResult.success) {
+        if (controller.signal.aborted) {
+          throw requestTimeout("Chat generation was cancelled");
+        }
+        throw upstreamError("LLM generation failed", {
+          reason: llmResult.error,
+        });
+      }
+
+      const validation = validateChatResponse(llmResult.data, cvEditCtx);
+      if (validation.ok) {
+        validated = validation.reply;
+        break;
+      }
+
+      lastValidationError = validation.error;
+      logger.warn(
+        "Ghostwriter reply failed schema validation; requesting correction",
         {
-          role: "system",
-          content: context.systemPrompt,
+          jobId: options.jobId,
+          runId: run.id,
+          attempt,
+          maxAttempts: MAX_VALIDATION_ATTEMPTS,
+          error: lastValidationError,
         },
-        {
-          role: "system",
-          content: `Job Context (JSON):\n${context.jobSnapshot}`,
-        },
-        {
-          role: "system",
-          content: `Candidate Brief:\n${context.briefSnapshot || "No personal brief available."}`,
-        },
-        {
-          role: "system",
-          content: `CV State (JSON):\n${context.cvSnapshot || "No active CV."}`,
-        },
-        {
-          role: "system",
-          content: `Cover Letter Draft:\n${context.coverLetterSnapshot || "(no cover letter draft yet)"}`,
-        },
-        ...history,
+      );
+
+      // Corrective retry: show the model its invalid reply + the concrete
+      // reason, and ask it to re-emit a schema-valid object.
+      conversation = [
+        ...conversation,
+        { role: "assistant", content: JSON.stringify(llmResult.data) },
         {
           role: "user",
-          content: options.prompt,
+          content:
+            `Your previous reply was invalid: ${lastValidationError}. ` +
+            'Reply with ONLY a JSON object matching the required schema: a ' +
+            'non-empty "message" string and a "toolCalls" array (use [] when ' +
+            "no edit is needed). Do not include any text outside the JSON.",
         },
-      ],
-      jsonSchema: CHAT_RESPONSE_SCHEMA,
-      maxRetries: 1,
-      retryDelayMs: 300,
-      jobId: options.jobId,
-      signal: controller.signal,
-      label: "chat with assistant",
-      subject: `${context.job.title} @ ${context.job.employer}`,
-    });
-
-    if (!llmResult.success) {
-      if (controller.signal.aborted) {
-        throw requestTimeout("Chat generation was cancelled");
-      }
-      throw upstreamError("LLM generation failed", {
-        reason: llmResult.error,
-      });
+      ];
     }
 
-    const dispatched = dispatchChatResponse(llmResult.data);
-    const finalText = dispatched.text;
+    if (!validated) {
+      throw upstreamError(
+        `Chat reply failed schema validation after ${MAX_VALIDATION_ATTEMPTS} attempts: ${lastValidationError}`,
+      );
+    }
+
+    const finalText = validated.message;
+    const proposedEdit = validated.proposedEdit;
     const chunks = chunkText(finalText);
 
     for (const chunk of chunks) {
@@ -531,8 +664,8 @@ async function runAssistantReply(
         status: "complete",
         tokensIn: estimateTokenCount(options.prompt),
         tokensOut: estimateTokenCount(accumulated),
-        proposedEdit: dispatched.proposedEdit,
-        editStatus: dispatched.proposedEdit ? "pending" : null,
+        proposedEdit,
+        editStatus: proposedEdit ? "pending" : null,
       },
     );
 

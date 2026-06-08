@@ -10,6 +10,7 @@ import type {
 import * as cvRepo from "../repositories/cv-documents";
 import * as jobChatRepo from "../repositories/ghostwriter";
 import * as jobsRepo from "../repositories/jobs";
+import { getActiveCoverLetterDocument } from "./cover-letter/active";
 import { applyBriefEdit, applyCvEditOps } from "./cv-edit-ops";
 import { getActiveCvDocument } from "./cv-active";
 import { generatePdf } from "./pdf";
@@ -115,7 +116,25 @@ export async function acceptEditForJob(input: {
     const job = await jobsRepo.getJobById(input.jobId);
     if (!job) throw notFound("Job not found");
 
-    await jobsRepo.updateJob(job.id, { coverLetterDraft: proposed.draft });
+    // Write to the SAME place the cover-letter pane reads from. When an active
+    // template exists the pane shows `coverLetterFieldOverrides[bodyFieldId]`
+    // (it takes precedence over `coverLetterDraft`), so writing only
+    // `coverLetterDraft` would leave the live pane unchanged — the
+    // "accepted but nothing updated" bug. Mirror `CoverLetterPane.saveOverride`.
+    const coverLetter = await getActiveCoverLetterDocument();
+    const bodyFieldId =
+      coverLetter?.fields.find((field) => field.role === "body")?.id ?? null;
+
+    if (bodyFieldId) {
+      await jobsRepo.updateJob(job.id, {
+        coverLetterFieldOverrides: {
+          ...(job.coverLetterFieldOverrides ?? {}),
+          [bodyFieldId]: proposed.draft,
+        },
+      });
+    } else {
+      await jobsRepo.updateJob(job.id, { coverLetterDraft: proposed.draft });
+    }
 
     const updatedMessage = await jobChatRepo.setMessageEditStatus(
       message.id,

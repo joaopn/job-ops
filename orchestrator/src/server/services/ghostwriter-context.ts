@@ -1,8 +1,9 @@
 import { badRequest, notFound } from "@infra/errors";
 import { logger } from "@infra/logger";
 import { sanitizeUnknown } from "@infra/sanitize";
-import type { CvDocument, Job } from "@shared/types";
+import type { CoverLetterDocument, CvDocument, Job } from "@shared/types";
 import * as jobsRepo from "../repositories/jobs";
+import { getActiveCoverLetterDocument } from "./cover-letter/active";
 import { getActiveCvDocument } from "./cv-active";
 import {
   getWritingLanguageLabel,
@@ -99,7 +100,24 @@ function buildCvSnapshot(job: Job, cv: CvDocument | null): string {
   return JSON.stringify(snapshot, null, 2);
 }
 
-function buildCoverLetterSnapshot(job: Job): string {
+/**
+ * Resolve the cover letter the user actually sees, mirroring
+ * `CoverLetterPane.persistedBody`: when an active template exists, the body
+ * override wins, then the legacy draft, then the template default. Without a
+ * template it's just the legacy `coverLetterDraft`. If this drifts from the
+ * pane, the model tailors against text the user isn't looking at.
+ */
+function buildCoverLetterSnapshot(
+  job: Job,
+  coverLetter: CoverLetterDocument | null,
+): string {
+  const bodyField = coverLetter?.fields.find((field) => field.role === "body");
+  if (bodyField) {
+    const override = job.coverLetterFieldOverrides?.[bodyField.id];
+    if (override) return override.trim();
+    if (job.coverLetterDraft) return job.coverLetterDraft.trim();
+    return bodyField.value.trim();
+  }
   return (job.coverLetterDraft ?? "").trim();
 }
 
@@ -150,10 +168,20 @@ export async function buildJobChatPromptContext(
     });
   }
 
+  let coverLetter: CoverLetterDocument | null = null;
+  try {
+    coverLetter = await getActiveCoverLetterDocument();
+  } catch (error) {
+    logger.warn("Failed to load active cover letter for job chat context", {
+      jobId,
+      error: sanitizeUnknown(error),
+    });
+  }
+
   const brief = cv?.personalBrief?.trim() ?? "";
   const briefSnapshot = buildBriefSnapshot(brief);
   const cvSnapshot = buildCvSnapshot(job, cv);
-  const coverLetterSnapshot = buildCoverLetterSnapshot(job);
+  const coverLetterSnapshot = buildCoverLetterSnapshot(job, coverLetter);
   const systemPrompt = await buildSystemPrompt(style, brief);
   const jobSnapshot = buildJobSnapshot(job);
 

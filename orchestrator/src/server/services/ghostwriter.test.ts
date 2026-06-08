@@ -222,7 +222,7 @@ describe("ghostwriter service", () => {
     });
     mocks.llmCallJson.mockResolvedValue({
       success: true,
-      data: { response: "Thanks for your question." },
+      data: { message: "Thanks for your question.", toolCalls: [] },
     });
   });
 
@@ -334,7 +334,7 @@ describe("ghostwriter service", () => {
       await vi.advanceTimersByTimeAsync(1);
       return {
         success: true,
-        data: { response: "x".repeat(200) },
+        data: { message: "x".repeat(200), toolCalls: [] },
       };
     });
 
@@ -472,6 +472,139 @@ describe("ghostwriter service", () => {
     });
 
     expect(result).toEqual({ cancelled: false, alreadyFinished: true });
+  });
+
+  it("attaches a cover-letter edit from a tool call", async () => {
+    mocks.repo.createMessage
+      .mockResolvedValueOnce(baseUserMessage)
+      .mockResolvedValueOnce({
+        ...baseAssistantMessage,
+        id: "assistant-cl",
+        content: "",
+        status: "partial",
+      });
+    mocks.llmCallJson.mockResolvedValue({
+      success: true,
+      data: {
+        message: "Rewrote the letter to lead with data-platform work.",
+        toolCalls: [
+          {
+            name: "rewrite_cover_letter",
+            argumentsJson: JSON.stringify({ draft: "Dear hiring team, ..." }),
+          },
+        ],
+      },
+    });
+
+    await sendMessageForJob({ jobId: "job-1", content: "Tighten the letter" });
+
+    const updateArgs = mocks.repo.updateMessage.mock.calls.at(-1)?.[1];
+    expect(updateArgs).toMatchObject({
+      status: "complete",
+      editStatus: "pending",
+      proposedEdit: {
+        kind: "cover-letter-edit",
+        draft: "Dear hiring team, ...",
+        rationale: "",
+      },
+    });
+  });
+
+  it("fills cv-edit `from` from the current field value (model sends only fieldId+to)", async () => {
+    mocks.buildJobChatPromptContext.mockResolvedValue({
+      job: { id: "job-1", title: "Eng", employer: "Acme", tailoredFields: {} },
+      cv: { id: "cv-1", fields: [{ id: "f1", role: "bullet", value: "old latex" }] },
+      style: { tone: "professional", formality: "medium", constraints: "", doNotUse: "" },
+      systemPrompt: "system prompt",
+      jobSnapshot: '{"job":"snapshot"}',
+      briefSnapshot: "brief",
+      cvSnapshot: '{"cv":"snapshot"}',
+      coverLetterSnapshot: "",
+    });
+    mocks.repo.createMessage
+      .mockResolvedValueOnce(baseUserMessage)
+      .mockResolvedValueOnce({
+        ...baseAssistantMessage,
+        id: "assistant-cv",
+        content: "",
+        status: "partial",
+      });
+    mocks.llmCallJson.mockResolvedValue({
+      success: true,
+      data: {
+        message: "Tightened that bullet.",
+        toolCalls: [
+          {
+            name: "propose_cv_edit",
+            argumentsJson: JSON.stringify({
+              edits: [{ fieldId: "f1", to: "new latex" }],
+            }),
+          },
+        ],
+      },
+    });
+
+    await sendMessageForJob({ jobId: "job-1", content: "tighten bullet 1" });
+
+    const updateArgs = mocks.repo.updateMessage.mock.calls.at(-1)?.[1];
+    expect(updateArgs.proposedEdit).toEqual({
+      kind: "cv-edit",
+      rationale: "",
+      edits: [{ fieldId: "f1", from: "old latex", to: "new latex" }],
+    });
+  });
+
+  it("corrective-retries an invalid reply, then succeeds", async () => {
+    mocks.repo.createMessage
+      .mockResolvedValueOnce(baseUserMessage)
+      .mockResolvedValueOnce({
+        ...baseAssistantMessage,
+        id: "assistant-retry",
+        content: "",
+        status: "partial",
+      });
+    mocks.llmCallJson
+      .mockResolvedValueOnce({
+        success: true,
+        data: { foo: "not the schema" },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: { message: "Fixed.", toolCalls: [] },
+      });
+
+    await sendMessageForJob({ jobId: "job-1", content: "hi" });
+
+    expect(mocks.llmCallJson).toHaveBeenCalledTimes(2);
+    // Second attempt must include the prior bad reply + a correction turn.
+    const secondMessages = mocks.llmCallJson.mock.calls[1][0].messages;
+    expect(secondMessages.at(-1).content).toContain("previous reply was invalid");
+    const updateArgs = mocks.repo.updateMessage.mock.calls.at(-1)?.[1];
+    expect(updateArgs).toMatchObject({ status: "complete", content: "Fixed." });
+  });
+
+  it("fails the turn when the reply stays invalid after all attempts", async () => {
+    mocks.repo.createMessage
+      .mockResolvedValueOnce(baseUserMessage)
+      .mockResolvedValueOnce({
+        ...baseAssistantMessage,
+        id: "assistant-bad",
+        content: "",
+        status: "partial",
+      });
+    mocks.llmCallJson.mockResolvedValue({
+      success: true,
+      data: { message: "", toolCalls: "nope" },
+    });
+
+    await expect(
+      sendMessageForJob({ jobId: "job-1", content: "hi" }),
+    ).rejects.toMatchObject({ status: 502 });
+
+    const failingUpdate = mocks.repo.updateMessage.mock.calls
+      .map((call) => call[1])
+      .find((args) => args.status === "failed");
+    expect(failingUpdate).toBeTruthy();
   });
 
   it("maps createRun unique constraint races to conflict", async () => {

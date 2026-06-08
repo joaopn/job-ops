@@ -27,6 +27,9 @@ const mocks = vi.hoisted(() => ({
   cvActive: {
     getActiveCvDocument: vi.fn(),
   },
+  coverLetterActive: {
+    getActiveCoverLetterDocument: vi.fn(),
+  },
   pdf: {
     generatePdf: vi.fn(),
   },
@@ -57,6 +60,11 @@ vi.mock("../repositories/ghostwriter", () => ({
 
 vi.mock("./cv-active", () => ({
   getActiveCvDocument: mocks.cvActive.getActiveCvDocument,
+}));
+
+vi.mock("./cover-letter/active", () => ({
+  getActiveCoverLetterDocument:
+    mocks.coverLetterActive.getActiveCoverLetterDocument,
 }));
 
 vi.mock("./pdf", () => ({
@@ -293,9 +301,11 @@ describe("acceptEditForJob: cover-letter-edit", () => {
     vi.clearAllMocks();
     mocks.jobsRepo.updateJob.mockResolvedValue(baseJob);
     mocks.jobsRepo.getJobById.mockResolvedValue(baseJob);
+    // Default: no active cover-letter template (legacy draft path).
+    mocks.coverLetterActive.getActiveCoverLetterDocument.mockResolvedValue(null);
   });
 
-  it("writes the revised draft to coverLetterDraft and marks accepted", async () => {
+  it("writes to coverLetterDraft when no template exists, and marks accepted", async () => {
     const proposed: JobChatProposedCoverLetterEdit = {
       kind: "cover-letter-edit",
       rationale: "drop the RAG claim",
@@ -320,6 +330,40 @@ describe("acceptEditForJob: cover-letter-edit", () => {
       "msg-1",
       "accepted",
     );
+  });
+
+  it("writes to coverLetterFieldOverrides[bodyFieldId] when a template exists", async () => {
+    const proposed: JobChatProposedCoverLetterEdit = {
+      kind: "cover-letter-edit",
+      rationale: "tighten the opener",
+      draft: "Revised body that the pane actually renders.",
+    };
+    mocks.jobsRepo.getJobById.mockResolvedValue({
+      ...baseJob,
+      coverLetterFieldOverrides: { "intro.0": "keep me" },
+    } as unknown as Job);
+    mocks.coverLetterActive.getActiveCoverLetterDocument.mockResolvedValue({
+      id: "cl-1",
+      name: "letter.tex",
+      fields: [
+        { id: "intro.0", role: "other", value: "Dear team," },
+        { id: "letter.body", role: "body", value: "default body" },
+      ],
+    });
+
+    mocks.jobChatRepo.getMessageById.mockResolvedValue(makeMessage(proposed));
+    mocks.jobChatRepo.setMessageEditStatus.mockResolvedValue(
+      makeMessage(proposed, { editStatus: "accepted" }),
+    );
+
+    await acceptEditForJob({ jobId: "job-1", messageId: "msg-1" });
+
+    expect(mocks.jobsRepo.updateJob).toHaveBeenCalledWith("job-1", {
+      coverLetterFieldOverrides: {
+        "intro.0": "keep me",
+        "letter.body": proposed.draft,
+      },
+    });
   });
 });
 
