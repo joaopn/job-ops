@@ -8,6 +8,7 @@ import {
   normalizeDatePosted,
 } from "@shared/date-normalize";
 import { normalizeDuplicateKey } from "@shared/duplicate-key";
+import { canonicalizeJobUrl } from "@shared/job-url";
 import { buildLocationEvidence } from "@shared/location-domain.js";
 import { logger } from "@infra/logger";
 import type {
@@ -529,6 +530,7 @@ export async function createJobs(
   if (!Array.isArray(inputOrInputs)) {
     const normalized: CreateJobInput = {
       ...inputOrInputs,
+      jobUrl: canonicalizeJobUrl(inputOrInputs.jobUrl),
       datePosted: normalizeDatePosted(inputOrInputs.datePosted) ?? undefined,
     };
     const inserted = await tryInsertJob(normalized);
@@ -544,6 +546,7 @@ export async function createJobs(
     try {
       normalizedInputs.push({
         ...input,
+        jobUrl: canonicalizeJobUrl(input.jobUrl),
         datePosted: normalizeDatePosted(input.datePosted) ?? undefined,
       });
     } catch (error) {

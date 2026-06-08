@@ -70,9 +70,28 @@ function fitRank(job: JobListItem): number {
     : -1;
 }
 
-// Default keeper: best fit, then newest posting, then newest discovered.
+// Preselected-keeper priority by pipeline position: Live (applied/in_progress)
+// > Ready > Selected (selected/processing) > Inbox (discovered). Statuses not
+// listed (backlog/stale/skipped/closed) rank lowest. Higher wins.
+const STATUS_KEEPER_RANK: Partial<Record<JobStatus, number>> = {
+  applied: 4,
+  in_progress: 4,
+  ready: 3,
+  selected: 2,
+  processing: 2,
+  discovered: 1,
+};
+
+function statusKeeperRank(job: JobListItem): number {
+  return STATUS_KEEPER_RANK[job.status] ?? 0;
+}
+
+// Default keeper: furthest along the pipeline first (Live > Ready > Selected >
+// Inbox), then best fit, then newest posting, then newest discovered.
 function chooseKeeper(jobs: JobListItem[]): string {
   const sorted = [...jobs].sort((a, b) => {
+    const status = statusKeeperRank(b) - statusKeeperRank(a);
+    if (status !== 0) return status;
     const fit = fitRank(b) - fitRank(a);
     if (fit !== 0) return fit;
     const posted = (parseDate(b.datePosted) ?? 0) - (parseDate(a.datePosted) ?? 0);
