@@ -2,12 +2,21 @@ import * as api from "@client/api";
 import type {
   CreateJobNoteInput,
   Job,
+  JobNote,
   UpdateJobNoteInput,
 } from "@shared/types";
 import type { QueryClient } from "@tanstack/react-query";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/client/lib/queryKeys";
 import { invalidateJobData } from "./invalidate";
+
+export function useJobNotesQuery(jobId: string | null) {
+  return useQuery<JobNote[]>({
+    queryKey: queryKeys.jobs.notes(jobId ?? "none"),
+    queryFn: () => api.getJobNotes(jobId as string),
+    enabled: !!jobId,
+  });
+}
 
 export async function invalidateJobNotesData(
   queryClient: QueryClient,
