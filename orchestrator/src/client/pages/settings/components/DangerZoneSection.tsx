@@ -1,3 +1,4 @@
+import { BackupRestoreControls } from "@client/pages/settings/components/BackupRestoreControls";
 import { SettingsSectionFrame } from "@client/pages/settings/components/SettingsSectionFrame";
 import {
   ALL_JOB_STATUSES,
@@ -301,6 +302,10 @@ export const DangerZoneSection: React.FC<DangerZoneSectionProps> = ({
             </AlertDialogContent>
           </AlertDialog>
         </div>
+
+        <Separator />
+
+        <BackupRestoreControls disabled={isLoading || isSaving} />
       </div>
     </SettingsSectionFrame>
   );

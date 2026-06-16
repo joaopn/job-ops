@@ -618,3 +618,12 @@ export const settingsRegistry = {
 
 export type SettingsRegistry = typeof settingsRegistry;
 export type SettingsRegistryKey = keyof SettingsRegistry;
+
+/**
+ * Registry keys flagged `kind: "secret"` (LLM/Apify credentials, basic-auth
+ * password). Used by the DB-export path to strip credential values when the
+ * user opts out of including secrets in a backup.
+ */
+export const SECRET_SETTING_KEYS = (
+  Object.keys(settingsRegistry) as SettingsRegistryKey[]
+).filter((key) => settingsRegistry[key].kind === "secret");

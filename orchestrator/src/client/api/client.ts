@@ -1623,6 +1623,49 @@ export async function clearDatabase(): Promise<{
   });
 }
 
+/**
+ * Download a DB snapshot. Bypasses the JSON `fetchApi` path since the response
+ * is a binary SQLite file; triggers a browser download from the blob.
+ */
+export async function exportDatabaseBackup(
+  includeSecrets: boolean,
+): Promise<void> {
+  const authHeader = getCachedAuthHeader();
+  const response = await fetch(
+    `${API_BASE}/database/export?includeSecrets=${includeSecrets ? "1" : "0"}`,
+    { headers: authHeader ? { Authorization: authHeader } : {} },
+  );
+  if (!response.ok) {
+    throw new ApiClientError(`Backup export failed (${response.status}).`, {
+      status: response.status,
+    });
+  }
+  const blob = await response.blob();
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const filename =
+    disposition.match(/filename="?([^"]+)"?/)?.[1] ?? "jobops-backup.db";
+
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+export async function restoreDatabaseBackup(
+  file: File,
+): Promise<{ message: string; restartRequired: boolean }> {
+  const form = new FormData();
+  form.append("file", file);
+  return fetchApi<{ message: string; restartRequired: boolean }>(
+    "/database/restore",
+    { method: "POST", body: form },
+  );
+}
+
 export async function deleteJobsByStatus(status: string): Promise<{
   message: string;
   count: number;
