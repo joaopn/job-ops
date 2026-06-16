@@ -61,6 +61,7 @@ const FIT_CHIP_TABS: FilterTab[] = [
   "selected",
   "ready",
   "live",
+  "interviewing",
   "backlog",
 ];
 

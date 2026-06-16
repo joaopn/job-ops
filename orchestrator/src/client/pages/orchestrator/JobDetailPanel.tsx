@@ -250,14 +250,14 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
     if (!selectedJob) return;
     try {
       await api.updateJob(selectedJob.id, { status: "in_progress" });
-      registerUndo(selectedJob, "Move to In Progress");
-      toast.success("Moved to in progress", { action: undoToastAction });
+      registerUndo(selectedJob, "Move to Interviewing");
+      toast.success("Moved to Interviewing", { action: undoToastAction });
       await onJobUpdated();
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
-          : "Failed to move to in progress";
+          : "Failed to move to Interviewing";
       toast.error(message);
     }
   };
@@ -497,7 +497,7 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
             onClick={handleMoveToInProgress}
           >
             <CheckCircle2 className="h-3.5 w-3.5" />
-            Move to In Progress
+            Move to Interviewing
           </Button>
         )}
 

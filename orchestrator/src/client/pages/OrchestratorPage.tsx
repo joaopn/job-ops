@@ -79,6 +79,7 @@ export const OrchestratorPage: React.FC = () => {
 			"selected",
 			"ready",
 			"live",
+			"interviewing",
 			"backlog",
 			"stale",
 			"closed",
@@ -114,8 +115,12 @@ export const OrchestratorPage: React.FC = () => {
 			navigateWithContext("inbox", null, true);
 			return;
 		}
-		if (tab === "applied" || tab === "in_progress") {
+		if (tab === "applied") {
 			navigateWithContext("live", null, true);
+			return;
+		}
+		if (tab === "in_progress") {
+			navigateWithContext("interviewing", null, true);
 			return;
 		}
 		const validTabs: FilterTab[] = [
@@ -123,6 +128,7 @@ export const OrchestratorPage: React.FC = () => {
 			"selected",
 			"ready",
 			"live",
+			"interviewing",
 			"backlog",
 			"stale",
 			"closed",

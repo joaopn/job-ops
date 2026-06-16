@@ -208,6 +208,7 @@ export const getJobCounts = (
     selected: 0,
     ready: 0,
     live: 0,
+    interviewing: 0,
     backlog: 0,
     stale: 0,
     closed: 0,
@@ -224,9 +225,8 @@ export const getJobCounts = (
       byTab.selected += 1;
     }
     if (job.status === "ready") byTab.ready += 1;
-    if (job.status === "applied" || job.status === "in_progress") {
-      byTab.live += 1;
-    }
+    if (job.status === "applied") byTab.live += 1;
+    if (job.status === "in_progress") byTab.interviewing += 1;
     if (job.status === "backlog") byTab.backlog += 1;
     if (job.status === "stale") byTab.stale += 1;
     if (job.status === "skipped" || job.status === "closed") byTab.closed += 1;

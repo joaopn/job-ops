@@ -29,7 +29,8 @@ describe("orchestrator utils", () => {
       inbox: 1,
       selected: 2, // selected + processing
       ready: 1,
-      live: 2, // applied + in_progress
+      live: 1, // applied
+      interviewing: 1, // in_progress
       backlog: 1,
       stale: 1,
       closed: 2, // skipped + closed

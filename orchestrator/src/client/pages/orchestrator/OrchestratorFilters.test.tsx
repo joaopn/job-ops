@@ -32,6 +32,7 @@ const renderFilters = (
       selected: 0,
       ready: 2,
       live: 3,
+      interviewing: 0,
       backlog: 0,
       stale: 0,
       closed: 0,

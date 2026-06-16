@@ -48,9 +48,9 @@ export const useFilteredJobs = (
     } else if (activeTab === "ready") {
       filtered = filtered.filter((job) => job.status === "ready");
     } else if (activeTab === "live") {
-      filtered = filtered.filter(
-        (job) => job.status === "applied" || job.status === "in_progress",
-      );
+      filtered = filtered.filter((job) => job.status === "applied");
+    } else if (activeTab === "interviewing") {
+      filtered = filtered.filter((job) => job.status === "in_progress");
     } else if (activeTab === "backlog") {
       filtered = filtered.filter((job) => job.status === "backlog");
     } else if (activeTab === "stale") {

@@ -231,6 +231,7 @@ export const FloatingJobActionsBar: React.FC<FloatingJobActionsBarProps> = ({
         );
 
       case "live":
+      case "interviewing":
         return (
           <>
             {canMarkClosedSelected && (

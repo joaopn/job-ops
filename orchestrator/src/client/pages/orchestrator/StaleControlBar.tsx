@@ -20,15 +20,15 @@ const MAX_DAYS = 365;
 const clampDays = (value: number): number =>
   Math.max(MIN_DAYS, Math.min(MAX_DAYS, Math.floor(value)));
 
-// Friendly tab labels for the toast breakdown. applied + in_progress both
-// surface as the "Live" tab, so they collapse to one label below.
+// Friendly tab labels for the toast breakdown. applied surfaces as the "Live"
+// tab; in_progress as the "Interviewing" tab.
 const STATUS_LABELS: Partial<Record<JobStatus, string>> = {
   discovered: "Inbox",
   selected: "Selected",
   backlog: "Backlog",
   ready: "Ready",
   applied: "Live",
-  in_progress: "Live",
+  in_progress: "Interviewing",
 };
 
 function describeBreakdown(
