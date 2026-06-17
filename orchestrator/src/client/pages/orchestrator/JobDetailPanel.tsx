@@ -47,6 +47,7 @@ import {
 } from "@/lib/utils";
 import { restoreJobStates, snapshotJob } from "@client/lib/undo";
 import type { FilterTab } from "./constants";
+import { JobDocumentsPanel } from "./JobDocumentsPanel";
 import { JobNotesSection } from "./JobNotesSection";
 import { MarkClosedPopover } from "./MarkClosedPopover";
 import { useUndo } from "./useUndoController";
@@ -69,7 +70,7 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
   onPauseRefreshChange,
 }) => {
   const [detailTab, setDetailTab] = useState<
-    "overview" | "description" | "notes"
+    "overview" | "description" | "notes" | "documents"
   >("overview");
   const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [editedDescription, setEditedDescription] = useState("");
@@ -136,7 +137,11 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
     setIsEditingDescription(false);
     setEditedDescription(selectedJob.jobDescription || "");
     setIsEditDetailsOpen(false);
-    setDetailTab("overview");
+    const jobIsLive =
+      selectedJob.status === "applied" || selectedJob.status === "in_progress";
+    const jobHasDocuments =
+      !!selectedJob.pdfPath || !!selectedJob.coverLetterPdfPath;
+    setDetailTab(jobIsLive && jobHasDocuments ? "documents" : "overview");
   }, [selectedJob?.id, selectedJob]);
 
   useEffect(() => {
@@ -348,6 +353,8 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
     selectedJob?.status === "applied" || selectedJob?.status === "in_progress";
   const isLive =
     selectedJob?.status === "applied" || selectedJob?.status === "in_progress";
+  const hasDocuments =
+    isLive && (!!selectedJob?.pdfPath || !!selectedJob?.coverLetterPdfPath);
   const canRowMoveToSelected = selectedJob?.status === "backlog";
   const canRowReopen =
     selectedJob?.status === "skipped" || selectedJob?.status === "closed";
@@ -648,6 +655,11 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
           <TabsTrigger value="description" className="text-xs">
             Description
           </TabsTrigger>
+          {hasDocuments && (
+            <TabsTrigger value="documents" className="text-xs">
+              Documents
+            </TabsTrigger>
+          )}
           {isLive && (
             <TabsTrigger value="notes" className="text-xs">
               Notes
@@ -829,6 +841,12 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
             )}
           </div>
         </TabsContent>
+
+        {hasDocuments && (
+          <TabsContent value="documents" className="space-y-3 pt-3">
+            <JobDocumentsPanel job={selectedJob} personName={personName} />
+          </TabsContent>
+        )}
 
         {isLive && (
           <TabsContent value="notes" className="space-y-3 pt-3">
