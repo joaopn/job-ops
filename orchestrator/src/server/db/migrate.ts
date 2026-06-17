@@ -116,6 +116,7 @@ const migrations: string[] = [
     cv_document_id TEXT REFERENCES cv_documents(id) ON DELETE SET NULL,
     pdf_path TEXT,
     cover_letter_draft TEXT NOT NULL DEFAULT '',
+    interview_prep TEXT NOT NULL DEFAULT '',
     discovered_at TEXT NOT NULL DEFAULT (datetime('now')),
     processed_at TEXT,
     ready_at TEXT,
@@ -290,6 +291,12 @@ const migrations: string[] = [
   // DBs. Idempotent via the duplicate-column-name skip below.
   `ALTER TABLE jobs ADD COLUMN cv_field_locks TEXT NOT NULL DEFAULT '[]'`,
 
+  // Interview QA: per-job, user-generated interview strategy (freeform
+  // markdown). Same defensive-ALTER-before-rebuild pattern — the rebuild's
+  // INSERT SELECT references `interview_prep` from `jobs`, so legacy DBs
+  // need the column first. Idempotent via the duplicate-column-name skip.
+  `ALTER TABLE jobs ADD COLUMN interview_prep TEXT NOT NULL DEFAULT ''`,
+
   // Canonical jobs-table rebuild. Originally added in 5d to drop unused
   // columns (tailored_summary/headline/skills, tracer_links_enabled,
   // sponsor_match_*); 5g extended it with the new status + outcome enums and
@@ -356,6 +363,7 @@ const migrations: string[] = [
     cover_letter_document_id TEXT REFERENCES cover_letter_documents(id) ON DELETE SET NULL,
     cover_letter_field_overrides TEXT NOT NULL DEFAULT '{}',
     cover_letter_pdf_path TEXT,
+    interview_prep TEXT NOT NULL DEFAULT '',
     reposted_at TEXT,
     repost_count INTEGER NOT NULL DEFAULT 0,
     discovered_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -380,6 +388,7 @@ const migrations: string[] = [
     tailoring_matched, tailoring_skipped, cv_document_id,
     pdf_path, cover_letter_draft,
     cover_letter_document_id, cover_letter_field_overrides, cover_letter_pdf_path,
+    interview_prep,
     reposted_at, repost_count,
     discovered_at, processed_at, ready_at,
     applied_at, created_at, updated_at
@@ -409,6 +418,7 @@ const migrations: string[] = [
     cover_letter_document_id,
     COALESCE(cover_letter_field_overrides, '{}') AS cover_letter_field_overrides,
     cover_letter_pdf_path,
+    COALESCE(interview_prep, '') AS interview_prep,
     COALESCE(reposted_at, NULL) AS reposted_at,
     COALESCE(repost_count, 0) AS repost_count,
     discovered_at, processed_at,

@@ -221,6 +221,7 @@ export interface Job {
   coverLetterDocumentId: string | null; // FK to cover_letter_documents.id; null = "use the active doc"
   coverLetterFieldOverrides: CvFieldOverrides; // Per-job cover-letter overrides; body field's value is the textarea state
   coverLetterPdfPath: string | null; // Path to rendered cover-letter PDF
+  interviewPrep: string; // User-generated interview strategy (freeform markdown); "" until generated
   appliedDuplicateMatch?: AppliedDuplicateMatch | null; // Included on detail responses and may be omitted on list responses
 
   // JobSpy fields (nullable for non-JobSpy sources)
@@ -417,6 +418,7 @@ export interface UpdateJobInput {
   coverLetterDocumentId?: string | null;
   coverLetterFieldOverrides?: CvFieldOverrides;
   coverLetterPdfPath?: string | null;
+  interviewPrep?: string;
   readyAt?: string;
   appliedAt?: string;
 }

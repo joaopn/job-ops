@@ -956,6 +956,7 @@ function mapRowToJob(row: typeof jobs.$inferSelect): Job {
     coverLetterDocumentId: row.coverLetterDocumentId ?? null,
     coverLetterFieldOverrides: parseFieldOverrides(row.coverLetterFieldOverrides),
     coverLetterPdfPath: row.coverLetterPdfPath ?? null,
+    interviewPrep: row.interviewPrep ?? "",
     jobType: row.jobType ?? null,
     salarySource: row.salarySource ?? null,
     salaryInterval: row.salaryInterval ?? null,

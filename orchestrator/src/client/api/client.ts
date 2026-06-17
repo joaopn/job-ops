@@ -1002,6 +1002,16 @@ export async function generateCoverLetter(id: string): Promise<Job> {
   });
 }
 
+export async function generateInterviewPrep(
+  id: string,
+  steer?: string,
+): Promise<Job> {
+  return fetchApi<Job>(`/jobs/${id}/generate-interview-prep`, {
+    method: "POST",
+    body: JSON.stringify({ steer: steer ?? "" }),
+  });
+}
+
 export async function renderCoverLetterPdf(id: string): Promise<Job> {
   return fetchApi<Job>(`/jobs/${id}/render-cover-letter`, {
     method: "POST",

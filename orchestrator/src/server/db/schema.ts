@@ -164,6 +164,7 @@ export const jobs = sqliteTable("jobs", {
     .notNull()
     .default(sql`('{}')`),
   coverLetterPdfPath: text("cover_letter_pdf_path"),
+  interviewPrep: text("interview_prep").notNull().default(""),
 
   // Timestamps
   discoveredAt: text("discovered_at").notNull().default(sql`(datetime('now'))`),

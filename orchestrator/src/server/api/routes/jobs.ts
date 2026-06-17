@@ -20,6 +20,7 @@ import * as settingsRepo from "@server/repositories/settings";
 import { getActivePersonalBrief } from "@server/services/brief";
 import { generateCoverLetter } from "@server/services/cover-letter/generate";
 import { renderCoverLetterPdf } from "@server/services/cover-letter/render";
+import { generateInterviewPrep } from "@server/services/interview-qa/generate";
 import {
   buildCvText,
   recomputeAtsCoverage,
@@ -90,6 +91,7 @@ const updateJobSchema = z.object({
   coverLetterDocumentId: z.string().min(1).nullable().optional(),
   coverLetterFieldOverrides: z.record(z.string(), z.string()).optional(),
   coverLetterPdfPath: z.string().nullable().optional(),
+  interviewPrep: z.string().max(20000).optional(),
   cvFieldLocks: z.array(z.string().min(1)).optional(),
   tailoredFields: z.record(z.string(), z.string()).optional(),
   tailoringFailureReason: z.string().nullable().optional(),
@@ -1672,6 +1674,42 @@ jobsRouter.post(
         return fail(
           res,
           badRequest(result.error ?? "Cover-letter generation failed"),
+        );
+      }
+      ok(res, result.job);
+    } catch (error) {
+      fail(res, toAppError(error));
+    }
+  },
+);
+
+/**
+ * POST /api/jobs/:id/generate-interview-prep - Run Interview QA for this
+ * job. The LLM produces a freeform interview strategy (markdown) from the
+ * JD + personal brief + tailored CV fields; the optional `steer` body
+ * field carries free-text steering from the tab. Persisted to
+ * `jobs.interviewPrep`. Returns the updated job. Manual-only.
+ */
+const generateInterviewPrepSchema = z.object({
+  steer: z.string().max(2000).optional(),
+});
+
+jobsRouter.post(
+  "/:id/generate-interview-prep",
+  async (req: Request, res: Response) => {
+    const parsed = generateInterviewPrepSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return fail(res, badRequest("Invalid interview-prep request."));
+    }
+    try {
+      const result = await generateInterviewPrep({
+        jobId: req.params.id,
+        steer: parsed.data.steer,
+      });
+      if (!result.success) {
+        return fail(
+          res,
+          badRequest(result.error ?? "Interview QA generation failed"),
         );
       }
       ok(res, result.job);

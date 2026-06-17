@@ -47,6 +47,7 @@ import {
 } from "@/lib/utils";
 import { restoreJobStates, snapshotJob } from "@client/lib/undo";
 import type { FilterTab } from "./constants";
+import { InterviewQaSection } from "./InterviewQaSection";
 import { JobDocumentsPanel } from "./JobDocumentsPanel";
 import { JobNotesSection } from "./JobNotesSection";
 import { MarkClosedPopover } from "./MarkClosedPopover";
@@ -70,7 +71,7 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
   onPauseRefreshChange,
 }) => {
   const [detailTab, setDetailTab] = useState<
-    "overview" | "description" | "notes" | "documents"
+    "overview" | "description" | "notes" | "documents" | "interview"
   >("overview");
   const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [editedDescription, setEditedDescription] = useState("");
@@ -680,6 +681,11 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
             </TabsTrigger>
           )}
           {isLive && (
+            <TabsTrigger value="interview" className="text-xs">
+              Interview QA
+            </TabsTrigger>
+          )}
+          {isLive && (
             <TabsTrigger value="notes" className="text-xs">
               Notes
             </TabsTrigger>
@@ -864,6 +870,12 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
         {hasDocuments && (
           <TabsContent value="documents" className="space-y-3 pt-3">
             <JobDocumentsPanel job={selectedJob} personName={personName} />
+          </TabsContent>
+        )}
+
+        {isLive && (
+          <TabsContent value="interview" className="space-y-3 pt-3">
+            <InterviewQaSection job={selectedJob} onJobUpdated={onJobUpdated} />
           </TabsContent>
         )}
 
