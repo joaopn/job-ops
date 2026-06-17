@@ -211,7 +211,9 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
         toast.success("Resume regenerated successfully");
       } else {
         await api.processJob(selectedJob.id);
-        toast.success("Resume generated successfully");
+        toast.success("Tailoring started", {
+          description: "It'll appear in the Tailoring tab when ready.",
+        });
       }
       await onJobUpdated();
     } catch (error) {
@@ -282,16 +284,17 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
     }
   };
 
-  const handleMoveToSelectedRow = async () => {
+  const handleTailorRow = async () => {
     if (!selectedJob) return;
     try {
-      await api.updateJob(selectedJob.id, { status: "selected" });
-      registerUndo(selectedJob, "Move to Selected");
-      toast.message("Moved to Selected", { action: undoToastAction });
+      // Tailoring runs in the background; the row flips to processing and
+      // appears in the Tailoring tab. Not undoable (creates a PDF).
+      await api.processJob(selectedJob.id);
+      toast.message("Tailoring started");
       await onJobUpdated();
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Failed to move to Selected";
+        error instanceof Error ? error.message : "Failed to start tailoring";
       toast.error(message);
     }
   };
@@ -355,7 +358,8 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
     selectedJob?.status === "applied" || selectedJob?.status === "in_progress";
   const hasDocuments =
     isLive && (!!selectedJob?.pdfPath || !!selectedJob?.coverLetterPdfPath);
-  const canRowMoveToSelected = selectedJob?.status === "backlog";
+  const canRowTailor =
+    selectedJob?.status === "backlog" || selectedJob?.status === "stale";
   const canRowReopen =
     selectedJob?.status === "skipped" || selectedJob?.status === "closed";
   const canProcess = selectedJob
@@ -367,13 +371,13 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
       )
     : false;
   const canRowSkip = selectedJob?.status === "backlog";
-  const showReadyPdf = activeTab === "ready";
-  const showGeneratePdf = activeTab === "inbox" || activeTab === "selected";
+  const showReadyPdf = activeTab === "tailoring";
+  const showGeneratePdf = activeTab === "inbox";
   const isProcessingSelected = selectedJob
     ? processingJobId === selectedJob.id || selectedJob.status === "processing"
     : false;
 
-  if (activeTab === "inbox" || activeTab === "selected") {
+  if (activeTab === "inbox") {
     return (
       <DiscoveredPanel
         job={selectedJob}
@@ -384,9 +388,24 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
     );
   }
 
-  if (activeTab === "ready") {
+  if (activeTab === "tailoring") {
+    // Only finished (ready) rows get the ReadyPanel (PDF + ghostwriter).
+    // Everything else routes to DiscoveredPanel, which renders the right
+    // state itself: ProcessingState for in-flight rows, DecideMode for the
+    // untailored candidates surfaced by the Untailored toggle, EmptyState
+    // for none selected.
+    if (selectedJob?.status === "ready") {
+      return (
+        <ReadyPanel
+          job={selectedJob}
+          onJobUpdated={onJobUpdated}
+          onJobMoved={handleJobMoved}
+          onTailoringDirtyChange={handleTailoringDirtyChange}
+        />
+      );
+    }
     return (
-      <ReadyPanel
+      <DiscoveredPanel
         job={selectedJob}
         onJobUpdated={onJobUpdated}
         onJobMoved={handleJobMoved}
@@ -523,14 +542,14 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
           />
         )}
 
-        {canRowMoveToSelected && (
+        {canRowTailor && (
           <Button
             size="sm"
             className="h-8 gap-1.5 text-xs bg-violet-600/20 text-violet-300 hover:bg-violet-600/30 border border-violet-500/30"
-            onClick={handleMoveToSelectedRow}
+            onClick={handleTailorRow}
           >
             <CheckCircle2 className="h-3.5 w-3.5" />
-            Move to Selected
+            Tailor
           </Button>
         )}
 

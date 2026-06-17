@@ -11,22 +11,18 @@ interface FloatingJobActionsBarProps {
   canMoveSelected: boolean;
   canSkipSelected: boolean;
   canRescoreSelected: boolean;
-  canMoveToSelectedSelected: boolean;
   canMoveToBacklogSelected: boolean;
   canMoveToStaleSelected: boolean;
   canMoveToInboxSelected: boolean;
-  canUnselectSelected: boolean;
   canMarkClosedSelected: boolean;
   canReopenSelected: boolean;
   jobActionInFlight: boolean;
   onMoveToReady: () => void;
   onSkipSelected: () => void;
   onRescoreSelected: () => void;
-  onMoveToSelected: () => void;
   onMoveToBacklog: () => void;
   onMoveToStale: () => void;
   onMoveToInbox: () => void;
-  onUnselect: () => void;
   onMarkClosed: (outcome: JobOutcome) => void;
   onReopen: () => void;
   onClear: () => void;
@@ -40,22 +36,18 @@ export const FloatingJobActionsBar: React.FC<FloatingJobActionsBarProps> = ({
   canMoveSelected,
   canSkipSelected,
   canRescoreSelected,
-  canMoveToSelectedSelected,
   canMoveToBacklogSelected,
   canMoveToStaleSelected,
   canMoveToInboxSelected,
-  canUnselectSelected,
   canMarkClosedSelected,
   canReopenSelected,
   jobActionInFlight,
   onMoveToReady,
   onSkipSelected,
   onRescoreSelected,
-  onMoveToSelected,
   onMoveToBacklog,
   onMoveToStale,
   onMoveToInbox,
-  onUnselect,
   onMarkClosed,
   onReopen,
   onClear,
@@ -71,23 +63,11 @@ export const FloatingJobActionsBar: React.FC<FloatingJobActionsBarProps> = ({
       case "inbox":
         return (
           <>
-            {canMoveToSelectedSelected && (
-              <Button
-                type="button"
-                size="sm"
-                variant="default"
-                className={buttonClass}
-                disabled={jobActionInFlight}
-                onClick={onMoveToSelected}
-              >
-                Move to Selected
-              </Button>
-            )}
             {canMoveSelected && (
               <Button
                 type="button"
                 size="sm"
-                variant="outline"
+                variant="default"
                 className={buttonClass}
                 disabled={jobActionInFlight}
                 onClick={onMoveToReady}
@@ -134,7 +114,7 @@ export const FloatingJobActionsBar: React.FC<FloatingJobActionsBarProps> = ({
           </>
         );
 
-      case "selected":
+      case "tailoring":
         return (
           <>
             {canMoveSelected && (
@@ -147,60 +127,6 @@ export const FloatingJobActionsBar: React.FC<FloatingJobActionsBarProps> = ({
                 onClick={onMoveToReady}
               >
                 Tailor {selectedCount} {jobOrJobs(selectedCount)}
-              </Button>
-            )}
-            {canRescoreSelected && (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className={buttonClass}
-                disabled={jobActionInFlight}
-                onClick={onRescoreSelected}
-              >
-                Recalculate match
-              </Button>
-            )}
-            {canUnselectSelected && (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className={buttonClass}
-                disabled={jobActionInFlight}
-                onClick={onUnselect}
-              >
-                Move to Inbox
-              </Button>
-            )}
-            {canSkipSelected && (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className={buttonClass}
-                disabled={jobActionInFlight}
-                onClick={onSkipSelected}
-              >
-                Skip
-              </Button>
-            )}
-          </>
-        );
-
-      case "ready":
-        return (
-          <>
-            {canMoveToSelectedSelected && (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className={buttonClass}
-                disabled={jobActionInFlight}
-                onClick={onMoveToSelected}
-              >
-                Move back to Selected
               </Button>
             )}
             {canRescoreSelected && (
@@ -257,16 +183,16 @@ export const FloatingJobActionsBar: React.FC<FloatingJobActionsBarProps> = ({
       case "backlog":
         return (
           <>
-            {canMoveToSelectedSelected && (
+            {canMoveSelected && (
               <Button
                 type="button"
                 size="sm"
                 variant="default"
                 className={buttonClass}
                 disabled={jobActionInFlight}
-                onClick={onMoveToSelected}
+                onClick={onMoveToReady}
               >
-                Move to Selected
+                Tailor {selectedCount} {jobOrJobs(selectedCount)}
               </Button>
             )}
             {canRescoreSelected && (
@@ -311,16 +237,16 @@ export const FloatingJobActionsBar: React.FC<FloatingJobActionsBarProps> = ({
                 Move to Inbox
               </Button>
             )}
-            {canMoveToSelectedSelected && (
+            {canMoveSelected && (
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
                 className={buttonClass}
                 disabled={jobActionInFlight}
-                onClick={onMoveToSelected}
+                onClick={onMoveToReady}
               >
-                Move to Selected
+                Tailor {selectedCount} {jobOrJobs(selectedCount)}
               </Button>
             )}
             {canMoveToBacklogSelected && (
@@ -369,18 +295,34 @@ export const FloatingJobActionsBar: React.FC<FloatingJobActionsBarProps> = ({
         );
 
       default: // "all"
-        return canRescoreSelected ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className={buttonClass}
-            disabled={jobActionInFlight}
-            onClick={onRescoreSelected}
-          >
-            Recalculate match
-          </Button>
-        ) : null;
+        return (
+          <>
+            {canMoveSelected && (
+              <Button
+                type="button"
+                size="sm"
+                variant="default"
+                className={buttonClass}
+                disabled={jobActionInFlight}
+                onClick={onMoveToReady}
+              >
+                Tailor {selectedCount} {jobOrJobs(selectedCount)}
+              </Button>
+            )}
+            {canRescoreSelected && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className={buttonClass}
+                disabled={jobActionInFlight}
+                onClick={onRescoreSelected}
+              >
+                Recalculate match
+              </Button>
+            )}
+          </>
+        );
     }
   };
 

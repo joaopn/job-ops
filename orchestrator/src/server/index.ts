@@ -8,6 +8,7 @@ import { sanitizeUnknown } from "@infra/sanitize";
 import { createApp } from "./app";
 import { initializeExtractorRegistry } from "./extractors/registry";
 import { deleteExpiredOrRevokedAuthSessions } from "./repositories/auth-sessions";
+import { reconcileTransientStatuses } from "./repositories/jobs";
 import { applyStoredEnvOverrides } from "./services/envSettings";
 
 const AUTH_SESSION_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
@@ -44,6 +45,17 @@ async function startServer() {
       "Extractor registry initialization failed outside production. Server startup aborted.",
     );
     return;
+  }
+
+  try {
+    const reconciled = await reconcileTransientStatuses();
+    if (reconciled.processing > 0 || reconciled.selected > 0) {
+      logger.info("Reconciled transient job statuses on startup", reconciled);
+    }
+  } catch (error) {
+    logger.warn("Failed to reconcile transient job statuses", {
+      error: sanitizeUnknown(error),
+    });
   }
 
   const app = createApp();

@@ -16,12 +16,10 @@ import {
   canMoveToBacklog,
   canMoveToInbox,
   canMoveToReady,
-  canMoveToSelected,
   canMoveToStale,
   canReopen,
   canRescore,
   canSkip,
-  canUnselect,
   getFailedJobIds,
 } from "./jobActions";
 import { clampNumber } from "./utils";
@@ -32,8 +30,6 @@ const jobActionLabel: Record<JobAction, string> = {
   move_to_ready: "Tailoring selected jobs...",
   skip: "Skipping selected jobs...",
   rescore: "Calculating match scores...",
-  move_to_selected: "Moving to Selected...",
-  unselect: "Moving to Inbox...",
   move_to_backlog: "Moving to Backlog...",
   move_to_stale: "Moving to Stale...",
   move_to_inbox: "Moving to Inbox...",
@@ -43,11 +39,9 @@ const jobActionLabel: Record<JobAction, string> = {
 };
 
 const jobActionSuccessLabel: Record<JobAction, string> = {
-  move_to_ready: "jobs tailored",
+  move_to_ready: "jobs sent to Tailoring",
   skip: "jobs skipped",
   rescore: "matches recalculated",
-  move_to_selected: "jobs moved to Selected",
-  unselect: "jobs moved to Inbox",
   move_to_backlog: "jobs moved to Backlog",
   move_to_stale: "jobs moved to Stale",
   move_to_inbox: "jobs moved to Inbox",
@@ -61,8 +55,6 @@ const jobActionSuccessLabel: Record<JobAction, string> = {
 // status-revert can't cleanly undo.
 const undoActionLabel: Partial<Record<JobAction, string>> = {
   skip: "Skip",
-  move_to_selected: "Move to Selected",
-  unselect: "Move to Inbox",
   move_to_backlog: "Move to Backlog",
   move_to_stale: "Move to Stale",
   move_to_inbox: "Move to Inbox",
@@ -115,10 +107,6 @@ export function useJobSelectionActions({
     () => canRescore(selectedJobs),
     [selectedJobs],
   );
-  const canMoveToSelectedSelected = useMemo(
-    () => canMoveToSelected(selectedJobs),
-    [selectedJobs],
-  );
   const canMoveToBacklogSelected = useMemo(
     () => canMoveToBacklog(selectedJobs),
     [selectedJobs],
@@ -129,10 +117,6 @@ export function useJobSelectionActions({
   );
   const canMoveToInboxSelected = useMemo(
     () => canMoveToInbox(selectedJobs),
-    [selectedJobs],
-  );
-  const canUnselectSelected = useMemo(
-    () => canUnselect(selectedJobs),
     [selectedJobs],
   );
   const canMarkClosedSelected = useMemo(
@@ -439,11 +423,9 @@ export function useJobSelectionActions({
     canSkipSelected,
     canMoveSelected,
     canRescoreSelected,
-    canMoveToSelectedSelected,
     canMoveToBacklogSelected,
     canMoveToStaleSelected,
     canMoveToInboxSelected,
-    canUnselectSelected,
     canMarkClosedSelected,
     canReopenSelected,
     jobActionInFlight,

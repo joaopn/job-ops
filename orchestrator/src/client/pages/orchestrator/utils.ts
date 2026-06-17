@@ -205,8 +205,7 @@ export const getJobCounts = (
   // keep working without churn.
   const byTab: Record<FilterTab, number> & { discovered: number } = {
     inbox: 0,
-    selected: 0,
-    ready: 0,
+    tailoring: 0,
     live: 0,
     interviewing: 0,
     backlog: 0,
@@ -221,10 +220,9 @@ export const getJobCounts = (
       byTab.inbox += 1;
       byTab.discovered += 1;
     }
-    if (job.status === "selected" || job.status === "processing") {
-      byTab.selected += 1;
+    if (job.status === "processing" || job.status === "ready") {
+      byTab.tailoring += 1;
     }
-    if (job.status === "ready") byTab.ready += 1;
     if (job.status === "applied") byTab.live += 1;
     if (job.status === "in_progress") byTab.interviewing += 1;
     if (job.status === "backlog") byTab.backlog += 1;

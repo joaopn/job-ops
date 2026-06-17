@@ -47,6 +47,32 @@ import {
 	getSourcesWithJobs,
 } from "./orchestrator/utils";
 
+// Candidates the Tailoring tab surfaces when the Untailored toggle is on.
+const TAILORING_CANDIDATE_STATUSES = new Set([
+	"discovered",
+	"backlog",
+	"stale",
+]);
+
+// Whether a job of `status` is part of `tab`'s visible list. Mirrors
+// useFilteredJobs — needed here so a selected row isn't nulled out / dropped on
+// tab switch. The Tailoring tab is a workspace: its contents depend on the
+// Untailored toggle (candidates when on, processing + ready when off).
+function jobBelongsToTab(
+	tab: FilterTab,
+	status: string,
+	untailoredOnly: boolean,
+): boolean {
+	const tabDef = tabs.find((t) => t.id === tab);
+	if (!tabDef || tabDef.statuses.length === 0) return true;
+	if (tab === "tailoring") {
+		return untailoredOnly
+			? TAILORING_CANDIDATE_STATUSES.has(status)
+			: status === "processing" || status === "ready";
+	}
+	return (tabDef.statuses as string[]).includes(status);
+}
+
 export const OrchestratorPage: React.FC = () => {
 	const { tab, jobId } = useParams<{ tab: string; jobId?: string }>();
 	const navigate = useNavigate();
@@ -70,14 +96,15 @@ export const OrchestratorPage: React.FC = () => {
 		setStaleThresholdDays,
 		fitFilter,
 		setFitFilter,
+		untailoredOnly,
+		setUntailoredOnly,
 		resetFilters,
 	} = useOrchestratorFilters();
 
 	const activeTab = useMemo(() => {
 		const validTabs: FilterTab[] = [
 			"inbox",
-			"selected",
-			"ready",
+			"tailoring",
 			"live",
 			"interviewing",
 			"backlog",
@@ -123,10 +150,19 @@ export const OrchestratorPage: React.FC = () => {
 			navigateWithContext("interviewing", null, true);
 			return;
 		}
+		// Selected tab removed; Ready renamed to Tailoring. Route old bookmarks
+		// to the closest current tab.
+		if (tab === "selected") {
+			navigateWithContext("inbox", null, true);
+			return;
+		}
+		if (tab === "ready") {
+			navigateWithContext("tailoring", null, true);
+			return;
+		}
 		const validTabs: FilterTab[] = [
 			"inbox",
-			"selected",
-			"ready",
+			"tailoring",
 			"live",
 			"interviewing",
 			"backlog",
@@ -235,22 +271,21 @@ export const OrchestratorPage: React.FC = () => {
 		maxAgeDays,
 		closedSubFilter,
 		fitFilter,
+		untailoredOnly,
 	);
 	const setActiveTab = useCallback(
 		(newTab: FilterTab) => {
 			// Keep selected job if it belongs to the target tab, otherwise clear it.
 			// The auto-select effect will pick the first job on desktop when cleared.
-			const tabDef = tabs.find((t) => t.id === newTab);
 			const selectedItem = selectedJobId
 				? jobs.find((j) => j.id === selectedJobId)
 				: null;
 			const jobFitsTab =
-				selectedItem &&
-				(tabDef?.statuses.length === 0 ||
-					tabDef?.statuses.includes(selectedItem.status));
+				!!selectedItem &&
+				jobBelongsToTab(newTab, selectedItem.status, untailoredOnly);
 			navigateWithContext(newTab, jobFitsTab ? selectedJobId : null);
 		},
-		[navigateWithContext, selectedJobId, jobs],
+		[navigateWithContext, selectedJobId, jobs, untailoredOnly],
 	);
 
 	// Synchronously null-out selectedJob when it doesn't belong to the current
@@ -260,10 +295,10 @@ export const OrchestratorPage: React.FC = () => {
 	// tab's action buttons.
 	const visibleSelectedJob = useMemo(() => {
 		if (!selectedJob) return null;
-		const tabDef = tabs.find((t) => t.id === activeTab);
-		if (!tabDef || tabDef.statuses.length === 0) return selectedJob;
-		return tabDef.statuses.includes(selectedJob.status) ? selectedJob : null;
-	}, [selectedJob, activeTab]);
+		return jobBelongsToTab(activeTab, selectedJob.status, untailoredOnly)
+			? selectedJob
+			: null;
+	}, [selectedJob, activeTab, untailoredOnly]);
 
 	const counts = useMemo(() => getJobCounts(jobs), [jobs]);
 	const displayedCounts = useMemo(() => counts, [counts]);
@@ -273,11 +308,9 @@ export const OrchestratorPage: React.FC = () => {
 		canSkipSelected,
 		canMoveSelected,
 		canRescoreSelected,
-		canMoveToSelectedSelected,
 		canMoveToBacklogSelected,
 		canMoveToStaleSelected,
 		canMoveToInboxSelected,
-		canUnselectSelected,
 		canMarkClosedSelected,
 		canReopenSelected,
 		jobActionInFlight,
@@ -462,7 +495,7 @@ export const OrchestratorPage: React.FC = () => {
 	};
 
 	const primaryEmptyStateAction = useMemo(() => {
-		if (activeTab === "ready" && counts.discovered > 0) {
+		if (activeTab === "tailoring" && counts.discovered > 0) {
 			return {
 				label: "Review Inbox",
 				onClick: () => setActiveTab("inbox"),
@@ -480,7 +513,7 @@ export const OrchestratorPage: React.FC = () => {
 	}, [activeTab, counts.discovered, openRunMode, setActiveTab]);
 
 	const secondaryEmptyStateAction = useMemo(() => {
-		if (activeTab === "ready") {
+		if (activeTab === "tailoring") {
 			return {
 				label: "Run pipeline",
 				onClick: () => openRunMode(),
@@ -619,6 +652,8 @@ export const OrchestratorPage: React.FC = () => {
 									onToggleSelectAll={toggleSelectAll}
 									fitFilter={fitFilter}
 									onFitFilterChange={setFitFilter}
+									untailoredOnly={untailoredOnly}
+									onUntailoredOnlyChange={setUntailoredOnly}
 									primaryEmptyStateAction={primaryEmptyStateAction}
 									secondaryEmptyStateAction={secondaryEmptyStateAction}
 									emptyStateMessage={emptyStateMessage}
@@ -686,22 +721,18 @@ export const OrchestratorPage: React.FC = () => {
 				canMoveSelected={canMoveSelected}
 				canSkipSelected={canSkipSelected}
 				canRescoreSelected={canRescoreSelected}
-				canMoveToSelectedSelected={canMoveToSelectedSelected}
 				canMoveToBacklogSelected={canMoveToBacklogSelected}
 				canMoveToStaleSelected={canMoveToStaleSelected}
 				canMoveToInboxSelected={canMoveToInboxSelected}
-				canUnselectSelected={canUnselectSelected}
 				canMarkClosedSelected={canMarkClosedSelected}
 				canReopenSelected={canReopenSelected}
 				jobActionInFlight={jobActionInFlight !== null}
 				onMoveToReady={() => void runJobAction("move_to_ready")}
 				onSkipSelected={() => void runJobAction("skip")}
 				onRescoreSelected={() => void runJobAction("rescore")}
-				onMoveToSelected={() => void runJobAction("move_to_selected")}
 				onMoveToBacklog={() => void runJobAction("move_to_backlog")}
 				onMoveToStale={() => void runJobAction("move_to_stale")}
 				onMoveToInbox={() => void runJobAction("move_to_inbox")}
-				onUnselect={() => void runJobAction("unselect")}
 				onMarkClosed={(outcome) => void runMarkClosedAction(outcome)}
 				onReopen={() => void runJobAction("reopen")}
 				onClear={clearSelection}

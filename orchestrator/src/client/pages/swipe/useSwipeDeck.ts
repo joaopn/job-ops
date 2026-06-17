@@ -14,7 +14,7 @@ import type { Job, SuitabilityCategory } from "@shared/types.js";
 import { useCallback, useEffect, useState } from "react";
 
 /** Actions reachable from the deck — all accept a `discovered` source job. */
-export type SwipeAction = "move_to_selected" | "skip" | "move_to_backlog";
+export type SwipeAction = "move_to_ready" | "skip" | "move_to_backlog";
 
 const FIT_RANK: Record<SuitabilityCategory, number> = {
   very_good_fit: 0,
@@ -128,7 +128,10 @@ export function useSwipeDeck({
       return;
     }
 
-    setLastSwipe(job);
+    // Tailoring runs in the background and resolves the row to ready; a PATCH
+    // back to discovered would race it. Exclude it from undo (skip/backlog
+    // only), matching the Manage view.
+    if (action !== "move_to_ready") setLastSwipe(job);
   }, []);
 
   const undo = useCallback(async () => {

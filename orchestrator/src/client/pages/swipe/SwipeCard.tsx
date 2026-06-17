@@ -126,7 +126,7 @@ export const SwipeCard = forwardRef<SwipeCardHandle, SwipeCardProps>(
     const x = useMotionValue(0);
     const y = useMotionValue(0);
     const rotate = useTransform(x, [-250, 250], [-12, 12]);
-    const selectOpacity = useTransform(x, [20, 130], [0, 1]);
+    const tailorOpacity = useTransform(x, [20, 130], [0, 1]);
     const skipOpacity = useTransform(x, [-130, -20], [1, 0]);
 
     const flyOut = (action: SwipeAction) => {
@@ -137,7 +137,7 @@ export const SwipeCard = forwardRef<SwipeCardHandle, SwipeCardProps>(
         ease: "easeOut" as const,
         onComplete: () => onCommit(action),
       };
-      if (action === "move_to_selected") animate(x, distance, opts);
+      if (action === "move_to_ready") animate(x, distance, opts);
       else if (action === "skip") animate(x, -distance, opts);
       else animate(y, 700, opts); // backlog: drop the card away
     };
@@ -147,7 +147,7 @@ export const SwipeCard = forwardRef<SwipeCardHandle, SwipeCardProps>(
     const handleDragEnd = (_: unknown, info: PanInfo) => {
       const { offset, velocity } = info;
       if (offset.x > COMMIT_OFFSET || velocity.x > COMMIT_VELOCITY) {
-        flyOut("move_to_selected");
+        flyOut("move_to_ready");
       } else if (offset.x < -COMMIT_OFFSET || velocity.x < -COMMIT_VELOCITY) {
         flyOut("skip");
       }
@@ -171,10 +171,10 @@ export const SwipeCard = forwardRef<SwipeCardHandle, SwipeCardProps>(
         <SwipeCardContent job={job} />
 
         <motion.div
-          style={{ opacity: selectOpacity }}
+          style={{ opacity: tailorOpacity }}
           className="pointer-events-none absolute left-4 top-4 z-10 rotate-[-12deg] rounded-md border-2 border-emerald-400 px-3 py-1 text-lg font-extrabold uppercase tracking-wider text-emerald-400"
         >
-          Select
+          Tailor
         </motion.div>
         <motion.div
           style={{ opacity: skipOpacity }}

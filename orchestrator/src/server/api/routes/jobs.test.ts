@@ -59,65 +59,6 @@ describe.sequential("POST /api/jobs/actions — 5g action variants", () => {
     return { status: res.status, body: await res.json() };
   }
 
-  it("move_to_selected promotes a discovered row to selected", async () => {
-    await seedJob({ id: "job-1", status: "discovered" });
-
-    const { status, body } = await postAction({
-      action: "move_to_selected",
-      jobIds: ["job-1"],
-    });
-
-    expect(status).toBe(200);
-    expect(body.ok).toBe(true);
-    expect(body.data.succeeded).toBe(1);
-    expect(body.data.results[0].job.status).toBe("selected");
-  });
-
-  it("move_to_selected from backlog also works (re-engagement)", async () => {
-    await seedJob({ id: "job-2", status: "backlog" });
-
-    const { body } = await postAction({
-      action: "move_to_selected",
-      jobIds: ["job-2"],
-    });
-
-    expect(body.data.results[0].job.status).toBe("selected");
-  });
-
-  it("move_to_selected demotes a ready row back to selected for re-tailoring", async () => {
-    await seedJob({ id: "job-3", status: "ready" });
-
-    const { body } = await postAction({
-      action: "move_to_selected",
-      jobIds: ["job-3"],
-    });
-
-    expect(body.data.results[0].job.status).toBe("selected");
-  });
-
-  it("move_to_selected rejects from non-promotable statuses", async () => {
-    await seedJob({ id: "job-3b", status: "applied" });
-
-    const { body } = await postAction({
-      action: "move_to_selected",
-      jobIds: ["job-3b"],
-    });
-
-    expect(body.data.failed).toBe(1);
-    expect(body.data.results[0].error.code).toBe("INVALID_REQUEST");
-  });
-
-  it("unselect demotes selected back to discovered", async () => {
-    await seedJob({ id: "job-4", status: "selected" });
-
-    const { body } = await postAction({
-      action: "unselect",
-      jobIds: ["job-4"],
-    });
-
-    expect(body.data.results[0].job.status).toBe("discovered");
-  });
-
   it("move_to_backlog accepts discovered + selected", async () => {
     await seedJob({ id: "job-5a", status: "discovered" });
     await seedJob({ id: "job-5b", status: "selected" });

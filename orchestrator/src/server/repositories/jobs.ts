@@ -299,6 +299,39 @@ export async function getJobById(id: string): Promise<Job | null> {
   return row ? mapRowToJob(row) : null;
 }
 
+/**
+ * Reconcile transient statuses left behind by a previous process.
+ *
+ * `processing` rows are tailoring runs that were in flight when the server
+ * stopped — the in-process runner is gone, so they're orphaned. Reset them to
+ * `discovered` with a failure reason so they reappear in the Inbox instead of
+ * hanging forever in the Tailoring tab. `selected` is a retired status (the
+ * staging tab was removed); fold any legacy rows back into the Inbox too.
+ *
+ * Idempotent: a clean restart has no `processing`/`selected` rows, so this is
+ * a no-op. Runs once at server startup.
+ */
+export async function reconcileTransientStatuses(): Promise<{
+  processing: number;
+  selected: number;
+}> {
+  const processingResult = await db
+    .update(jobs)
+    .set({
+      status: "discovered",
+      tailoringFailureReason: "Tailoring interrupted (server restart)",
+    })
+    .where(eq(jobs.status, "processing"));
+  const selectedResult = await db
+    .update(jobs)
+    .set({ status: "discovered" })
+    .where(eq(jobs.status, "selected"));
+  return {
+    processing: processingResult.changes ?? 0,
+    selected: selectedResult.changes ?? 0,
+  };
+}
+
 export async function listJobNotes(jobId: string): Promise<JobNote[]> {
   const rows = await db
     .select()

@@ -140,8 +140,7 @@ export const appliedDuplicateIndicator = {
 
 export type FilterTab =
   | "inbox"
-  | "selected"
-  | "ready"
+  | "tailoring"
   | "live"
   | "interviewing"
   | "backlog"
@@ -240,8 +239,11 @@ export const tabs: Array<{
   statuses: JobStatus[];
 }> = [
   { id: "inbox", label: "Inbox", statuses: ["discovered"] },
-  { id: "selected", label: "Selected", statuses: ["selected", "processing"] },
-  { id: "ready", label: "Ready", statuses: ["ready"] },
+  {
+    id: "tailoring",
+    label: "Tailoring",
+    statuses: ["processing", "ready"],
+  },
   { id: "live", label: "Live", statuses: ["applied"] },
   { id: "interviewing", label: "Interviewing", statuses: ["in_progress"] },
   { id: "backlog", label: "Backlog", statuses: ["backlog"] },
@@ -252,13 +254,13 @@ export const tabs: Array<{
 
 export const emptyStateCopy: Record<FilterTab, string> = {
   inbox: "Run the pipeline to discover new jobs.",
-  selected: "No jobs queued for tailoring. Move rows from Inbox to Selected.",
-  ready: "Tailor selected jobs to generate PDFs.",
+  tailoring:
+    "Nothing in tailoring yet. Select Inbox rows and click Tailor — they land here while their CV/cover letter generate, then turn Ready.",
   live: "Applied jobs awaiting a response land here. Mark a Ready row as Applied to start tracking. Move ones you're interviewing for to Interviewing.",
   interviewing:
     "Jobs you're actively interviewing for. Move an applied job here from the Live tab to track interview notes separately.",
   backlog: "Empty. Inbox rows that age past the threshold land here automatically; reposted listings get re-promoted.",
-  stale: "Empty. Set an age threshold above and click \"Move stale rows here\" to sweep aged Inbox, Selected, and Backlog rows into this holding pen — or \"Also move aged Ready & Live here\" to include those tabs.",
+  stale: "Empty. Set an age threshold above and click \"Move stale rows here\" to sweep aged Inbox and Backlog rows into this holding pen — or \"Also move aged Ready & Live here\" to include those tabs.",
   closed: "Empty. Skipped jobs and Live rows you Mark Closed land here with an outcome chip.",
   all: "No jobs in the system yet. Run the pipeline to get started.",
 };

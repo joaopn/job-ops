@@ -7,16 +7,9 @@ const SKIPPABLE_STATUSES = new Set([
   "backlog",
   "stale",
 ]);
-const MOVE_TO_READY_STATUSES = new Set(["discovered", "selected"]);
-const MOVE_TO_SELECTED_STATUSES = new Set([
-  "discovered",
-  "backlog",
-  "ready",
-  "stale",
-]);
+const MOVE_TO_READY_STATUSES = new Set(["discovered", "backlog", "stale"]);
 const MOVE_TO_BACKLOG_STATUSES = new Set([
   "discovered",
-  "selected",
   "stale",
 ]);
 const MOVE_TO_STALE_STATUSES = new Set([
@@ -45,13 +38,6 @@ export function canRescore(jobs: JobListItem[]): boolean {
   return jobs.length > 0 && jobs.every((job) => job.status !== "processing");
 }
 
-export function canMoveToSelected(jobs: JobListItem[]): boolean {
-  return (
-    jobs.length > 0 &&
-    jobs.every((job) => MOVE_TO_SELECTED_STATUSES.has(job.status))
-  );
-}
-
 export function canMoveToBacklog(jobs: JobListItem[]): boolean {
   return (
     jobs.length > 0 &&
@@ -71,10 +57,6 @@ export function canMoveToInbox(jobs: JobListItem[]): boolean {
     jobs.length > 0 &&
     jobs.every((job) => MOVE_TO_INBOX_STATUSES.has(job.status))
   );
-}
-
-export function canUnselect(jobs: JobListItem[]): boolean {
-  return jobs.length > 0 && jobs.every((job) => job.status === "selected");
 }
 
 export function canMarkClosed(jobs: JobListItem[]): boolean {

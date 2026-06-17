@@ -6,7 +6,6 @@ import {
   Edit2,
   Loader2,
   RefreshCcw,
-  Square,
   Sparkles,
   XCircle,
 } from "lucide-react";
@@ -30,8 +29,6 @@ interface DecideModeProps {
   onRescore: () => void;
   isRescoring: boolean;
   onEditDetails: () => void;
-  onMoveToSelected: () => void;
-  onUnselect: () => void;
   onMoveToBacklog: () => void;
   isMovingStatus: boolean;
 }
@@ -44,13 +41,9 @@ export const DecideMode: React.FC<DecideModeProps> = ({
   onRescore,
   isRescoring,
   onEditDetails,
-  onMoveToSelected,
-  onUnselect,
   onMoveToBacklog,
   isMovingStatus,
 }) => {
-  const showMoveToSelected = job.status === "discovered";
-  const showUnselect = job.status === "selected";
   const [showDescription, setShowDescription] = useState(false);
   const jobLink = job.applicationLink || job.jobUrl;
   const { renderMarkdownInJobDescriptions } = useSettings();
@@ -98,39 +91,6 @@ export const DecideMode: React.FC<DecideModeProps> = ({
               href={jobLink}
               className="flex-1 h-11 text-sm sm:h-10 sm:text-xs"
             />
-          ) : null}
-          {showMoveToSelected ? (
-            <Button
-              variant="outline"
-              size="default"
-              onClick={onMoveToSelected}
-              disabled={isMovingStatus}
-              className="flex-1 h-11 text-sm text-violet-300 hover:text-violet-200 hover:border-violet-500/30 hover:bg-violet-500/5 sm:h-10 sm:text-xs"
-            >
-              {isMovingStatus ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Square className="mr-2 h-4 w-4" />
-              )}
-              Move to Selected
-              <KbdHint shortcut="e" className="ml-1.5" />
-            </Button>
-          ) : null}
-          {showUnselect ? (
-            <Button
-              variant="outline"
-              size="default"
-              onClick={onUnselect}
-              disabled={isMovingStatus}
-              className="flex-1 h-11 text-sm text-muted-foreground hover:text-foreground sm:h-10 sm:text-xs"
-            >
-              {isMovingStatus ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Square className="mr-2 h-4 w-4" />
-              )}
-              Unselect
-            </Button>
           ) : null}
           <Button
             variant="outline"

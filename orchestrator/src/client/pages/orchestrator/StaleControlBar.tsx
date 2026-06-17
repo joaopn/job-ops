@@ -24,7 +24,6 @@ const clampDays = (value: number): number =>
 // tab; in_progress as the "Interviewing" tab.
 const STATUS_LABELS: Partial<Record<JobStatus, string>> = {
   discovered: "Inbox",
-  selected: "Selected",
   backlog: "Backlog",
   ready: "Ready",
   applied: "Live",

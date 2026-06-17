@@ -27,14 +27,13 @@ describe("orchestrator utils", () => {
 
     expect(getJobCounts(jobs)).toEqual({
       inbox: 1,
-      selected: 2, // selected + processing
-      ready: 1,
+      tailoring: 2, // processing + ready
       live: 1, // applied
       interviewing: 1, // in_progress
       backlog: 1,
       stale: 1,
       closed: 2, // skipped + closed
-      all: 10,
+      all: 10, // a stray legacy `selected` row counts only here
       discovered: 1, // legacy alias for inbox
     });
   });

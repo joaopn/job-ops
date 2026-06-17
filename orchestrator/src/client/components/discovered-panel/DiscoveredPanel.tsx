@@ -64,7 +64,9 @@ export const DiscoveredPanel: React.FC<DiscoveredPanelProps> = ({
       setIsFinalizing(true);
       await api.processJob(job.id);
 
-      toast.success("Job tailored");
+      toast.success("Tailoring started", {
+        description: "It'll appear in the Tailoring tab when ready.",
+      });
 
       onJobMoved(job.id);
       await onJobUpdated();
@@ -99,10 +101,6 @@ export const DiscoveredPanel: React.FC<DiscoveredPanelProps> = ({
     }
   };
 
-  const handleMoveToSelected = () =>
-    flipStatus("selected", "Moved to Selected", "Failed to move to Selected");
-  const handleUnselect = () =>
-    flipStatus("discovered", "Returned to Inbox", "Failed to unselect");
   const handleMoveToBacklog = () =>
     flipStatus("backlog", "Moved to Backlog", "Failed to move to Backlog");
 
@@ -124,8 +122,6 @@ export const DiscoveredPanel: React.FC<DiscoveredPanelProps> = ({
         onRescore={handleRescore}
         isRescoring={isRescoring}
         onEditDetails={() => setIsEditDetailsOpen(true)}
-        onMoveToSelected={handleMoveToSelected}
-        onUnselect={handleUnselect}
         onMoveToBacklog={handleMoveToBacklog}
         isMovingStatus={isMovingStatus}
       />

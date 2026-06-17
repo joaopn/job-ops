@@ -25,12 +25,11 @@ const renderFilters = (
   overrides?: Partial<ComponentProps<typeof OrchestratorFilters>>,
 ) => {
   const props = {
-    activeTab: "ready" as FilterTab,
+    activeTab: "tailoring" as FilterTab,
     onTabChange: vi.fn(),
     counts: {
       inbox: 1,
-      selected: 0,
-      ready: 2,
+      tailoring: 2,
       live: 3,
       interviewing: 0,
       backlog: 0,

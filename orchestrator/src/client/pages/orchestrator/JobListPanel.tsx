@@ -43,6 +43,8 @@ interface JobListPanelProps {
   onToggleSelectAll: (checked: boolean) => void;
   fitFilter?: FitFilterValue[];
   onFitFilterChange?: (value: FitFilterValue[]) => void;
+  untailoredOnly?: boolean;
+  onUntailoredOnlyChange?: (value: boolean) => void;
   primaryEmptyStateAction?: EmptyStateAction;
   secondaryEmptyStateAction?: EmptyStateAction;
   emptyStateMessage?: string;
@@ -58,12 +60,18 @@ const ROW_ESTIMATE = 84;
 // and clearable.
 const FIT_CHIP_TABS: FilterTab[] = [
   "inbox",
-  "selected",
-  "ready",
+  "tailoring",
   "live",
   "interviewing",
   "backlog",
 ];
+
+// Tabs where the "Untailored" toggle does something. On Tailoring it swaps the
+// list to the candidates that still need tailoring (so you can bulk-tailor);
+// on All it narrows the mixed list to those candidates. Hidden on Inbox (all
+// untailored already) and Backlog/Stale (every row there is untailored, so the
+// toggle would be a no-op).
+const UNTAILORED_CHIP_TABS: FilterTab[] = ["tailoring", "all"];
 
 export const JobListPanel = forwardRef<VirtualListHandle, JobListPanelProps>(
   (
@@ -79,6 +87,8 @@ export const JobListPanel = forwardRef<VirtualListHandle, JobListPanelProps>(
       onToggleSelectAll,
       fitFilter,
       onFitFilterChange,
+      untailoredOnly,
+      onUntailoredOnlyChange,
       primaryEmptyStateAction,
       secondaryEmptyStateAction,
       emptyStateMessage,
@@ -133,6 +143,8 @@ export const JobListPanel = forwardRef<VirtualListHandle, JobListPanelProps>(
       activeJobs.every((job) => selectedJobIds.has(job.id));
     const showFitChips =
       FIT_CHIP_TABS.includes(activeTab) && !!fitFilter && !!onFitFilterChange;
+    const showUntailoredChip =
+      UNTAILORED_CHIP_TABS.includes(activeTab) && !!onUntailoredOnlyChange;
 
     const listHeader = (
       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/40 px-4 py-2">
@@ -143,37 +155,56 @@ export const JobListPanel = forwardRef<VirtualListHandle, JobListPanelProps>(
           disabled={activeJobs.length === 0}
           aria-label="Select all filtered jobs"
         />
-        {showFitChips && fitFilter && onFitFilterChange ? (
+        {showFitChips || showUntailoredChip ? (
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
-            {FIT_FILTER_VALUES.map((value) => {
-              const active = fitFilter.includes(value);
-              const classes = FIT_FILTER_CHIP_CLASS[value];
-              return (
-                <Button
-                  key={value}
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className={cn(
-                    "h-7 px-2 text-xs font-medium",
-                    active ? classes.active : classes.inactive,
-                  )}
-                  aria-pressed={active}
-                  onClick={() =>
-                    onFitFilterChange(
-                      active
-                        ? fitFilter.filter((entry) => entry !== value)
-                        : FIT_FILTER_VALUES.filter(
-                            (entry) =>
-                              fitFilter.includes(entry) || entry === value,
-                          ),
-                    )
-                  }
-                >
-                  {FIT_FILTER_LABELS[value]}
-                </Button>
-              );
-            })}
+            {showFitChips && fitFilter && onFitFilterChange
+              ? FIT_FILTER_VALUES.map((value) => {
+                  const active = fitFilter.includes(value);
+                  const classes = FIT_FILTER_CHIP_CLASS[value];
+                  return (
+                    <Button
+                      key={value}
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className={cn(
+                        "h-7 px-2 text-xs font-medium",
+                        active ? classes.active : classes.inactive,
+                      )}
+                      aria-pressed={active}
+                      onClick={() =>
+                        onFitFilterChange(
+                          active
+                            ? fitFilter.filter((entry) => entry !== value)
+                            : FIT_FILTER_VALUES.filter(
+                                (entry) =>
+                                  fitFilter.includes(entry) || entry === value,
+                              ),
+                        )
+                      }
+                    >
+                      {FIT_FILTER_LABELS[value]}
+                    </Button>
+                  );
+                })
+              : null}
+            {showUntailoredChip && onUntailoredOnlyChange ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className={cn(
+                  "h-7 px-2 text-xs font-medium",
+                  untailoredOnly
+                    ? "bg-amber-500/20 text-amber-200 border border-amber-500/40 hover:bg-amber-500/25"
+                    : "text-amber-300/80 hover:bg-amber-500/10 hover:text-amber-200 border border-transparent",
+                )}
+                aria-pressed={!!untailoredOnly}
+                onClick={() => onUntailoredOnlyChange(!untailoredOnly)}
+              >
+                Untailored
+              </Button>
+            ) : null}
           </div>
         ) : (
           <div className="flex-1" />

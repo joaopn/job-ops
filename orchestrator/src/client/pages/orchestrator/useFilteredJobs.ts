@@ -18,6 +18,14 @@ import {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+// Statuses a job can be tailored *from* — i.e. it hasn't been through the
+// tailoring funnel yet. Mirrors the server's MOVE_TO_READY_FROM_STATUSES.
+const UNTAILORED_STATUSES = new Set<JobListItem["status"]>([
+  "discovered",
+  "backlog",
+  "stale",
+]);
+
 const dateSortPriorityOrder: DateFilterDimension[] = [
   "ready",
   "applied",
@@ -35,18 +43,27 @@ export const useFilteredJobs = (
   maxAgeDays: number | null,
   closedSubFilter: ClosedSubFilter,
   fitFilter: FitFilterValue[],
+  untailoredOnly: boolean,
 ) =>
   useMemo(() => {
     let filtered = [...jobs];
 
+    if (untailoredOnly) {
+      filtered = filtered.filter((job) => UNTAILORED_STATUSES.has(job.status));
+    }
+
     if (activeTab === "inbox") {
       filtered = filtered.filter((job) => job.status === "discovered");
-    } else if (activeTab === "selected") {
-      filtered = filtered.filter(
-        (job) => job.status === "selected" || job.status === "processing",
-      );
-    } else if (activeTab === "ready") {
-      filtered = filtered.filter((job) => job.status === "ready");
+    } else if (activeTab === "tailoring") {
+      // Workspace tab. With the Untailored toggle on, the global filter above
+      // has already narrowed to candidates that still need tailoring; leave
+      // those visible so they can be bulk-selected and tailored. Off, show the
+      // in-flight (processing) + finished (ready) rows.
+      if (!untailoredOnly) {
+        filtered = filtered.filter(
+          (job) => job.status === "processing" || job.status === "ready",
+        );
+      }
     } else if (activeTab === "live") {
       filtered = filtered.filter((job) => job.status === "applied");
     } else if (activeTab === "interviewing") {
@@ -164,6 +181,7 @@ export const useFilteredJobs = (
     maxAgeDays,
     closedSubFilter,
     fitFilter,
+    untailoredOnly,
   ]);
 
 const matchesDateDimension = (

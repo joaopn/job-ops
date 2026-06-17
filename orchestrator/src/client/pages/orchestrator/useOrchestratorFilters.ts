@@ -292,6 +292,25 @@ export const useOrchestratorFilters = () => {
     [setSearchParams],
   );
 
+  const untailoredOnly = useMemo(
+    () => searchParams.get("untailored") === "1",
+    [searchParams],
+  );
+
+  const setUntailoredOnly = useCallback(
+    (value: boolean) => {
+      setSearchParams(
+        (prev) => {
+          if (value) prev.set("untailored", "1");
+          else prev.delete("untailored");
+          return prev;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
   const closedSubFilter = useMemo((): ClosedSubFilter => {
     const raw = searchParams.get("closedFilter") ?? "all";
     return ALLOWED_CLOSED_SUB_FILTERS.includes(raw as ClosedSubFilter)
@@ -355,6 +374,7 @@ export const useOrchestratorFilters = () => {
         prev.delete("closedFilter");
         prev.delete("staleThreshold");
         prev.delete("fit");
+        prev.delete("untailored");
         return prev;
       },
       { replace: true },
@@ -381,6 +401,8 @@ export const useOrchestratorFilters = () => {
     setStaleThresholdDays,
     fitFilter,
     setFitFilter,
+    untailoredOnly,
+    setUntailoredOnly,
     resetFilters,
   };
 };

@@ -124,14 +124,6 @@ const jobActionRequestSchema = z.discriminatedUnion("action", [
       .optional(),
   }),
   z.object({
-    action: z.literal("move_to_selected"),
-    jobIds: z.array(z.string().min(1)).min(1).max(100),
-  }),
-  z.object({
-    action: z.literal("unselect"),
-    jobIds: z.array(z.string().min(1)).min(1).max(100),
-  }),
-  z.object({
     action: z.literal("move_to_backlog"),
     jobIds: z.array(z.string().min(1)).min(1).max(100),
   }),
@@ -177,10 +169,9 @@ const SKIPPABLE_STATUSES: ReadonlySet<JobStatus> = new Set([
   "stale",
 ]);
 
-const SELECTABLE_FROM_STATUSES: ReadonlySet<JobStatus> = new Set([
+const MOVE_TO_READY_FROM_STATUSES: ReadonlySet<JobStatus> = new Set([
   "discovered",
   "backlog",
-  "ready",
   "stale",
 ]);
 
@@ -298,6 +289,56 @@ function createSharedRescoreBriefLoader(): () => Promise<string> {
   };
 }
 
+// Bounded FIFO runner for detached tailoring. A bulk "Tailor N" flips every
+// row to `processing` and enqueues N background runs; without a cap that would
+// spawn N concurrent LLM + tectonic jobs. Mirror the pipeline's
+// PROCESSING_CONCURRENCY so manual and automatic tailoring load the box the
+// same way.
+const BACKGROUND_TAILOR_CONCURRENCY = 3;
+let backgroundTailorActive = 0;
+const backgroundTailorQueue: Array<() => void> = [];
+
+function drainBackgroundTailorQueue(): void {
+  if (backgroundTailorActive >= BACKGROUND_TAILOR_CONCURRENCY) return;
+  const next = backgroundTailorQueue.shift();
+  if (next) next();
+}
+
+/**
+ * Run a job's tailoring (LLM cv-adjust + PDF) detached from the request that
+ * triggered it. The row has already been flipped to `processing`; processJob
+ * resolves it to `ready` (success) or back to `discovered` with a persisted
+ * `tailoringFailureReason` (failure). Progress is visible in the live LLM
+ * call queue. No request is awaiting this, so swallow + log all rejections.
+ */
+function scheduleBackgroundTailor(
+  jobId: string,
+  options: { force?: boolean; requestOrigin?: string | null },
+): void {
+  const run = () => {
+    backgroundTailorActive += 1;
+    void processJob(jobId, options)
+      .then((result) => {
+        if (!result.success) {
+          logger.warn("Background tailoring failed", {
+            jobId,
+            error: result.error,
+          });
+        }
+      })
+      .catch((error) => {
+        logger.error("Background tailoring threw", error);
+      })
+      .finally(() => {
+        backgroundTailorActive -= 1;
+        drainBackgroundTailorQueue();
+      });
+  };
+
+  if (backgroundTailorActive < BACKGROUND_TAILOR_CONCURRENCY) run();
+  else backgroundTailorQueue.push(run);
+}
+
 async function executeJobActionForJob(
   action: JobAction,
   jobId: string,
@@ -339,85 +380,34 @@ async function executeJobActionForJob(
     }
 
     if (action === "move_to_ready") {
-      if (job.status !== "discovered" && job.status !== "selected") {
+      if (!MOVE_TO_READY_FROM_STATUSES.has(job.status)) {
         throw badRequest(
-          `Job is not movable to Ready from status "${job.status}"`,
+          `Job is not movable to Tailoring from status "${job.status}"`,
           {
             jobId,
             status: job.status,
-            allowedStatuses: ["discovered", "selected"],
+            allowedStatuses: Array.from(MOVE_TO_READY_FROM_STATUSES),
           },
         );
       }
 
-      const processed = await processJob(jobId, {
+      // Flip to `processing` synchronously so the row jumps to the Tailoring
+      // tab immediately; the actual LLM tailoring + PDF runs detached and is
+      // observable in the live LLM call queue. processJob flips processing →
+      // ready on success, or back to discovered (+ failure reason) on error.
+      const updated = await jobsRepo.updateJob(jobId, { status: "processing" });
+      if (!updated) {
+        throw new AppError({
+          status: 404,
+          code: "NOT_FOUND",
+          message: "Job not found",
+        });
+      }
+
+      scheduleBackgroundTailor(jobId, {
         force: options?.forceMoveToReady ?? false,
         requestOrigin: options?.requestOrigin ?? null,
       });
-      if (!processed.success) {
-        throw new AppError({
-          status: 500,
-          code: "INTERNAL_ERROR",
-          message: processed.error || "Failed to process job",
-        });
-      }
-
-      const updated = await jobsRepo.getJobById(jobId);
-      if (!updated) {
-        throw new AppError({
-          status: 404,
-          code: "NOT_FOUND",
-          message: "Job not found after processing",
-        });
-      }
-
-      return { jobId, ok: true, job: updated };
-    }
-
-    if (action === "move_to_selected") {
-      if (!SELECTABLE_FROM_STATUSES.has(job.status)) {
-        throw badRequest(
-          `Job is not movable to Selected from status "${job.status}"`,
-          {
-            jobId,
-            status: job.status,
-            allowedStatuses: Array.from(SELECTABLE_FROM_STATUSES),
-          },
-        );
-      }
-
-      const updated = await jobsRepo.updateJob(jobId, { status: "selected" });
-      if (!updated) {
-        throw new AppError({
-          status: 404,
-          code: "NOT_FOUND",
-          message: "Job not found",
-        });
-      }
-
-      return { jobId, ok: true, job: updated };
-    }
-
-    if (action === "unselect") {
-      if (job.status !== "selected") {
-        throw badRequest(
-          `Job is not unselectable from status "${job.status}"`,
-          {
-            jobId,
-            status: job.status,
-            requiredStatus: "selected",
-          },
-        );
-      }
-
-      const updated = await jobsRepo.updateJob(jobId, { status: "discovered" });
-      if (!updated) {
-        throw new AppError({
-          status: 404,
-          code: "NOT_FOUND",
-          message: "Job not found",
-        });
-      }
 
       return { jobId, ok: true, job: updated };
     }

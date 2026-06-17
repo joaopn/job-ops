@@ -12,7 +12,7 @@ interface SwipeActionBarProps {
   canUndo: boolean;
   onSkip: () => void;
   onBacklog: () => void;
-  onSelect: () => void;
+  onTailor: () => void;
   onUndo: () => void;
 }
 
@@ -21,7 +21,7 @@ export const SwipeActionBar: React.FC<SwipeActionBarProps> = ({
   canUndo,
   onSkip,
   onBacklog,
-  onSelect,
+  onTailor,
   onUndo,
 }) => {
   return (
@@ -64,8 +64,8 @@ export const SwipeActionBar: React.FC<SwipeActionBarProps> = ({
         size="icon"
         variant="outline"
         disabled={disabled}
-        onClick={onSelect}
-        aria-label="Select"
+        onClick={onTailor}
+        aria-label="Tailor"
         className="h-14 w-14 rounded-full border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300"
       >
         <Check className="h-6 w-6" />

@@ -498,10 +498,21 @@ export async function generateFinalPdf(
       // silently moved closed jobs into the Inbox tab, making them appear
       // to vanish.
       const originalStatus = job.status;
+      // The initial tailoring funnel. The pipeline/auto path enters as
+      // `discovered` and flips itself to `processing` here; the manual Tailor
+      // button pre-sets `processing` at the route before calling in, so that
+      // counts as in-funnel too. `selected` is retained for any legacy rows.
       const isInitialTailoringFunnel =
-        originalStatus === "discovered" || originalStatus === "selected";
+        originalStatus === "discovered" ||
+        originalStatus === "selected" ||
+        originalStatus === "processing";
+      // Where to send the row if tailoring fails. The manual path's original
+      // status is already `processing`; reverting to it would strand the row,
+      // so send it back to the Inbox instead.
+      const revertStatus =
+        originalStatus === "processing" ? "discovered" : originalStatus;
 
-      if (isInitialTailoringFunnel) {
+      if (isInitialTailoringFunnel && originalStatus !== "processing") {
         await jobsRepo.updateJob(job.id, { status: "processing" });
       }
 
@@ -513,7 +524,7 @@ export async function generateFinalPdf(
 
       if (!pdfResult.success) {
         if (isInitialTailoringFunnel) {
-          await jobsRepo.updateJob(job.id, { status: originalStatus });
+          await jobsRepo.updateJob(job.id, { status: revertStatus });
         }
         return { success: false, error: pdfResult.error };
       }

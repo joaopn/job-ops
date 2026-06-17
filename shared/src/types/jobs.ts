@@ -8,8 +8,8 @@ export type JobLocationEvidence = LocationEvidence;
 
 export type JobStatus =
   | "discovered" // Inbox: crawled but not picked
-  | "selected" // User-shortlisted; queued for tailoring
-  | "processing" // Currently generating resume
+  | "selected" // RETIRED: the Selected staging tab was removed; kept in the enum so legacy rows still read/migrate. Reconciled to `discovered` on boot. No new writers.
+  | "processing" // Currently generating resume (in the Tailoring tab)
   | "ready" // PDF generated, waiting for user to apply
   | "applied" // Application sent
   | "in_progress" // In process beyond initial application

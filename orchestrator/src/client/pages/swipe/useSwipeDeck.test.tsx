@@ -93,11 +93,11 @@ describe("useSwipeDeck", () => {
     await waitFor(() => expect(result.current.cards).toHaveLength(2));
 
     await act(async () => {
-      await result.current.act(result.current.cards[0], "move_to_selected");
+      await result.current.act(result.current.cards[0], "move_to_ready");
     });
 
     expect(api.streamJobAction).toHaveBeenCalledWith(
-      { action: "move_to_selected", jobIds: ["a"] },
+      { action: "move_to_ready", jobIds: ["a"] },
       expect.anything(),
     );
     expect(result.current.cards.map((c) => c.id)).toEqual(["b"]);

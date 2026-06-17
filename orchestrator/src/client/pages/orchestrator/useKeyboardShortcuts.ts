@@ -122,8 +122,7 @@ export function useKeyboardShortcuts(args: UseKeyboardShortcutsArgs): void {
 
       // ── Tab switching ───────────────────────────────────────────────────
       [SHORTCUTS.tabInbox.key]: () => setActiveTab("inbox"),
-      [SHORTCUTS.tabSelected.key]: () => setActiveTab("selected"),
-      [SHORTCUTS.tabReady.key]: () => setActiveTab("ready"),
+      [SHORTCUTS.tabTailoring.key]: () => setActiveTab("tailoring"),
       [SHORTCUTS.tabLive.key]: () => setActiveTab("live"),
       [SHORTCUTS.tabBacklog.key]: () => setActiveTab("backlog"),
       [SHORTCUTS.tabStale.key]: () => setActiveTab("stale"),
@@ -189,7 +188,7 @@ export function useKeyboardShortcuts(args: UseKeyboardShortcutsArgs): void {
 
       [SHORTCUTS.markApplied.key]: () => {
         if (!selectedJob) return;
-        if (activeTab !== "ready") return;
+        if (selectedJob.status !== "ready") return;
         if (shortcutActionInFlight.current) return;
         shortcutActionInFlight.current = true;
         const jobId = selectedJob.id;
@@ -225,13 +224,12 @@ export function useKeyboardShortcuts(args: UseKeyboardShortcutsArgs): void {
 
         shortcutActionInFlight.current = true;
         const jobId = selectedJob.id;
-        toast.message("Tailoring job...");
 
         api
           .processJob(jobId)
           .then(async () => {
-            toast.success("Job tailored", {
-              description: "Your tailored PDF has been generated.",
+            toast.success("Tailoring started", {
+              description: "It'll appear in the Tailoring tab when ready.",
             });
             selectNextAfterAction(jobId);
             await loadJobs();
@@ -244,14 +242,6 @@ export function useKeyboardShortcuts(args: UseKeyboardShortcutsArgs): void {
           .finally(() => {
             shortcutActionInFlight.current = false;
           });
-      },
-
-      [SHORTCUTS.moveToSelected.key]: () => {
-        if (!isShortcutInScope(SHORTCUTS.moveToSelected, activeTab)) return;
-        if (shortcutActionInFlight.current) return;
-        if (selectedJobIds.size > 0) {
-          void runJobAction("move_to_selected");
-        }
       },
 
       [SHORTCUTS.moveToBacklog.key]: () => {
@@ -280,14 +270,14 @@ export function useKeyboardShortcuts(args: UseKeyboardShortcutsArgs): void {
 
       [SHORTCUTS.viewPdf.key]: () => {
         if (!selectedJob) return;
-        if (activeTab !== "ready") return;
+        if (selectedJob.status !== "ready") return;
         const href = `/pdfs/resume_${selectedJob.id}.pdf?v=${encodeURIComponent(selectedJob.updatedAt)}`;
         window.open(href, "_blank", "noopener,noreferrer");
       },
 
       [SHORTCUTS.downloadPdf.key]: () => {
         if (!selectedJob) return;
-        if (activeTab !== "ready") return;
+        if (selectedJob.status !== "ready") return;
         const href = `/pdfs/resume_${selectedJob.id}.pdf?v=${encodeURIComponent(selectedJob.updatedAt)}`;
         const a = document.createElement("a");
         a.href = href;

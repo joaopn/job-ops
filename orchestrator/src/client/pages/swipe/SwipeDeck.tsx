@@ -92,7 +92,7 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
         canUndo={canUndo}
         onSkip={() => cardRef.current?.flyOut("skip")}
         onBacklog={() => cardRef.current?.flyOut("move_to_backlog")}
-        onSelect={() => cardRef.current?.flyOut("move_to_selected")}
+        onTailor={() => cardRef.current?.flyOut("move_to_ready")}
         onUndo={undo}
       />
     </div>
