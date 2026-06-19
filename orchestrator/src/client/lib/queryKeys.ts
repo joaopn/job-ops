@@ -31,6 +31,8 @@ export const queryKeys = {
     revision: (options?: { statuses?: JobStatus[] }) =>
       [...queryKeys.jobs.all, "revision", options ?? {}] as const,
     duplicates: () => [...queryKeys.jobs.all, "duplicates"] as const,
+    byCompany: (employer: string) =>
+      [...queryKeys.jobs.all, "by-company", employer] as const,
     detail: (id: string) => [...queryKeys.jobs.all, "detail", id] as const,
     tasks: (id: string) => [...queryKeys.jobs.all, "tasks", id] as const,
     notes: (id: string) => [...queryKeys.jobs.all, "notes", id] as const,

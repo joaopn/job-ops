@@ -15,6 +15,7 @@ import { JobDescriptionMarkdown } from "@/client/components/JobDescriptionMarkdo
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { FitAssessment } from "..";
+import { CompanyNameButton } from "../../pages/orchestrator/CompanyNameButton";
 import { FitIndicator } from "../ScoreIndicator";
 import { KbdHint } from "../KbdHint";
 import { OpenJobListingButton } from "../OpenJobListingButton";
@@ -62,7 +63,10 @@ export const DecideMode: React.FC<DecideModeProps> = ({
               <h2 className="text-lg font-semibold leading-tight">
                 {job.title}
               </h2>
-              <p className="text-sm text-muted-foreground">{job.employer}</p>
+              <CompanyNameButton
+                employer={job.employer}
+                className="block max-w-full truncate text-sm text-muted-foreground"
+              />
               {job.location ? (
                 <p className="text-xs text-muted-foreground">{job.location}</p>
               ) : null}

@@ -157,6 +157,7 @@ const jobActionRequestSchema = z.discriminatedUnion("action", [
 const listJobsQuerySchema = z.object({
   status: z.string().optional(),
   view: z.enum(["full", "list"]).optional(),
+  employer: z.string().min(1).optional(),
 });
 
 const jobsRevisionQuerySchema = z.object({
@@ -663,11 +664,12 @@ jobsRouter.get("/", async (req: Request, res: Response) => {
     const statusFilter = parsedQuery.data.status;
     const statuses = parseStatusFilter(statusFilter);
     const view = parsedQuery.data.view ?? "list";
+    const employer = parsedQuery.data.employer;
 
     const primaryQueryStart = performance.now();
     const jobs: Array<Job | JobListItem> =
       view === "list"
-        ? await jobsRepo.getJobListItems(statuses)
+        ? await jobsRepo.getJobListItems(statuses, employer)
         : await jobsRepo.getAllJobs(statuses);
     primaryQueryMs = performance.now() - primaryQueryStart;
     const candidateCount = 0;

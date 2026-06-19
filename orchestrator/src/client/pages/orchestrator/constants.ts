@@ -5,6 +5,7 @@ import {
   PIPELINE_EXTRACTOR_SOURCE_IDS,
 } from "@shared/extractors";
 import {
+  type JobOutcome,
   type JobStatus,
   SUITABILITY_CATEGORIES,
   SUITABILITY_CATEGORY_LABELS,
@@ -131,6 +132,14 @@ export const defaultStatusToken = {
   label: "Unknown",
   badge: "border-muted-foreground/20 bg-muted/30 text-muted-foreground",
   dot: "bg-muted-foreground",
+};
+
+export const outcomeLabel: Record<JobOutcome, string> = {
+  rejected: "Rejected",
+  withdrawn: "Withdrawn",
+  ghosted: "Ghosted",
+  duplicated: "Duplicated",
+  other: "Other",
 };
 
 export const appliedDuplicateIndicator = {

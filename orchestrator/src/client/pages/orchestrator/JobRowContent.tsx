@@ -1,5 +1,6 @@
 import type { JobListItem, SuitabilityCategory } from "@shared/types.js";
 import { cn } from "@/lib/utils";
+import { CompanyNameButton } from "./CompanyNameButton";
 import { defaultStatusToken, statusTokens } from "./constants";
 
 interface JobRowContentProps {
@@ -99,7 +100,10 @@ export const JobRowContent = ({
           {job.title}
         </div>
         <div className="truncate text-xs text-muted-foreground mt-0.5">
-          {job.employer}
+          <CompanyNameButton
+            employer={job.employer}
+            className="align-baseline"
+          />
           {job.location && (
             <span className="before:content-['_in_']">{job.location}</span>
           )}

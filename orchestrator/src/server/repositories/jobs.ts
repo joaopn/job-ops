@@ -117,6 +117,7 @@ export async function getAllJobs(statuses?: JobStatus[]): Promise<Job[]> {
  */
 export async function getJobListItems(
   statuses?: JobStatus[],
+  employer?: string,
 ): Promise<JobListItem[]> {
   const selection = {
     id: jobs.id,
@@ -147,16 +148,19 @@ export async function getJobListItems(
     updatedAt: jobs.updatedAt,
   } as const;
 
-  const query =
+  const conditions = [
     statuses && statuses.length > 0
-      ? db
-          .select(selection)
-          .from(jobs)
-          .where(inArray(jobs.status, statuses))
-          .orderBy(desc(jobs.discoveredAt))
-      : db.select(selection).from(jobs).orderBy(desc(jobs.discoveredAt));
+      ? inArray(jobs.status, statuses)
+      : undefined,
+    employer ? sql`lower(${jobs.employer}) = lower(${employer})` : undefined,
+  ].filter(Boolean);
+  const whereClause =
+    conditions.length > 0 ? and(...conditions) : undefined;
 
-  const rows = await query;
+  const baseQuery = db.select(selection).from(jobs);
+  const rows = await (whereClause
+    ? baseQuery.where(whereClause).orderBy(desc(jobs.discoveredAt))
+    : baseQuery.orderBy(desc(jobs.discoveredAt)));
 
   // Resolve a human label for each row's source. Provider-instance sources
   // (`<provider>:<uuid>`) need the configured instances to map to the user's

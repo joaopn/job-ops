@@ -46,6 +46,7 @@ import {
   safeFilenamePart,
 } from "@/lib/utils";
 import { restoreJobStates, snapshotJob } from "@client/lib/undo";
+import { CompanyNameButton } from "./CompanyNameButton";
 import type { FilterTab } from "./constants";
 import { InterviewQaSection } from "./InterviewQaSection";
 import { JobDocumentsPanel } from "./JobDocumentsPanel";
@@ -435,7 +436,10 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
           <h2 className="text-lg font-semibold leading-tight">
             {selectedJob.title}
           </h2>
-          <p className="text-sm text-muted-foreground">{selectedJob.employer}</p>
+          <CompanyNameButton
+            employer={selectedJob.employer}
+            className="block max-w-full truncate text-sm text-muted-foreground"
+          />
           {selectedJob.location ? (
             <p className="text-xs text-muted-foreground">
               {selectedJob.location}

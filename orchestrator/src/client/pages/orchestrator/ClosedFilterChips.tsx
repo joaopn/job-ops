@@ -1,15 +1,15 @@
 import type React from "react";
 import { Button } from "@/components/ui/button";
-import type { ClosedSubFilter } from "./constants";
+import { type ClosedSubFilter, outcomeLabel } from "./constants";
 
 const CHIPS: Array<{ value: ClosedSubFilter; label: string }> = [
   { value: "all", label: "All" },
   { value: "skipped", label: "Skipped" },
-  { value: "rejected", label: "Rejected" },
-  { value: "withdrawn", label: "Withdrawn" },
-  { value: "ghosted", label: "Ghosted" },
-  { value: "duplicated", label: "Duplicated" },
-  { value: "other", label: "Other" },
+  { value: "rejected", label: outcomeLabel.rejected },
+  { value: "withdrawn", label: outcomeLabel.withdrawn },
+  { value: "ghosted", label: outcomeLabel.ghosted },
+  { value: "duplicated", label: outcomeLabel.duplicated },
+  { value: "other", label: outcomeLabel.other },
 ];
 
 interface ClosedFilterChipsProps {

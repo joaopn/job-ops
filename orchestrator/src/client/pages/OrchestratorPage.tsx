@@ -15,6 +15,8 @@ import { Drawer, DrawerClose, DrawerContent } from "@/components/ui/drawer";
 import { KeyboardShortcutBar } from "../components/KeyboardShortcutBar";
 import { KeyboardShortcutDialog } from "../components/KeyboardShortcutDialog";
 import { type FilterTab, tabs } from "./orchestrator/constants";
+import { CompanyJobsDialog } from "./orchestrator/CompanyJobsDialog";
+import { CompanyPanelProvider } from "./orchestrator/CompanyPanelContext";
 import { FloatingJobActionsBar } from "./orchestrator/FloatingJobActionsBar";
 import { BatchUrlImportSheet } from "./orchestrator/BatchUrlImportSheet";
 import { ClosedFilterChips } from "./orchestrator/ClosedFilterChips";
@@ -225,6 +227,16 @@ export const OrchestratorPage: React.FC = () => {
 	);
 
 	const undoController = useUndoController(loadJobs);
+
+	const [companyPanelEmployer, setCompanyPanelEmployer] = useState<
+		string | null
+	>(null);
+	const companyPanel = useMemo(
+		() => ({
+			openCompanyJobs: (employer: string) => setCompanyPanelEmployer(employer),
+		}),
+		[],
+	);
 
 	const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
 	const [isDuplicateBannerDismissed, setIsDuplicateBannerDismissed] =
@@ -533,6 +545,7 @@ export const OrchestratorPage: React.FC = () => {
 
 	return (
 		<UndoProvider value={undoController}>
+		<CompanyPanelProvider value={companyPanel}>
 			{/* Desktop: viewport-height app shell so the list/detail region fills
           exactly the space left under the header/banner/filters — no magic
           `100vh - Nrem` math, no document scroll. Below lg the `lg:` classes
@@ -807,6 +820,13 @@ export const OrchestratorPage: React.FC = () => {
 				}}
 				activeTab={activeTab}
 			/>
+
+			<CompanyJobsDialog
+				employer={companyPanelEmployer}
+				onClose={() => setCompanyPanelEmployer(null)}
+				onSelectJob={handleCommandSelectJob}
+			/>
+		</CompanyPanelProvider>
 		</UndoProvider>
 	);
 };

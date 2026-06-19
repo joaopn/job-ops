@@ -516,6 +516,7 @@ export function getJobs(): Promise<JobsListResponse<JobListItem>>;
 export function getJobs(options: {
   statuses?: string[];
   view?: "list";
+  employer?: string;
 }): Promise<JobsListResponse<JobListItem>>;
 export function getJobs(options?: {
   statuses?: string[];
@@ -524,11 +525,13 @@ export function getJobs(options?: {
 export async function getJobs(options?: {
   statuses?: string[];
   view?: "full" | "list";
+  employer?: string;
 }): Promise<JobsListResponse<Job> | JobsListResponse<JobListItem>> {
   const params = new URLSearchParams();
   if (options?.statuses?.length)
     params.set("status", options.statuses.join(","));
   if (options?.view) params.set("view", options.view);
+  if (options?.employer) params.set("employer", options.employer);
   const query = params.toString();
   return fetchApi<JobsListResponse<Job> | JobsListResponse<JobListItem>>(
     `/jobs${query ? `?${query}` : ""}`,

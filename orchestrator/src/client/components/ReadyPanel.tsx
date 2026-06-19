@@ -41,6 +41,7 @@ import { useActiveCv } from "../hooks/useActiveCv";
 import { useRescoreJob } from "../hooks/useRescoreJob";
 import { useResizablePanel } from "../hooks/useResizableListPanel";
 import { useSettings } from "../hooks/useSettings";
+import { CompanyNameButton } from "../pages/orchestrator/CompanyNameButton";
 import { FitAssessment } from ".";
 import { CollapsibleSection } from "./discovered-panel/CollapsibleSection";
 import { AtsCoverageBadge } from "./ghostwriter/AtsCoverageBadge";
@@ -353,7 +354,10 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
               <h2 className="text-lg font-semibold leading-tight">
                 {job.title}
               </h2>
-              <p className="text-sm text-muted-foreground">{job.employer}</p>
+              <CompanyNameButton
+                employer={job.employer}
+                className="block max-w-full truncate text-sm text-muted-foreground"
+              />
               {job.location ? (
                 <p className="text-xs text-muted-foreground">{job.location}</p>
               ) : null}
