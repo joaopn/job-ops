@@ -82,7 +82,7 @@ export const DiscoveredPanel: React.FC<DiscoveredPanelProps> = ({
   const handleRescore = () => rescoreJob(job?.id);
 
   const flipStatus = async (
-    status: "selected" | "discovered" | "backlog",
+    status: "discovered" | "backlog",
     successLabel: string,
     failureLabel: string,
   ) => {

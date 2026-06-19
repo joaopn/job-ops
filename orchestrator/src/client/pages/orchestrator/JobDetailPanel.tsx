@@ -304,7 +304,7 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
     if (!selectedJob) return;
     try {
       await api.updateJob(selectedJob.id, {
-        status: "selected",
+        status: "discovered",
         outcome: null,
         closedAt: null,
       });

@@ -552,7 +552,7 @@ async function executeJobActionForJob(
       }
 
       const updated = await jobsRepo.updateJob(jobId, {
-        status: "selected",
+        status: "discovered",
         outcome: null,
         closedAt: null,
       });

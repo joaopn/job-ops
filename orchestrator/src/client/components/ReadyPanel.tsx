@@ -96,7 +96,7 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [isRefreshingAts, setIsRefreshingAts] = useState(false);
   const [isEditDetailsOpen, setIsEditDetailsOpen] = useState(false);
-  const [isMovingBackToSelected, setIsMovingBackToSelected] = useState(false);
+  const [isMovingBackToInbox, setIsMovingBackToInbox] = useState(false);
   const [showDescription, setShowDescription] = useState(false);
   const { isRescoring, rescoreJob } = useRescoreJob(onJobUpdated);
   const { renderMarkdownInJobDescriptions } = useSettings();
@@ -253,14 +253,14 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
     }
   }, [job, onJobMoved, onJobUpdated, skipJobMutation]);
 
-  const handleMoveBackToSelected = useCallback(async () => {
+  const handleMoveBackToInbox = useCallback(async () => {
     if (!job) return;
 
     try {
-      setIsMovingBackToSelected(true);
-      await api.updateJob(job.id, { status: "selected" });
-      toast.success("Moved back to Selected", {
-        description: "Re-tailor from the Selected tab to apply CV/brief updates.",
+      setIsMovingBackToInbox(true);
+      await api.updateJob(job.id, { status: "discovered" });
+      toast.success("Moved back to Inbox", {
+        description: "Re-tailor from the Inbox to apply CV/brief updates.",
       });
       onJobMoved(job.id);
       await onJobUpdated();
@@ -268,10 +268,10 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
       const message =
         error instanceof Error
           ? error.message
-          : "Failed to move job back to Selected";
+          : "Failed to move job back to Inbox";
       toast.error(message);
     } finally {
-      setIsMovingBackToSelected(false);
+      setIsMovingBackToInbox(false);
     }
   }, [job, onJobMoved, onJobUpdated]);
 
@@ -515,13 +515,11 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
               <DropdownMenuSeparator />
 
               <DropdownMenuItem
-                onSelect={handleMoveBackToSelected}
-                disabled={isMovingBackToSelected}
+                onSelect={handleMoveBackToInbox}
+                disabled={isMovingBackToInbox}
               >
                 <Undo2 className="mr-2 h-4 w-4" />
-                {isMovingBackToSelected
-                  ? "Moving back..."
-                  : "Move back to Selected"}
+                {isMovingBackToInbox ? "Moving back..." : "Move back to Inbox"}
               </DropdownMenuItem>
 
               <DropdownMenuSeparator />

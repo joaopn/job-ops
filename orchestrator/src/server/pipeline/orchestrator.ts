@@ -560,7 +560,21 @@ export async function processJob(
   const result = await runProcessJob(jobId, options);
   if (!result.success) {
     try {
+      // Step 2 (generateFinalPdf) reverts its own funnel flip on failure, but
+      // a step-1 (summarizeJob) failure on the manual/background path — where
+      // the route pre-set `processing` before calling in — leaves the row
+      // stranded at `processing`, which renders the non-interactive
+      // "Processing job..." state forever. Centralize the safety net here: any
+      // failure that finds the row still at `processing` reverts it to the
+      // Inbox so the user can retry. Non-funnel re-tailors (ready/applied/…)
+      // never sit at `processing`, so they're untouched.
+      const current = await jobsRepo.getJobById(jobId);
+      const statusPatch =
+        current?.status === "processing"
+          ? ({ status: "discovered" as const })
+          : {};
       await jobsRepo.updateJob(jobId, {
+        ...statusPatch,
         tailoringFailureReason: result.error ?? "Unknown error",
       });
     } catch (writeError) {

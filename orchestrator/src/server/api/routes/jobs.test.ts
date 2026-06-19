@@ -143,7 +143,7 @@ describe.sequential("POST /api/jobs/actions — 5g action variants", () => {
     expect(body.data.results[0].error.code).toBe("INVALID_REQUEST");
   });
 
-  it("reopen rotates skipped/closed back to selected and clears outcome", async () => {
+  it("reopen rotates skipped/closed back to the inbox and clears outcome", async () => {
     await seedJob({
       id: "job-9a",
       status: "closed",
@@ -159,7 +159,7 @@ describe.sequential("POST /api/jobs/actions — 5g action variants", () => {
 
     expect(body.data.succeeded).toBe(2);
     for (const result of body.data.results) {
-      expect(result.job.status).toBe("selected");
+      expect(result.job.status).toBe("discovered");
       expect(result.job.outcome).toBeNull();
       expect(result.job.closedAt).toBeNull();
     }
