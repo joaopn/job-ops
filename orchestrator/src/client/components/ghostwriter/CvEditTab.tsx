@@ -7,6 +7,7 @@ import {
   LockOpen,
   RotateCcw,
   Save,
+  Sparkles,
 } from "lucide-react";
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -147,6 +148,20 @@ export const CvEditTab: React.FC<Props> = ({
     },
   });
 
+  const generateMutation = useMutation({
+    mutationFn: () => api.reTailorJob(job.id),
+    onSuccess: async () => {
+      toast.success("CV re-tailored");
+      await onJobUpdated();
+      onRendered();
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to re-tailor CV",
+      );
+    },
+  });
+
   /**
    * Parse + commit the Raw textarea (when active) and return the effective
    * overrides for the caller to use *now* — setOverrides is async so the
@@ -236,9 +251,13 @@ export const CvEditTab: React.FC<Props> = ({
   // doesn't reflect typed-but-uncommitted text. Enabling Save while Raw is
   // active routes the click through commit() — handler no-ops on parse
   // failure (errors shown inline) or nothing-to-save (buildPatch=null).
-  const canSave =
-    (isDirty || subTab === "raw") && !saveMutation.isPending;
-  const canRender = !renderMutation.isPending && !saveMutation.isPending;
+  const busy =
+    saveMutation.isPending ||
+    renderMutation.isPending ||
+    generateMutation.isPending;
+  const canSave = (isDirty || subTab === "raw") && !busy;
+  const canRender = !busy;
+  const canGenerate = !busy;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -283,6 +302,21 @@ export const CvEditTab: React.FC<Props> = ({
           >
             <RotateCcw className="h-3 w-3" />
             Reset all
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1 px-2 text-xs"
+            onClick={() => generateMutation.mutate()}
+            disabled={!canGenerate}
+            title="Re-tailor this CV against the job with the LLM, then re-render the PDF"
+          >
+            {generateMutation.isPending ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Sparkles className="h-3 w-3" />
+            )}
+            Generate
           </Button>
           <Button
             variant="outline"
