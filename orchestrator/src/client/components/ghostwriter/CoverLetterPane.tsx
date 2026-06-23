@@ -2,22 +2,15 @@ import * as api from "@client/api";
 import { useActiveCoverLetter } from "@client/hooks/useActiveCoverLetter";
 import type { Job } from "@shared/types";
 import { useMutation } from "@tanstack/react-query";
-import {
-  Copy,
-  ExternalLink,
-  FileText,
-  Loader2,
-  Mail,
-  Save,
-  Sparkles,
-} from "lucide-react";
+import { Copy, Loader2, Mail, Save } from "lucide-react";
 import type React from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "@client/lib/toast";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { copyTextToClipboard } from "@/lib/utils";
-import { cn } from "@/lib/utils";
+import { cn, copyTextToClipboard } from "@/lib/utils";
+import { CoverLetterEditTab } from "./CoverLetterEditTab";
+import { CoverLetterPdfPane } from "./CoverLetterPdfPane";
 
 type CoverLetterPaneProps = {
   job: Job;
@@ -27,120 +20,104 @@ type CoverLetterPaneProps = {
 type Tab = "edit" | "pdf";
 
 /**
- * Per-job cover-letter editor with Edit/PDF tab toggle.
+ * Per-job cover-letter editor with Edit/PDF tab toggle. Mirror of `CvPane`:
+ * the Edit|PDF strip is hoisted into each body component so the editor's
+ * toolbar can share its row.
  *
- * Edit tab — textarea bound to `coverLetterFieldOverrides[bodyFieldId]`,
- * falling back to the doc's default body when no override exists yet,
- * then to the legacy `coverLetterDraft` text column for users without a
- * cover-letter doc.
+ * Edit tab — when an active cover-letter document exists, `CoverLetterEditTab`
+ * renders the full per-field editor (Fields/Raw) over
+ * `coverLetterFieldOverrides`. Without a document, falls back to a plain
+ * draft textarea bound to the legacy `coverLetterDraft` column.
  *
- * PDF tab — iframe of `/pdfs/cover_letter_<jobId>.pdf` cache-busted on
- * `job.updatedAt`. Empty-state until the user runs Render.
- *
- * Render PDF — autosaves any dirty textarea content, then calls
- * `/api/jobs/:id/render-cover-letter`, then auto-switches to the PDF
- * tab so the user sees the compiled output.
+ * PDF tab — `CoverLetterPdfPane` iframes `/pdfs/cover_letter_<jobId>.pdf`,
+ * cache-busted on `job.updatedAt`.
  */
 export const CoverLetterPane: React.FC<CoverLetterPaneProps> = ({
   job,
   onJobUpdated,
 }) => {
-  const { coverLetter, bodyFieldId, bodyDefault } = useActiveCoverLetter();
+  const { coverLetter, bodyFieldId } = useActiveCoverLetter();
   const [tab, setTab] = useState<Tab>("edit");
   const renderedOnceRef = useRef(false);
-
-  const persistedBody = useMemo(() => {
-    if (bodyFieldId) {
-      const override = job.coverLetterFieldOverrides?.[bodyFieldId];
-      if (override) return override;
-      if (job.coverLetterDraft) return job.coverLetterDraft;
-      return bodyDefault;
-    }
-    return job.coverLetterDraft ?? "";
-  }, [bodyFieldId, bodyDefault, job.coverLetterFieldOverrides, job.coverLetterDraft]);
-
-  const [draft, setDraft] = useState(persistedBody);
-
-  useEffect(() => {
-    setDraft(persistedBody);
-  }, [persistedBody]);
-
-  const isDirty = draft !== persistedBody;
   const hasPdf = Boolean(job.coverLetterPdfPath);
 
-  const saveOverride = useMutation({
-    mutationFn: async (next: string) => {
-      if (bodyFieldId) {
-        const overrides = {
-          ...(job.coverLetterFieldOverrides ?? {}),
-          [bodyFieldId]: next,
-        };
-        return api.updateJob(job.id, {
-          coverLetterFieldOverrides: overrides,
-        });
-      }
-      return api.updateJob(job.id, { coverLetterDraft: next });
-    },
-    onSuccess: async () => {
-      await onJobUpdated?.();
-    },
-    onError: (error) => {
-      const message =
-        error instanceof Error ? error.message : "Failed to save cover letter";
-      toast.error(message);
-    },
-  });
-
-  const generateMutation = useMutation({
-    mutationFn: () => api.generateCoverLetter(job.id),
-    onSuccess: async () => {
-      toast.success("Cover letter drafted");
-      await onJobUpdated?.();
-    },
-    onError: (error) => {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Failed to generate cover letter";
-      toast.error(message);
-    },
-  });
-
-  const renderMutation = useMutation({
-    mutationFn: async () => {
-      if (isDirty) {
-        await saveOverride.mutateAsync(draft);
-      }
-      return api.renderCoverLetterPdf(job.id);
-    },
-    onSuccess: async () => {
-      toast.success("Cover letter PDF rendered");
-      await onJobUpdated?.();
-      setTab("pdf");
-      renderedOnceRef.current = true;
-    },
-    onError: (error) => {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Failed to render cover-letter PDF";
-      toast.error(message);
-    },
-  });
-
-  const canSave = isDirty && !saveOverride.isPending;
-  const canGenerate =
-    !!coverLetter && !!bodyFieldId && !generateMutation.isPending;
-  const canRender =
-    !!coverLetter && !renderMutation.isPending && !saveOverride.isPending;
-
-  const handleSave = () => {
-    saveOverride.mutate(draft, {
-      onSuccess: () => {
-        toast.success("Cover letter saved");
-      },
-    });
+  const handleRendered = () => {
+    renderedOnceRef.current = true;
+    setTab("pdf");
   };
+
+  const tabSwitch = (
+    <div className="flex items-center gap-1">
+      <TabButton active={tab === "edit"} onClick={() => setTab("edit")}>
+        Edit
+      </TabButton>
+      <TabButton
+        active={tab === "pdf"}
+        onClick={() => setTab("pdf")}
+        disabled={!hasPdf && !renderedOnceRef.current}
+      >
+        PDF
+      </TabButton>
+    </div>
+  );
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      {tab === "edit" ? (
+        coverLetter ? (
+          <CoverLetterEditTab
+            job={job}
+            coverLetter={coverLetter}
+            bodyFieldId={bodyFieldId}
+            onJobUpdated={onJobUpdated ?? (() => {})}
+            onRendered={handleRendered}
+            tabSwitch={tabSwitch}
+          />
+        ) : (
+          <LegacyDraftTab
+            job={job}
+            onJobUpdated={onJobUpdated}
+            tabSwitch={tabSwitch}
+          />
+        )
+      ) : (
+        <CoverLetterPdfPane job={job} tabSwitch={tabSwitch} />
+      )}
+    </div>
+  );
+};
+
+/**
+ * No cover-letter template uploaded yet: a plain textarea bound to the legacy
+ * `coverLetterDraft` column. Generate / Render PDF need a document, so only
+ * Copy / Save are offered here.
+ */
+const LegacyDraftTab: React.FC<{
+  job: Job;
+  onJobUpdated?: () => void | Promise<void>;
+  tabSwitch: React.ReactNode;
+}> = ({ job, onJobUpdated, tabSwitch }) => {
+  const persisted = job.coverLetterDraft ?? "";
+  const [draft, setDraft] = useState(persisted);
+
+  useEffect(() => {
+    setDraft(persisted);
+  }, [persisted]);
+
+  const isDirty = draft !== persisted;
+
+  const saveMutation = useMutation({
+    mutationFn: async () => api.updateJob(job.id, { coverLetterDraft: draft }),
+    onSuccess: async () => {
+      toast.success("Cover letter saved");
+      await onJobUpdated?.();
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to save cover letter",
+      );
+    },
+  });
 
   const copy = async () => {
     if (!draft.trim()) return;
@@ -152,65 +129,11 @@ export const CoverLetterPane: React.FC<CoverLetterPaneProps> = ({
     }
   };
 
-  const pdfHref = `/pdfs/cover_letter_${job.id}.pdf?v=${encodeURIComponent(job.updatedAt)}`;
-
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1">
-          <TabButton
-            active={tab === "edit"}
-            onClick={() => setTab("edit")}
-          >
-            Edit
-          </TabButton>
-          <TabButton
-            active={tab === "pdf"}
-            onClick={() => setTab("pdf")}
-            disabled={!hasPdf && !renderedOnceRef.current}
-          >
-            PDF
-          </TabButton>
-        </div>
-        <div className="flex flex-wrap items-center gap-1">
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 gap-1 px-2 text-xs"
-            onClick={() => generateMutation.mutate()}
-            disabled={!canGenerate}
-            title={
-              !coverLetter
-                ? "Upload a cover-letter template on the Cover Letter page first"
-                : undefined
-            }
-          >
-            {generateMutation.isPending ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <Sparkles className="h-3 w-3" />
-            )}
-            Generate
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 gap-1 px-2 text-xs"
-            onClick={() => renderMutation.mutate()}
-            disabled={!canRender}
-            title={
-              !coverLetter
-                ? "Upload a cover-letter template on the Cover Letter page first"
-                : undefined
-            }
-          >
-            {renderMutation.isPending ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <FileText className="h-3 w-3" />
-            )}
-            Render PDF
-          </Button>
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        {tabSwitch}
+        <div className="ml-auto flex items-center gap-1">
           <Button
             variant="ghost"
             size="sm"
@@ -224,10 +147,10 @@ export const CoverLetterPane: React.FC<CoverLetterPaneProps> = ({
           <Button
             size="sm"
             className="h-7 gap-1 px-2 text-xs"
-            disabled={!canSave}
-            onClick={handleSave}
+            disabled={!isDirty || saveMutation.isPending}
+            onClick={() => saveMutation.mutate()}
           >
-            {saveOverride.isPending ? (
+            {saveMutation.isPending ? (
               <Loader2 className="h-3 w-3 animate-spin" />
             ) : (
               <Save className="h-3 w-3" />
@@ -237,57 +160,18 @@ export const CoverLetterPane: React.FC<CoverLetterPaneProps> = ({
         </div>
       </div>
 
-      {!coverLetter ? (
-        <div className="mb-2 flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
-          <Mail className="h-3.5 w-3.5" />
-          No cover-letter template uploaded — Generate / Render PDF are
-          disabled. Upload one from the Cover Letter page.
-        </div>
-      ) : null}
+      <div className="mb-2 flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
+        <Mail className="h-3.5 w-3.5" />
+        No cover-letter template uploaded — upload one from the Cover Letter
+        page to edit fields and Generate / Render a PDF.
+      </div>
 
-      {tab === "edit" ? (
-        <Textarea
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          placeholder={
-            coverLetter
-              ? "Click Generate to draft a cover letter for this job — or write directly here."
-              : "Ask the chat to draft a cover letter, then click 'Use as draft' on the reply — or paste/edit directly here."
-          }
-          className="h-full min-h-[320px] flex-1 resize-none font-mono text-xs leading-relaxed"
-        />
-      ) : hasPdf ? (
-        <div className="flex h-full min-h-0 flex-col">
-          <div className="mb-2 flex items-center justify-end">
-            <Button
-              asChild
-              variant="ghost"
-              size="sm"
-              className="h-7 gap-1 px-2 text-xs"
-            >
-              <a href={pdfHref} target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="h-3 w-3" />
-                Open in new tab
-              </a>
-            </Button>
-          </div>
-          <iframe
-            title="Compiled cover-letter preview"
-            src={pdfHref}
-            className="h-full min-h-[320px] w-full flex-1 rounded-md border border-border/60 bg-background"
-          />
-        </div>
-      ) : (
-        <div className="flex h-full min-h-[320px] flex-col items-center justify-center gap-2 rounded-md border border-dashed border-border/60 bg-muted/10 text-center">
-          <FileText className="h-6 w-6 text-muted-foreground" />
-          <div className="text-sm font-medium text-muted-foreground">
-            No cover-letter PDF rendered yet
-          </div>
-          <p className="max-w-[260px] text-xs text-muted-foreground/80">
-            Click "Render PDF" to compile the current draft into a PDF.
-          </p>
-        </div>
-      )}
+      <Textarea
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        placeholder="Ask the chat to draft a cover letter, then click 'Use as draft' on the reply — or paste/edit directly here."
+        className="h-full min-h-[320px] flex-1 resize-none font-mono text-xs leading-relaxed"
+      />
     </div>
   );
 };

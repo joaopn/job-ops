@@ -13,7 +13,11 @@ type Props = {
   locks: ReadonlySet<string>;
   onChange: (id: string, value: string) => void;
   onReset: (id: string) => void;
-  onToggleLock: (id: string) => void;
+  /**
+   * Omit to hide the per-field lock control entirely (e.g. cover letters,
+   * which have no lock model). When omitted, `locks` is expected empty.
+   */
+  onToggleLock?: (id: string) => void;
 };
 
 type FieldGroup = {
@@ -123,7 +127,7 @@ type SectionProps = {
   defaults: Record<string, string>;
   onChange: (id: string, value: string) => void;
   onReset: (id: string) => void;
-  onToggleLock: (id: string) => void;
+  onToggleLock?: (id: string) => void;
 };
 
 const FieldGroupSection: React.FC<SectionProps> = ({
@@ -168,7 +172,9 @@ const FieldGroupSection: React.FC<SectionProps> = ({
             isLocked={locks.has(field.id)}
             onChange={(v) => onChange(field.id, v)}
             onReset={() => onReset(field.id)}
-            onToggleLock={() => onToggleLock(field.id)}
+            onToggleLock={
+              onToggleLock ? () => onToggleLock(field.id) : undefined
+            }
           />
         ))}
       </div>
@@ -183,7 +189,7 @@ type FieldRowProps = {
   isLocked: boolean;
   onChange: (next: string) => void;
   onReset: () => void;
-  onToggleLock: () => void;
+  onToggleLock?: () => void;
 };
 
 const FieldRow: React.FC<FieldRowProps> = ({
@@ -224,24 +230,26 @@ const FieldRow: React.FC<FieldRowProps> = ({
               Reset
             </Button>
           ) : null}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-6 w-6 p-0"
-            onClick={onToggleLock}
-            title={
-              isLocked
-                ? "Unlock — re-tailoring and chat may modify"
-                : "Lock — block re-tailoring and chat edits"
-            }
-          >
-            {isLocked ? (
-              <Lock className="h-3 w-3 text-amber-600" />
-            ) : (
-              <LockOpen className="h-3 w-3 text-muted-foreground" />
-            )}
-          </Button>
+          {onToggleLock ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0"
+              onClick={onToggleLock}
+              title={
+                isLocked
+                  ? "Unlock — re-tailoring and chat may modify"
+                  : "Lock — block re-tailoring and chat edits"
+              }
+            >
+              {isLocked ? (
+                <Lock className="h-3 w-3 text-amber-600" />
+              ) : (
+                <LockOpen className="h-3 w-3 text-muted-foreground" />
+              )}
+            </Button>
+          ) : null}
         </div>
       </div>
       <Textarea
