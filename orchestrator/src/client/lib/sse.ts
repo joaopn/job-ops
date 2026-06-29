@@ -20,6 +20,28 @@ function parseSseFrame(frame: string): string | null {
   return dataLines.length > 0 ? dataLines.join("\n") : null;
 }
 
+const RECONNECT_BASE_DELAY_MS = 1000;
+const RECONNECT_MAX_DELAY_MS = 15000;
+
+// Wait `ms`, resolving early if `signal` aborts (i.e. the caller unsubscribed).
+function delay(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal.aborted) {
+      resolve();
+      return;
+    }
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
 export function subscribeToEventSource<T>(
   url: string,
   handlers: EventSourceSubscriptionHandlers<T>,
@@ -30,7 +52,12 @@ export function subscribeToEventSource<T>(
   void (async () => {
     let authHeader = getCachedAuthHeader();
     let authAttempt = 0;
+    let reconnectDelay = RECONNECT_BASE_DELAY_MS;
 
+    // Reconnect indefinitely until the caller unsubscribes. The progress route
+    // replays the current state as the first frame on every (re)connect, so a
+    // dropped stream self-heals to the latest server state rather than freezing
+    // the UI on the last event it happened to receive.
     while (!isClosed) {
       try {
         const response = await fetch(url, {
@@ -53,9 +80,14 @@ export function subscribeToEventSource<T>(
 
         if (!response.ok || !response.body) {
           handlers.onError?.();
-          return;
+          await delay(reconnectDelay, controller.signal);
+          reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX_DELAY_MS);
+          continue;
         }
 
+        // Connection is live again — reset auth + backoff for the next drop.
+        authAttempt = 0;
+        reconnectDelay = RECONNECT_BASE_DELAY_MS;
         handlers.onOpen?.();
 
         const decoder = new TextDecoder();
@@ -93,12 +125,18 @@ export function subscribeToEventSource<T>(
           }
         }
 
-        return;
-      } catch {
-        if (!isClosed && !controller.signal.aborted) {
+        // Stream ended without an explicit unsubscribe (server closed it or the
+        // connection dropped) — surface disconnected state and reconnect.
+        if (!isClosed) {
           handlers.onError?.();
+          await delay(reconnectDelay, controller.signal);
+          reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX_DELAY_MS);
         }
-        return;
+      } catch {
+        if (isClosed || controller.signal.aborted) return;
+        handlers.onError?.();
+        await delay(reconnectDelay, controller.signal);
+        reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX_DELAY_MS);
       }
     }
   })();
