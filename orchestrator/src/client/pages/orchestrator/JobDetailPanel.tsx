@@ -51,6 +51,7 @@ import type { FilterTab } from "./constants";
 import { InterviewQaSection } from "./InterviewQaSection";
 import { JobDocumentsPanel } from "./JobDocumentsPanel";
 import { JobNotesSection } from "./JobNotesSection";
+import { JobStageSwitcher } from "./JobStageSwitcher";
 import { MarkClosedPopover } from "./MarkClosedPopover";
 import { useUndo } from "./useUndoController";
 
@@ -463,6 +464,12 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
             View
           </a>
         </Button>
+
+        <JobStageSwitcher
+          job={selectedJob}
+          onJobUpdated={onJobUpdated}
+          onJobMoved={handleJobMoved}
+        />
 
         {showReadyPdf &&
           (selectedHasPdf ? (

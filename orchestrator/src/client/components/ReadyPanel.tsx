@@ -42,6 +42,7 @@ import { useRescoreJob } from "../hooks/useRescoreJob";
 import { useResizablePanel } from "../hooks/useResizableListPanel";
 import { useSettings } from "../hooks/useSettings";
 import { CompanyNameButton } from "../pages/orchestrator/CompanyNameButton";
+import { JobStageSwitcher } from "../pages/orchestrator/JobStageSwitcher";
 import { FitAssessment } from ".";
 import { CollapsibleSection } from "./discovered-panel/CollapsibleSection";
 import { AtsCoverageBadge } from "./ghostwriter/AtsCoverageBadge";
@@ -411,6 +412,13 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
               href={jobLink}
               className="h-9 px-2 text-xs"
               shortcut="o"
+            />
+
+            <JobStageSwitcher
+              job={job}
+              onJobUpdated={onJobUpdated}
+              onJobMoved={onJobMoved}
+              className="h-9"
             />
 
             <Button

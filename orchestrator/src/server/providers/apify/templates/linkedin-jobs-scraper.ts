@@ -148,7 +148,7 @@ export const linkedinJobsScraperTemplate: ProviderActorTemplate = {
   actorRef: "curious_coder/linkedin-jobs-scraper",
   displayName: "LinkedIn Jobs Scraper (curious_coder)",
   description:
-    "curious_coder/linkedin-jobs-scraper. Search URLs and result count are built automatically from your configured search terms + location (one URL per city, else the country) — you no longer paste LinkedIn URLs here, and any `urls`/`count` you set are ignored/overridden. The per-URL count scales with your run budget × number of search terms (the actor enforces a minimum of 10). The global \"Max job age to scrape\" setting is applied via LinkedIn's f_TPR date filter on the built URLs when set. Set scrapeCompany=true if you want company-side fields populated (costs more CUs).",
+    "curious_coder/linkedin-jobs-scraper. Search URLs and result count are built automatically from your configured search terms + location (one URL per city, else the country) — you no longer paste LinkedIn URLs here, and any `urls`/`count` you set are ignored/overridden. The per-URL count scales with your run budget × number of search terms (the actor enforces a minimum of 10). The global max-job-age-to-scrape setting is applied via the LinkedIn f_TPR date filter on the built URLs when set. Set scrapeCompany=true if you want company-side fields populated (costs more CUs).",
   defaultInputTemplate: JSON.stringify(
     {
       scrapeCompany: false,
