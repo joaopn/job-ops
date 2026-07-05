@@ -1,7 +1,7 @@
 import type { JobListItem, SuitabilityCategory } from "@shared/types.js";
 import { cn } from "@/lib/utils";
 import { CompanyNameButton } from "./CompanyNameButton";
-import { defaultStatusToken, statusTokens } from "./constants";
+import { defaultStatusToken, outcomeLabel, statusTokens } from "./constants";
 
 interface JobRowContentProps {
   job: JobListItem;
@@ -65,6 +65,8 @@ export const JobRowContent = ({
   staleThresholdDays,
 }: JobRowContentProps) => {
   const category = job.suitabilityCategory ?? null;
+  const closureReason = job.outcome ? outcomeLabel[job.outcome] : null;
+  const isSkipped = job.status === "skipped";
   const sourceLabel = job.sourceLabel ?? job.source;
   const statusToken = statusTokens[job.status] ?? defaultStatusToken;
   const age = formatAge(job, Date.now());
@@ -146,17 +148,31 @@ export const JobRowContent = ({
         )}
       </div>
 
-      {(category || sourceLabel) && (
+      {(category || closureReason || isSkipped || sourceLabel) && (
         <div className="shrink-0 text-right">
-          {category && (
-            <span
-              className={cn(
-                "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
-                CATEGORY_PILL_CLASS[category],
+          {(category || closureReason || isSkipped) && (
+            <div className="flex items-center justify-end gap-1">
+              {category && (
+                <span
+                  className={cn(
+                    "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                    CATEGORY_PILL_CLASS[category],
+                  )}
+                >
+                  {CATEGORY_PILL_LABEL[category]}
+                </span>
               )}
-            >
-              {CATEGORY_PILL_LABEL[category]}
-            </span>
+              {closureReason && (
+                <span className="rounded-full border border-rose-500/40 bg-rose-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-300">
+                  {closureReason}
+                </span>
+              )}
+              {isSkipped && (
+                <span className="rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300">
+                  Skipped
+                </span>
+              )}
+            </div>
           )}
           {sourceLabel && (
             <div

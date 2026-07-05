@@ -47,7 +47,7 @@ import {
 } from "@/lib/utils";
 import { restoreJobStates, snapshotJob } from "@client/lib/undo";
 import { CompanyNameButton } from "./CompanyNameButton";
-import type { FilterTab } from "./constants";
+import { type FilterTab, outcomeLabel } from "./constants";
 import { InterviewQaSection } from "./InterviewQaSection";
 import { JobDocumentsPanel } from "./JobDocumentsPanel";
 import { JobNotesSection } from "./JobNotesSection";
@@ -447,7 +447,19 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
             </p>
           ) : null}
         </div>
-        <FitIndicator category={selectedJob.suitabilityCategory ?? null} />
+        <div className="flex shrink-0 items-center gap-1.5">
+          <FitIndicator category={selectedJob.suitabilityCategory ?? null} />
+          {selectedJob.outcome ? (
+            <span className="inline-flex items-center rounded-full border border-rose-500/40 bg-rose-500/15 px-2.5 py-0.5 text-xs font-semibold text-rose-300">
+              {outcomeLabel[selectedJob.outcome]}
+            </span>
+          ) : null}
+          {selectedJob.status === "skipped" ? (
+            <span className="inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/15 px-2.5 py-0.5 text-xs font-semibold text-amber-300">
+              Skipped
+            </span>
+          ) : null}
+        </div>
       </div>
 
       <FitAssessment job={selectedJob} />
