@@ -162,6 +162,7 @@ export const createAppSettings = (
     default: "https://api.openai.com/v1",
     override: null,
   },
+  defaultProfileId: null,
   onboardingBasicAuthDecision: null,
   searchTerms: {
     value: ["Software Engineer"],

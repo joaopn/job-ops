@@ -582,6 +582,13 @@ export const settingsRegistry = {
   },
 
   // --- Simple Strings ---
+  // Server-managed pointer to the default Profile. Set via the profiles
+  // set-default / delete routes, not the Settings UI, so it's a plain
+  // nullable string (like onboardingBasicAuthDecision) rather than a Resolved.
+  defaultProfileId: {
+    kind: "string" as const,
+    schema: z.string().trim().max(100),
+  },
   onboardingBasicAuthDecision: {
     kind: "string" as const,
     schema: z.enum(["enabled", "skipped"]),

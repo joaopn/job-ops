@@ -370,6 +370,16 @@ export const providerInstances = sqliteTable(
   }),
 );
 
+export const profiles = sqliteTable("profiles", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  configJson: text("config_json", { mode: "json" })
+    .notNull()
+    .default(sql`('{}')`),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+});
+
 export const authSessions = sqliteTable(
   "auth_sessions",
   {
@@ -410,3 +420,5 @@ export type ProviderInstanceDbRow = typeof providerInstances.$inferSelect;
 export type NewProviderInstanceDbRow = typeof providerInstances.$inferInsert;
 export type CvDocumentRow = typeof cvDocuments.$inferSelect;
 export type NewCvDocumentRow = typeof cvDocuments.$inferInsert;
+export type ProfileDbRow = typeof profiles.$inferSelect;
+export type NewProfileDbRow = typeof profiles.$inferInsert;

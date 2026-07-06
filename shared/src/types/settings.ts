@@ -104,6 +104,7 @@ export interface AppSettings {
   modelTailoring: ModelResolved;
 
   // Simple strings:
+  defaultProfileId: string | null;
   onboardingBasicAuthDecision: "enabled" | "skipped" | null;
   basicAuthUser: string | null;
   basicAuthPassword: string | null;

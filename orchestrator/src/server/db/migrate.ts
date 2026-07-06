@@ -3,6 +3,7 @@
  * and brings legacy schemas up to the current shape.
  */
 
+import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import Database from "better-sqlite3";
@@ -533,6 +534,20 @@ const migrations: string[] = [
   `ALTER TABLE provider_instances ADD COLUMN max_jobs INTEGER`,
   // Additive: existing DBs predate max_age_days (skipped on dup-column).
   `ALTER TABLE provider_instances ADD COLUMN max_age_days INTEGER`,
+
+  // Profiles: named, selectable scrape sets (location + terms + run knobs +
+  // pinned sources) that become the runtime source of truth for a run. One
+  // JSON config blob per row, UUID PK — mirrors provider_instances. No
+  // rebuild block per the "one canonical rebuild only" rule; the first-boot
+  // seed of a "Default" profile lives in the guarded JS block near the
+  // bottom of this file (after the SQL array, so later ALTERs exist).
+  `CREATE TABLE IF NOT EXISTS profiles (
+     id TEXT PRIMARY KEY,
+     name TEXT NOT NULL,
+     config_json TEXT NOT NULL DEFAULT '{}',
+     created_at TEXT NOT NULL DEFAULT (datetime('now')),
+     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+   )`,
 ];
 
 console.log("🔧 Running database migrations...");
@@ -837,6 +852,107 @@ try {
   }
 } catch (error) {
   console.error("❌ cv_documents legacy-column rebuild failed:", error);
+  process.exit(1);
+}
+
+// Seed a "Default" profile from the current effective scrape settings —
+// guarded + empty-only.
+//
+// Runs ONLY when `profiles` is empty, so it can never overwrite a
+// user-created profile or re-run per boot (the cv_documents per-boot-wipe
+// lesson). Lives here, after the SQL `migrations[]` array, so the
+// source_configs / provider_instances backfills above have already populated
+// the rows this reads. Values are inlined (no @shared import at boot),
+// matching `defaultProfileConfig()` field-for-field; a bad/missing setting
+// falls back to the same default the shared parser would use on read.
+try {
+  const profileCount = (
+    sqlite.prepare("SELECT COUNT(*) AS n FROM profiles").get() as { n: number }
+  ).n;
+
+  if (profileCount === 0) {
+    const readSetting = (key: string): string | null => {
+      const row = sqlite
+        .prepare("SELECT value FROM settings WHERE key = ?")
+        .get(key) as { value: string } | undefined;
+      return row?.value ?? null;
+    };
+    const parseStringArray = (raw: string | null): string[] => {
+      if (!raw) return [];
+      try {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed)
+          ? parsed.filter((v): v is string => typeof v === "string")
+          : [];
+      } catch {
+        return [];
+      }
+    };
+    const parseIntOrNull = (raw: string | null): number | null => {
+      if (!raw) return null;
+      const parsed = parseInt(raw, 10);
+      return Number.isNaN(parsed) ? null : parsed;
+    };
+
+    const enabledSourceIds = (
+      sqlite
+        .prepare("SELECT extractor_id FROM source_configs WHERE enabled = 1")
+        .all() as Array<{ extractor_id: string }>
+    ).map((r) => r.extractor_id);
+    const providerInstanceIds = (
+      sqlite
+        .prepare("SELECT id FROM provider_instances WHERE enabled = 1")
+        .all() as Array<{ id: string }>
+    ).map((r) => r.id);
+
+    const workplaceTypes = parseStringArray(readSetting("workplaceTypes"));
+
+    const config = {
+      searchTerms: parseStringArray(readSetting("searchTerms")),
+      searchCountry: readSetting("searchCountry") ?? "",
+      searchCities: readSetting("searchCities") ?? "",
+      workplaceTypes:
+        workplaceTypes.length > 0
+          ? workplaceTypes
+          : ["remote", "hybrid", "onsite"],
+      locationSearchScope: readSetting("locationSearchScope") ?? "selected_only",
+      locationMatchStrictness:
+        readSetting("locationMatchStrictness") ?? "exact_only",
+      scrapeMaxAgeDays: parseIntOrNull(readSetting("scrapeMaxAgeDays")),
+      blockedCompanyKeywords: parseStringArray(
+        readSetting("blockedCompanyKeywords"),
+      ),
+      runBudget: 500,
+      topN: 10,
+      minSuitabilityCategory: readSetting("minSuitabilityCategory") ?? "good_fit",
+      enabledSourceIds,
+      providerInstanceIds,
+    };
+
+    const id = randomUUID();
+    const now = new Date().toISOString();
+    sqlite
+      .prepare(
+        `INSERT INTO profiles (id, name, config_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run(id, "Default", JSON.stringify(config), now, now);
+
+    // Point defaultProfileId at the seed unless one is already set.
+    if (!readSetting("defaultProfileId")) {
+      sqlite
+        .prepare(
+          `INSERT INTO settings (key, value, created_at, updated_at)
+           VALUES (?, ?, datetime('now'), datetime('now'))
+           ON CONFLICT(key) DO UPDATE SET
+             value = excluded.value, updated_at = datetime('now')`,
+        )
+        .run("defaultProfileId", id);
+    }
+    console.log("✅ seeded Default profile from current settings");
+  }
+} catch (error) {
+  console.error("❌ profiles seed failed:", error);
   process.exit(1);
 }
 
