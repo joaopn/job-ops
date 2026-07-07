@@ -303,10 +303,181 @@ describe.sequential("Pipeline API routes", () => {
           selectedCountry: "united kingdom",
           country: "united kingdom",
           cityLocations: [],
-          workplaceTypes: [],
+          // Unset in the body → filled from the resolved default Profile,
+          // whose seed default is all three workplace types.
+          workplaceTypes: ["remote", "hybrid", "onsite"],
           geoScope: "selected_only",
           searchScope: "selected_only",
           matchStrictness: "exact_only",
+        }),
+      }),
+    );
+  });
+
+  async function createProfile(
+    baseUrl: string,
+    config: Record<string, unknown>,
+  ): Promise<string> {
+    const res = await fetch(`${baseUrl}/api/profiles`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Test profile", config }),
+    });
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    return body.data.id as string;
+  }
+
+  it("resolves scrape config from an explicit profileId", async () => {
+    const { runPipeline } = await import("@server/pipeline/index");
+    const profileId = await createProfile(baseUrl, {
+      searchTerms: ["backend engineer"],
+      searchCountry: "united kingdom",
+      searchCities: "",
+      workplaceTypes: ["remote"],
+      locationSearchScope: "selected_plus_remote_worldwide",
+      locationMatchStrictness: "flexible",
+      scrapeMaxAgeDays: 14,
+      blockedCompanyKeywords: ["scam corp"],
+      runBudget: 300,
+      topN: 7,
+      minSuitabilityCategory: "very_good_fit",
+      enabledSourceIds: ["test-linkedin"],
+    });
+
+    const res = await fetch(`${baseUrl}/api/pipeline/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ profileId }),
+    });
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(runPipeline).toHaveBeenCalledWith(
+      expect.objectContaining({
+        topN: 7,
+        minSuitabilityCategory: "very_good_fit",
+        // enabledSourceIds (extractor ids) expand to their platform ids.
+        sources: ["linkedin"],
+        searchTerms: ["backend engineer"],
+        scrapeMaxAgeDays: 14,
+        blockedCompanyKeywords: ["scam corp"],
+        // 300 budget / (1 term × 1 source).
+        maxJobsPerTerm: 300,
+        locationIntent: expect.objectContaining({
+          selectedCountry: "united kingdom",
+          cityLocations: [],
+          workplaceTypes: ["remote"],
+          geoScope: "selected_plus_remote_worldwide",
+          matchStrictness: "flexible",
+        }),
+      }),
+    );
+  });
+
+  it("lets body fields override the profile per-field", async () => {
+    const { runPipeline } = await import("@server/pipeline/index");
+    const profileId = await createProfile(baseUrl, {
+      searchTerms: ["backend engineer"],
+      searchCountry: "united kingdom",
+      workplaceTypes: ["remote"],
+      scrapeMaxAgeDays: 14,
+      blockedCompanyKeywords: ["scam corp"],
+      runBudget: 300,
+      topN: 7,
+      minSuitabilityCategory: "very_good_fit",
+      enabledSourceIds: ["test-linkedin"],
+    });
+
+    const res = await fetch(`${baseUrl}/api/pipeline/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        profileId,
+        searchTerms: ["override term"],
+        topN: 3,
+        maxJobsPerTerm: 55,
+        country: "united kingdom",
+        cityLocations: ["London"],
+        workplaceTypes: ["remote", "hybrid"],
+        searchScope: "selected_plus_remote_worldwide",
+        matchStrictness: "flexible",
+        sources: ["linkedin"],
+      }),
+    });
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(runPipeline).toHaveBeenCalledWith(
+      expect.objectContaining({
+        topN: 3,
+        sources: ["linkedin"],
+        searchTerms: ["override term"],
+        maxJobsPerTerm: 55,
+        // Profile-only fields still flow through the override.
+        scrapeMaxAgeDays: 14,
+        blockedCompanyKeywords: ["scam corp"],
+        locationIntent: expect.objectContaining({
+          selectedCountry: "united kingdom",
+          cityLocations: ["London"],
+          workplaceTypes: ["remote", "hybrid"],
+        }),
+      }),
+    );
+  });
+
+  it("returns not found for an unknown explicit profileId", async () => {
+    const res = await fetch(`${baseUrl}/api/pipeline/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ profileId: "does-not-exist" }),
+    });
+    const body = await res.json();
+    expect(res.status).toBe(404);
+    expect(body.ok).toBe(false);
+    expect(body.error.code).toBe("NOT_FOUND");
+  });
+
+  it("falls back to the default profile when no profileId is given", async () => {
+    const { runPipeline } = await import("@server/pipeline/index");
+    const profileId = await createProfile(baseUrl, {
+      searchTerms: ["ml engineer"],
+      searchCountry: "germany",
+      searchCities: "Berlin",
+      workplaceTypes: ["onsite"],
+      locationSearchScope: "selected_only",
+      locationMatchStrictness: "exact_only",
+      scrapeMaxAgeDays: 30,
+      blockedCompanyKeywords: ["blockedco"],
+      runBudget: 200,
+      topN: 4,
+      minSuitabilityCategory: "good_fit",
+      enabledSourceIds: ["test-linkedin"],
+    });
+
+    const setDefaultRes = await fetch(
+      `${baseUrl}/api/profiles/${profileId}/set-default`,
+      { method: "POST" },
+    );
+    expect((await setDefaultRes.json()).ok).toBe(true);
+
+    const res = await fetch(`${baseUrl}/api/pipeline/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(runPipeline).toHaveBeenCalledWith(
+      expect.objectContaining({
+        topN: 4,
+        sources: ["linkedin"],
+        searchTerms: ["ml engineer"],
+        scrapeMaxAgeDays: 30,
+        blockedCompanyKeywords: ["blockedco"],
+        maxJobsPerTerm: 200,
+        locationIntent: expect.objectContaining({
+          selectedCountry: "germany",
+          cityLocations: ["Berlin"],
+          workplaceTypes: ["onsite"],
         }),
       }),
     );

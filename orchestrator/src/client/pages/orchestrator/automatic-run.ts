@@ -5,13 +5,14 @@ import {
   normalizeLocationMatchStrictness,
   normalizeLocationSearchScope,
 } from "@shared/location-preferences.js";
+import { deriveMaxJobsPerTerm as sharedDeriveMaxJobsPerTerm } from "@shared/run-budget.js";
 import {
   parseSearchCitiesSetting,
   serializeSearchCitiesSetting,
 } from "@shared/search-cities.js";
 import {
-  SUITABILITY_CATEGORIES,
   type JobSource,
+  SUITABILITY_CATEGORIES,
   type SuitabilityCategory,
 } from "@shared/types";
 
@@ -190,11 +191,13 @@ export function deriveMaxJobsPerTerm(args: {
   searchTerms: string[];
   sources: JobSource[];
 }): MaxJobsPerTermOverride {
-  const budget = Math.max(1, Math.round(args.budget));
-  const termCount = Math.max(1, args.searchTerms.length);
-  const sourceCount = Math.max(1, args.sources.length);
-  const perUnit = Math.max(1, Math.floor(budget / (termCount * sourceCount)));
-  return { maxJobsPerTerm: perUnit };
+  return {
+    maxJobsPerTerm: sharedDeriveMaxJobsPerTerm({
+      budget: args.budget,
+      termCount: args.searchTerms.length,
+      sourceCount: args.sources.length,
+    }),
+  };
 }
 
 export function parseSearchTermsInput(input: string): string[] {

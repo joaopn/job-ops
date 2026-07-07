@@ -20,10 +20,15 @@ import {
   runPipeline,
   subscribeToProgress,
 } from "@server/pipeline/index";
-import * as pipelineRepo from "@server/repositories/pipeline";
 import { getRunJobs } from "@server/pipeline/run-job-capture";
+import * as pipelineRepo from "@server/repositories/pipeline";
+import { getProfile } from "@server/repositories/profiles";
 import { getEnabledProviderInstances } from "@server/repositories/provider-instances";
-import { PIPELINE_EXTRACTOR_SOURCE_IDS } from "@shared/extractors";
+import { getDefaultProfile } from "@server/services/profiles";
+import {
+  type ExtractorSourceId,
+  PIPELINE_EXTRACTOR_SOURCE_IDS,
+} from "@shared/extractors";
 import {
   createLocationIntent,
   planLocationSources,
@@ -32,11 +37,13 @@ import {
   LOCATION_MATCH_STRICTNESS_VALUES,
   LOCATION_SEARCH_SCOPE_VALUES,
 } from "@shared/location-preferences.js";
+import { deriveMaxJobsPerTerm } from "@shared/run-budget.js";
+import { parseSearchCitiesSetting } from "@shared/search-cities.js";
 import {
-  RUN_JOB_BUCKETS,
-  SUITABILITY_CATEGORIES,
   type PipelineStatusResponse,
+  RUN_JOB_BUCKETS,
   type RunJobsResponse,
+  SUITABILITY_CATEGORIES,
 } from "@shared/types";
 import { type Request, type Response, Router } from "express";
 import { z } from "zod";
@@ -215,30 +222,76 @@ const runPipelineSchema = z.object({
   // Per-source re-run: reconcile the scoped sources into the existing banner
   // funnel instead of resetting every source's results.
   partial: z.boolean().optional(),
+  // Resolve the run's scrape config from this Profile. Body fields still win
+  // per-field (one-off overrides); absent → the default Profile.
+  profileId: z.string().min(1).optional(),
 });
 
 pipelineRouter.post("/run", async (req: Request, res: Response) => {
   try {
-    const config = runPipelineSchema.parse(req.body);
-    const locationIntent = createLocationIntent({
-      selectedCountry: config.country,
-      cityLocations: config.cityLocations,
-      workplaceTypes: config.workplaceTypes,
-      geoScope: config.searchScope,
-      matchStrictness: config.matchStrictness,
-    });
-    if (config.sources && config.sources.length > 0) {
-      let registry: ExtractorRegistry;
+    const body = runPipelineSchema.parse(req.body);
+
+    // Resolve the Profile that backs this run: an explicit id (404 if missing),
+    // else the default Profile. A null default (pre-seed only) means the run is
+    // driven from the body alone — today's behavior. Every scrape field below
+    // resolves `body.X ?? profile.config.X`, so a one-off body override wins
+    // per-field without persisting to the Profile.
+    let profile: Awaited<ReturnType<typeof getProfile>> = null;
+    if (body.profileId) {
+      profile = await getProfile(body.profileId);
+      if (!profile) {
+        return fail(res, notFound(`Profile not found: ${body.profileId}`));
+      }
+    } else {
+      profile = await getDefaultProfile();
+    }
+    const profileConfig = profile?.config ?? null;
+
+    let cachedRegistry: ExtractorRegistry | null = null;
+    let registryFailed = false;
+    const loadRegistry = async (): Promise<ExtractorRegistry | null> => {
+      if (cachedRegistry) return cachedRegistry;
+      if (registryFailed) return null;
       try {
-        registry = await getExtractorRegistry();
+        cachedRegistry = await getExtractorRegistry();
+        return cachedRegistry;
       } catch (error) {
-        logger.error(
-          "Extractor registry unavailable during source validation",
-          {
-            route: "/api/pipeline/run",
-            error,
-          },
-        );
+        registryFailed = true;
+        logger.error("Extractor registry unavailable during run assembly", {
+          route: "/api/pipeline/run",
+          error,
+        });
+        return null;
+      }
+    };
+
+    const resolvedSearchTerms = body.searchTerms ?? profileConfig?.searchTerms;
+    const resolvedProviderInstanceIds =
+      body.providerInstanceIds ?? profileConfig?.providerInstanceIds;
+
+    const locationIntent = createLocationIntent({
+      selectedCountry: body.country ?? profileConfig?.searchCountry,
+      cityLocations:
+        body.cityLocations ??
+        (profileConfig
+          ? parseSearchCitiesSetting(profileConfig.searchCities)
+          : undefined),
+      workplaceTypes: body.workplaceTypes ?? profileConfig?.workplaceTypes,
+      geoScope: body.searchScope ?? profileConfig?.locationSearchScope,
+      matchStrictness:
+        body.matchStrictness ?? profileConfig?.locationMatchStrictness,
+    });
+
+    // Sources: a body list wins verbatim (including `[]` = "no built-in
+    // extractors"). Otherwise expand the Profile's pinned extractor ids to
+    // their platform ids via the registry. No profile / empty pin → leave
+    // undefined so discovery uses all enabled extractors, or `[]` respectively.
+    let resolvedSources: ExtractorSourceId[] | undefined;
+    if (body.sources !== undefined) {
+      resolvedSources = body.sources;
+    } else if (profileConfig && profileConfig.enabledSourceIds.length > 0) {
+      const registry = await loadRegistry();
+      if (!registry) {
         return fail(
           res,
           serviceUnavailable(
@@ -246,7 +299,26 @@ pipelineRouter.post("/run", async (req: Request, res: Response) => {
           ),
         );
       }
-      const unavailableSources = config.sources.filter(
+      const pinned = new Set(profileConfig.enabledSourceIds);
+      resolvedSources = Array.from(registry.manifestBySource.entries())
+        .filter(([, manifest]) => pinned.has(manifest.id))
+        .map(([platform]) => platform);
+    }
+
+    // Body-provided sources are validated (unknown → 400, incompatible with the
+    // resolved location intent → 400). Profile-derived sources are NOT gated
+    // here — discovery skips incompatible ones rather than failing the run.
+    if (body.sources && body.sources.length > 0) {
+      const registry = await loadRegistry();
+      if (!registry) {
+        return fail(
+          res,
+          serviceUnavailable(
+            "Extractor registry is unavailable. Try again after fixing startup errors.",
+          ),
+        );
+      }
+      const unavailableSources = body.sources.filter(
         (source) => !registry.manifestBySource.has(source),
       );
       if (unavailableSources.length > 0) {
@@ -261,7 +333,7 @@ pipelineRouter.post("/run", async (req: Request, res: Response) => {
 
       const sourcePlans = planLocationSources({
         intent: locationIntent,
-        sources: config.sources,
+        sources: body.sources,
       });
       if (sourcePlans.incompatibleSources.length > 0) {
         const incompatible = sourcePlans.plans
@@ -281,10 +353,10 @@ pipelineRouter.post("/run", async (req: Request, res: Response) => {
       }
     }
 
-    if (config.providerInstanceIds && config.providerInstanceIds.length > 0) {
+    if (body.providerInstanceIds && body.providerInstanceIds.length > 0) {
       const enabledInstances = await getEnabledProviderInstances();
       const enabledIds = new Set(enabledInstances.map((row) => row.id));
-      const unknownInstanceIds = config.providerInstanceIds.filter(
+      const unknownInstanceIds = body.providerInstanceIds.filter(
         (id) => !enabledIds.has(id),
       );
       if (unknownInstanceIds.length > 0) {
@@ -298,17 +370,39 @@ pipelineRouter.post("/run", async (req: Request, res: Response) => {
       }
     }
 
+    // maxJobsPerTerm: a body value wins; otherwise derive it from the Profile's
+    // run budget spread across the run's compatible extractor sources × terms
+    // (provider instances excluded from the divisor, mirroring the client).
+    let resolvedMaxJobsPerTerm = body.maxJobsPerTerm;
+    if (resolvedMaxJobsPerTerm === undefined && profileConfig) {
+      const compatibleSourceCount = resolvedSources
+        ? planLocationSources({
+            intent: locationIntent,
+            sources: resolvedSources,
+          }).compatibleSources.length
+        : 0;
+      resolvedMaxJobsPerTerm = deriveMaxJobsPerTerm({
+        budget: profileConfig.runBudget,
+        termCount: (resolvedSearchTerms ?? []).length,
+        sourceCount: compatibleSourceCount,
+      });
+    }
+
     // Start pipeline in background
     runWithRequestContext({}, () => {
       runPipeline({
-        topN: config.topN,
-        minSuitabilityCategory: config.minSuitabilityCategory,
-        sources: config.sources,
-        providerInstanceIds: config.providerInstanceIds,
-        maxJobsPerTerm: config.maxJobsPerTerm,
+        topN: body.topN ?? profileConfig?.topN,
+        minSuitabilityCategory:
+          body.minSuitabilityCategory ?? profileConfig?.minSuitabilityCategory,
+        sources: resolvedSources,
+        providerInstanceIds: resolvedProviderInstanceIds,
+        maxJobsPerTerm: resolvedMaxJobsPerTerm,
+        searchTerms: resolvedSearchTerms,
+        scrapeMaxAgeDays: profileConfig?.scrapeMaxAgeDays,
+        blockedCompanyKeywords: profileConfig?.blockedCompanyKeywords,
         locationIntent,
-        enableAutoTailoring: config.enableAutoTailoring,
-        partial: config.partial,
+        enableAutoTailoring: body.enableAutoTailoring,
+        partial: body.partial,
       }).catch((error) => {
         logger.error("Background pipeline run failed", error);
       });
