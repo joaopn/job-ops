@@ -1,11 +1,11 @@
 import { logger } from "@infra/logger";
 import { sanitizeUnknown } from "@infra/sanitize";
 import { getExtractorRegistry } from "@server/extractors/registry";
+import { getProvider } from "@server/providers";
 import { getAllJobUrls } from "@server/repositories/jobs";
 import * as providerInstancesRepo from "@server/repositories/provider-instances";
 import * as settingsRepo from "@server/repositories/settings";
 import * as sourceConfigsRepo from "@server/repositories/source-configs";
-import { getProvider } from "@server/providers";
 import { resolveSourceContextSettings } from "@server/services/source-configs/resolve";
 import { asyncPool } from "@server/utils/async-pool";
 import type { ExtractorSourceId } from "@shared/extractors";
@@ -18,6 +18,7 @@ import {
 } from "@shared/location-domain.js";
 import { formatCountryLabel } from "@shared/location-support.js";
 import { normalizeStringArray } from "@shared/normalize-string-array.js";
+import { serializeSearchCitiesSetting } from "@shared/search-cities.js";
 import type {
   CapturedRunJob,
   CreateJobInput,
@@ -139,11 +140,13 @@ export async function discoverJobsStep(args: {
   const settings = await settingsRepo.getAllSettings();
   const registry = await getExtractorRegistry();
 
-  const searchTermsSetting = settings.searchTerms;
-  let searchTerms: string[] = [];
-
-  if (searchTermsSetting) {
-    searchTerms = JSON.parse(searchTermsSetting) as string[];
+  // Prefer the Profile-driven config; fall back to the global setting, then
+  // the env default, so no-profile / transitional runs are unchanged.
+  let searchTerms: string[];
+  if (args.mergedConfig.searchTerms !== undefined) {
+    searchTerms = args.mergedConfig.searchTerms;
+  } else if (settings.searchTerms) {
+    searchTerms = JSON.parse(settings.searchTerms) as string[];
   } else {
     const defaultSearchTermsEnv =
       process.env.JOBSPY_SEARCH_TERMS || "web developer";
@@ -188,18 +191,26 @@ export async function discoverJobsStep(args: {
       : args.mergedConfig.sources;
 
   const runGlobals: SourceConfigRunGlobals = {
-    city: settings.searchCities ?? "",
+    // Derived from locationIntent (already config-preferred) so a run's
+    // location is atomic. On the settings-fallback path locationIntent is
+    // itself built from these same settings, so this round-trips — it only
+    // normalizes a non-canonical stored searchCities, which is a downstream
+    // no-op (extractors re-parse the city global).
+    city: serializeSearchCitiesSetting(locationIntent.cityLocations) ?? "",
     country: locationIntent.selectedCountry ?? "",
-    workplaceTypes: settings.workplaceTypes ?? "[]",
+    workplaceTypes: JSON.stringify(locationIntent.workplaceTypes),
     ...(args.mergedConfig.maxJobsPerTerm !== undefined
       ? { maxJobsPerTerm: String(args.mergedConfig.maxJobsPerTerm) }
       : {}),
-    // Only emit the max-age global when the user set one. Unset → no key →
-    // each extractor keeps its own default; supporting extractors that opted
-    // into the mapping read it, the rest ignore it.
-    ...(settings.scrapeMaxAgeDays
-      ? { maxAgeDays: settings.scrapeMaxAgeDays }
-      : {}),
+    // Max-age: prefer the Profile-driven config value (a real number gets
+    // String()'d), else the global setting verbatim. null/undefined = unset →
+    // no key → each extractor keeps its own default.
+    ...(args.mergedConfig.scrapeMaxAgeDays !== undefined &&
+    args.mergedConfig.scrapeMaxAgeDays !== null
+      ? { maxAgeDays: String(args.mergedConfig.scrapeMaxAgeDays) }
+      : settings.scrapeMaxAgeDays
+        ? { maxAgeDays: settings.scrapeMaxAgeDays }
+        : {}),
   };
 
   const sourcePlans = requestedSources.map((source) => ({
@@ -283,7 +294,8 @@ export async function discoverJobsStep(args: {
           requestedProviderInstanceIds.includes(instance.id),
         );
   if (enabledProviderInstances.length > 0) {
-    const apifyApiToken = (await settingsRepo.getSetting("apifyApiToken")) ?? "";
+    const apifyApiToken =
+      (await settingsRepo.getSetting("apifyApiToken")) ?? "";
     for (const instance of enabledProviderInstances) {
       const provider = getProvider(instance.providerId);
       if (!provider) {
@@ -292,8 +304,7 @@ export async function discoverJobsStep(args: {
         );
         continue;
       }
-      const apiToken =
-        instance.providerId === "apify" ? apifyApiToken : "";
+      const apiToken = instance.providerId === "apify" ? apifyApiToken : "";
       const syntheticSource = `${instance.providerId}:${instance.id}`;
       sourceTasks.push({
         source: syntheticSource,
@@ -427,7 +438,10 @@ export async function discoverJobsStep(args: {
     return { discoveredJobs, sourceErrors };
   }
 
-  const sourceResults = await asyncPool<DiscoverySourceTask, DiscoveryTaskResult>({
+  const sourceResults = await asyncPool<
+    DiscoverySourceTask,
+    DiscoveryTaskResult
+  >({
     items: sourceTasks,
     concurrency: DISCOVERY_CONCURRENCY,
     shouldStop: args.shouldCancel,
@@ -542,9 +556,9 @@ export async function discoverJobsStep(args: {
     );
   }
 
-  const blockedCompanyKeywords = parseBlockedCompanyKeywords(
-    settings.blockedCompanyKeywords,
-  );
+  const blockedCompanyKeywords =
+    args.mergedConfig.blockedCompanyKeywords ??
+    parseBlockedCompanyKeywords(settings.blockedCompanyKeywords);
   const blockedKeywordsLowerCase = blockedCompanyKeywords.map((value) =>
     value.toLowerCase(),
   );

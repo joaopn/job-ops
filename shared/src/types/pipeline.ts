@@ -21,6 +21,12 @@ export interface PipelineConfig {
   partial?: boolean;
   outputDir: string; // Directory for generated PDFs
   locationIntent?: LocationIntent;
+  // Scrape config the selected Profile drives (Batch 3). When set, these win
+  // over the global `settings` values; when absent, discover-jobs falls back
+  // to settings so no-profile / transitional runs keep working.
+  searchTerms?: string[];
+  scrapeMaxAgeDays?: number | null;
+  blockedCompanyKeywords?: string[];
   enableCrawling?: boolean;
   enableScoring?: boolean;
   enableImporting?: boolean;
@@ -427,4 +433,3 @@ export type JobActionStreamEvent =
       message: string;
       requestId: string;
     };
-

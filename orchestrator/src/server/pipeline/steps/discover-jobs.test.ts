@@ -14,10 +14,34 @@ vi.mock("@server/repositories/jobs", () => ({
 
 vi.mock("@server/repositories/source-configs", () => ({
   getAllSourceConfigs: vi.fn().mockResolvedValue([
-    { extractorId: "jobspy", enabled: true, config: {}, mappings: {}, updatedAt: "" },
-    { extractorId: "hiringcafe", enabled: true, config: {}, mappings: {}, updatedAt: "" },
-    { extractorId: "startupjobs", enabled: true, config: {}, mappings: {}, updatedAt: "" },
-    { extractorId: "workingnomads", enabled: true, config: {}, mappings: {}, updatedAt: "" },
+    {
+      extractorId: "jobspy",
+      enabled: true,
+      config: {},
+      mappings: {},
+      updatedAt: "",
+    },
+    {
+      extractorId: "hiringcafe",
+      enabled: true,
+      config: {},
+      mappings: {},
+      updatedAt: "",
+    },
+    {
+      extractorId: "startupjobs",
+      enabled: true,
+      config: {},
+      mappings: {},
+      updatedAt: "",
+    },
+    {
+      extractorId: "workingnomads",
+      enabled: true,
+      config: {},
+      mappings: {},
+      updatedAt: "",
+    },
   ]),
 }));
 
@@ -639,11 +663,158 @@ describe("discoverJobsStep", () => {
       }),
     );
 
-    const [{ getExistingJobUrls }] = workingnomadsManifest.run.mock.calls[0] as [
-      { getExistingJobUrls: () => Promise<string[]> },
-    ];
+    const [{ getExistingJobUrls }] = workingnomadsManifest.run.mock
+      .calls[0] as [{ getExistingJobUrls: () => Promise<string[]> }];
     await expect(getExistingJobUrls()).resolves.toEqual([
       "https://example.com/existing",
     ]);
+  });
+
+  it("prefers mergedConfig.searchTerms over the settings value", async () => {
+    const settingsRepo = await import("@server/repositories/settings");
+    const registryModule = await import("@server/extractors/registry");
+
+    const jobspyManifest = {
+      id: "jobspy",
+      displayName: "JobSpy",
+      providesSources: ["indeed", "linkedin", "glassdoor"],
+      run: vi.fn().mockResolvedValue({ success: true, jobs: [] }),
+    };
+
+    vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
+      searchTerms: JSON.stringify(["engineer"]),
+      searchCountry: "united kingdom",
+    } as any);
+
+    vi.mocked(registryModule.getExtractorRegistry).mockResolvedValue({
+      manifests: new Map([["jobspy", jobspyManifest as any]]),
+      manifestBySource: new Map([
+        ["indeed", jobspyManifest as any],
+        ["linkedin", jobspyManifest as any],
+        ["glassdoor", jobspyManifest as any],
+      ]),
+      availableSources: ["indeed", "linkedin", "glassdoor"],
+    } as any);
+
+    await discoverJobsStep({
+      mergedConfig: {
+        ...baseConfig,
+        sources: ["linkedin"],
+        searchTerms: ["rust developer"],
+      },
+    });
+
+    expect(jobspyManifest.run).toHaveBeenCalledWith(
+      expect.objectContaining({ searchTerms: ["rust developer"] }),
+    );
+  });
+
+  it("prefers mergedConfig.blockedCompanyKeywords over the settings value", async () => {
+    const settingsRepo = await import("@server/repositories/settings");
+    const registryModule = await import("@server/extractors/registry");
+
+    const jobspyManifest = {
+      id: "jobspy",
+      displayName: "JobSpy",
+      providesSources: ["indeed", "linkedin", "glassdoor"],
+      run: vi.fn().mockResolvedValue({
+        success: true,
+        jobs: [
+          {
+            source: "linkedin",
+            title: "Engineer",
+            employer: "Acme Staffing",
+            jobUrl: "https://example.com/job-1",
+          },
+          {
+            source: "linkedin",
+            title: "Engineer II",
+            employer: "Contoso",
+            jobUrl: "https://example.com/job-2",
+          },
+        ],
+      }),
+    };
+
+    // Settings would NOT block "Acme Staffing"; the config keyword must.
+    vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
+      searchTerms: JSON.stringify(["engineer"]),
+      blockedCompanyKeywords: JSON.stringify([]),
+    } as any);
+
+    vi.mocked(registryModule.getExtractorRegistry).mockResolvedValue({
+      manifests: new Map([["jobspy", jobspyManifest as any]]),
+      manifestBySource: new Map([
+        ["indeed", jobspyManifest as any],
+        ["linkedin", jobspyManifest as any],
+        ["glassdoor", jobspyManifest as any],
+      ]),
+      availableSources: ["indeed", "linkedin", "glassdoor"],
+    } as any);
+
+    const result = await discoverJobsStep({
+      mergedConfig: {
+        ...baseConfig,
+        sources: ["linkedin"],
+        blockedCompanyKeywords: ["staffing"],
+      },
+    });
+
+    expect(result.discoveredJobs).toHaveLength(1);
+    expect(result.discoveredJobs[0]?.employer).toBe("Contoso");
+  });
+
+  it("treats an empty mergedConfig.blockedCompanyKeywords as an override, not a fallback", async () => {
+    const settingsRepo = await import("@server/repositories/settings");
+    const registryModule = await import("@server/extractors/registry");
+
+    const jobspyManifest = {
+      id: "jobspy",
+      displayName: "JobSpy",
+      providesSources: ["indeed", "linkedin", "glassdoor"],
+      run: vi.fn().mockResolvedValue({
+        success: true,
+        jobs: [
+          {
+            source: "linkedin",
+            title: "Engineer",
+            employer: "Acme Staffing",
+            jobUrl: "https://example.com/job-1",
+          },
+          {
+            source: "linkedin",
+            title: "Engineer II",
+            employer: "Contoso",
+            jobUrl: "https://example.com/job-2",
+          },
+        ],
+      }),
+    };
+
+    // Settings WOULD block "Acme Staffing"; an explicit empty config overrides.
+    vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
+      searchTerms: JSON.stringify(["engineer"]),
+      blockedCompanyKeywords: JSON.stringify(["staffing"]),
+    } as any);
+
+    vi.mocked(registryModule.getExtractorRegistry).mockResolvedValue({
+      manifests: new Map([["jobspy", jobspyManifest as any]]),
+      manifestBySource: new Map([
+        ["indeed", jobspyManifest as any],
+        ["linkedin", jobspyManifest as any],
+        ["glassdoor", jobspyManifest as any],
+      ]),
+      availableSources: ["indeed", "linkedin", "glassdoor"],
+    } as any);
+
+    const result = await discoverJobsStep({
+      mergedConfig: {
+        ...baseConfig,
+        sources: ["linkedin"],
+        blockedCompanyKeywords: [],
+      },
+    });
+
+    expect(result.discoveredJobs).toHaveLength(2);
   });
 });
