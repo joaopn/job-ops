@@ -1,7 +1,7 @@
 import { renderWithQueryClient } from "@client/test/renderWithQueryClient";
 import type { Profile } from "@shared/types";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@client/api", () => ({
@@ -18,7 +18,6 @@ vi.mock("@client/lib/toast", () => ({
 }));
 
 import {
-  createProfile,
   deleteProfile,
   duplicateProfile,
   getProfiles,
@@ -57,8 +56,12 @@ const profileB = makeProfile({ id: "p2", name: "Berlin backend" });
 
 function renderPage() {
   return renderWithQueryClient(
-    <MemoryRouter>
-      <ProfilesPage />
+    <MemoryRouter initialEntries={["/profiles"]}>
+      <Routes>
+        <Route path="/profiles" element={<ProfilesPage />} />
+        <Route path="/profiles/new" element={<div>editor-new</div>} />
+        <Route path="/profiles/:id" element={<div>editor-edit</div>} />
+      </Routes>
     </MemoryRouter>,
   );
 }
@@ -70,7 +73,6 @@ describe("ProfilesPage", () => {
       profiles: [profileA, profileB],
       defaultProfileId: "p1",
     });
-    vi.mocked(createProfile).mockResolvedValue(makeProfile({ id: "p3" }));
     vi.mocked(setDefaultProfile).mockResolvedValue({ defaultProfileId: "p2" });
     vi.mocked(duplicateProfile).mockResolvedValue(makeProfile({ id: "p4" }));
     vi.mocked(deleteProfile).mockResolvedValue({ id: "p2" });
@@ -88,14 +90,13 @@ describe("ProfilesPage", () => {
     ).toHaveLength(1);
   });
 
-  it("creates a profile when Add profile is clicked", async () => {
+  it("navigates to the new-profile editor when Add profile is clicked", async () => {
     renderPage();
     await screen.findByDisplayValue("Remote ML");
 
     fireEvent.click(screen.getByRole("button", { name: /add profile/i }));
 
-    await waitFor(() => expect(createProfile).toHaveBeenCalledTimes(1));
-    expect(createProfile).toHaveBeenCalledWith({ name: "New profile" });
+    expect(await screen.findByText("editor-new")).toBeInTheDocument();
   });
 
   it("sets a profile as default", async () => {

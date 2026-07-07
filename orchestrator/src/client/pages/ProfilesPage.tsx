@@ -1,28 +1,17 @@
 import * as api from "@client/api";
 import { PageHeader, PageMain } from "@client/components/layout";
 import { queryKeys } from "@client/lib/queryKeys";
-import { toast } from "@client/lib/toast";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Loader2, Plus, Target } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ProfileCard } from "./profiles/ProfileCard";
 
 export function ProfilesPage() {
-  const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const query = useQuery({
     queryKey: queryKeys.profiles.list(),
     queryFn: api.getProfiles,
-  });
-
-  const createMutation = useMutation({
-    mutationFn: () => api.createProfile({ name: "New profile" }),
-    onSuccess: () => {
-      toast.success("Profile created");
-      queryClient.invalidateQueries({ queryKey: queryKeys.profiles.all });
-    },
-    onError: (error) => {
-      toast.error(error instanceof Error ? error.message : "Create failed");
-    },
   });
 
   return (
@@ -35,14 +24,9 @@ export function ProfilesPage() {
           <Button
             type="button"
             size="sm"
-            disabled={createMutation.isPending}
-            onClick={() => createMutation.mutate()}
+            onClick={() => navigate("/profiles/new")}
           >
-            {createMutation.isPending ? (
-              <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-            ) : (
-              <Plus className="mr-1 h-4 w-4" />
-            )}
+            <Plus className="mr-1 h-4 w-4" />
             Add profile
           </Button>
         }

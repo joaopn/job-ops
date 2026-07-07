@@ -3,8 +3,9 @@ import { queryKeys } from "@client/lib/queryKeys";
 import { toast } from "@client/lib/toast";
 import type { Profile } from "@shared/types";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Check, Copy, Loader2, Trash2 } from "lucide-react";
+import { Check, Copy, Loader2, Pencil, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -43,6 +44,7 @@ function summarize(profile: Profile): string {
 
 export function ProfileCard({ profile, defaultProfileId }: ProfileCardProps) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [name, setName] = useState(profile.name);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const isDefault = profile.id === defaultProfileId;
@@ -136,6 +138,15 @@ export function ProfileCard({ profile, defaultProfileId }: ProfileCardProps) {
           <p className="text-sm text-muted-foreground">{summarize(profile)}</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => navigate(`/profiles/${profile.id}`)}
+          >
+            <Pencil className="mr-1 h-3.5 w-3.5" />
+            Edit
+          </Button>
           {!isDefault ? (
             <Button
               type="button"

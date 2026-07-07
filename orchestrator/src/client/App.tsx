@@ -19,6 +19,7 @@ import { CoverLetterPage } from "./pages/CoverLetterPage";
 import { CvPage } from "./pages/CvPage";
 import { OnboardingPage } from "./pages/OnboardingPage";
 import { OrchestratorPage } from "./pages/OrchestratorPage";
+import { ProfileEditorPage } from "./pages/ProfileEditorPage";
 import { ProfilesPage } from "./pages/ProfilesPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SourcesPage } from "./pages/SourcesPage";
@@ -106,6 +107,8 @@ export const App: React.FC = () => {
                 />
                 <Route path="/sources" element={<SourcesPage />} />
                 <Route path="/profiles" element={<ProfilesPage />} />
+                <Route path="/profiles/new" element={<ProfileEditorPage />} />
+                <Route path="/profiles/:id" element={<ProfileEditorPage />} />
                 <Route path="/swipe" element={<SwipePage />} />
                 <Route path="/jobs/:tab" element={<OrchestratorPage />} />
                 <Route

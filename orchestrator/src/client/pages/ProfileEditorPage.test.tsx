@@ -1,0 +1,159 @@
+import type { SourceConfigsExtractorEntry } from "@client/api";
+import { renderWithQueryClient } from "@client/test/renderWithQueryClient";
+import type { Profile } from "@shared/types";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@client/api", () => ({
+  getProfiles: vi.fn(),
+  getSourceConfigs: vi.fn(),
+  getProviderInstances: vi.fn(),
+  createProfile: vi.fn(),
+  updateProfile: vi.fn(),
+}));
+
+vi.mock("@client/lib/toast", () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
+}));
+
+import {
+  createProfile,
+  getProfiles,
+  getProviderInstances,
+  getSourceConfigs,
+  updateProfile,
+} from "@client/api";
+import { ProfileEditorPage } from "./ProfileEditorPage";
+
+function makeProfile(overrides: Partial<Profile> = {}): Profile {
+  return {
+    id: "p1",
+    name: "Remote ML",
+    config: {
+      searchTerms: ["ml engineer"],
+      searchCountry: "Germany",
+      searchCities: "Berlin|Munich",
+      workplaceTypes: ["remote"],
+      locationSearchScope: "selected_only",
+      locationMatchStrictness: "exact_only",
+      scrapeMaxAgeDays: null,
+      blockedCompanyKeywords: [],
+      runBudget: 500,
+      topN: 10,
+      minSuitabilityCategory: "good_fit",
+      enabledSourceIds: ["jobspy"],
+      providerInstanceIds: [],
+    },
+    createdAt: "2025-01-01T00:00:00.000Z",
+    updatedAt: "2025-01-01T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+function makeExtractor(
+  extractorId: string,
+  displayName: string,
+): SourceConfigsExtractorEntry {
+  return {
+    extractorId,
+    displayName,
+    providesSources: [],
+    row: {
+      extractorId,
+      enabled: true,
+      config: {},
+      mappings: {},
+      updatedAt: "2025-01-01T00:00:00.000Z",
+    },
+    schema: null,
+    effectiveSettings: {},
+  };
+}
+
+function renderAt(path: string) {
+  return renderWithQueryClient(
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route path="/profiles" element={<div>profiles-list</div>} />
+        <Route path="/profiles/new" element={<ProfileEditorPage />} />
+        <Route path="/profiles/:id" element={<ProfileEditorPage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
+describe("ProfileEditorPage", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getProfiles).mockResolvedValue({
+      profiles: [makeProfile({ id: "p1", name: "Remote ML" })],
+      defaultProfileId: "p1",
+    });
+    vi.mocked(getSourceConfigs).mockResolvedValue({
+      extractors: [
+        makeExtractor("jobspy", "JobSpy"),
+        makeExtractor("hiringcafe", "Hiring Cafe"),
+      ],
+    });
+    vi.mocked(getProviderInstances).mockResolvedValue({ providers: [] });
+    vi.mocked(updateProfile).mockResolvedValue(makeProfile({ id: "p1" }));
+    vi.mocked(createProfile).mockResolvedValue(makeProfile({ id: "p9" }));
+  });
+
+  it("hydrates an existing profile's values in edit mode", async () => {
+    renderAt("/profiles/p1");
+    expect(await screen.findByLabelText("Name")).toHaveValue("Remote ML");
+    expect(screen.getByLabelText("Max jobs discovered")).toHaveValue(500);
+  });
+
+  it("saves edits via updateProfile and returns to the list", async () => {
+    renderAt("/profiles/p1");
+    const nameInput = await screen.findByLabelText("Name");
+    fireEvent.change(nameInput, { target: { value: "Renamed" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() => expect(updateProfile).toHaveBeenCalledTimes(1));
+    expect(updateProfile).toHaveBeenCalledWith(
+      "p1",
+      expect.objectContaining({
+        name: "Renamed",
+        config: expect.objectContaining({
+          searchTerms: ["ml engineer"],
+          runBudget: 500,
+        }),
+      }),
+    );
+    expect(await screen.findByText("profiles-list")).toBeInTheDocument();
+  });
+
+  it("pins an extractor and includes it in the saved config", async () => {
+    renderAt("/profiles/p1");
+    await screen.findByLabelText("Name");
+
+    fireEvent.click(await screen.findByLabelText("Hiring Cafe"));
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() => expect(updateProfile).toHaveBeenCalledTimes(1));
+    const [, patch] = vi.mocked(updateProfile).mock.calls[0];
+    expect(patch.config?.enabledSourceIds).toEqual(
+      expect.arrayContaining(["jobspy", "hiringcafe"]),
+    );
+  });
+
+  it("creates a new profile from defaults once named", async () => {
+    renderAt("/profiles/new");
+    const nameInput = await screen.findByLabelText("Name");
+    expect(screen.getByRole("button", { name: /^save$/i })).toBeDisabled();
+
+    fireEvent.change(nameInput, { target: { value: "Fresh" } });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() => expect(createProfile).toHaveBeenCalledTimes(1));
+    expect(createProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "Fresh" }),
+    );
+    expect(await screen.findByText("profiles-list")).toBeInTheDocument();
+  });
+});
