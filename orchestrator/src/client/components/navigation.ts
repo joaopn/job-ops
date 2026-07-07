@@ -5,6 +5,7 @@ import {
   Mail,
   Network,
   Settings,
+  Target,
 } from "lucide-react";
 
 export type NavLink = {
@@ -30,6 +31,7 @@ export const NAV_LINKS: NavLink[] = [
   { to: "/cv", label: "My CV", icon: FileText },
   { to: "/cover-letter", label: "Cover Letter", icon: Mail },
   { to: "/sources", label: "Sources", icon: Network },
+  { to: "/profiles", label: "Profiles", icon: Target },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 

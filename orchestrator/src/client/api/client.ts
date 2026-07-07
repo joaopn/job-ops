@@ -1505,11 +1505,14 @@ export async function updateSettings(
 
 // Source-configs API
 import type {
+  CreateProfileInput,
   CreateProviderInstanceInput,
+  Profile,
   ProviderActorTemplateSummary,
   ProviderInstanceRow,
   SourceConfigRow,
   SourceConfigSchema,
+  UpdateProfileInput,
   UpdateProviderInstanceInput,
   UpsertSourceConfigInput,
 } from "@shared/types";
@@ -1581,6 +1584,55 @@ export async function deleteProviderInstance(
 ): Promise<{ id: string }> {
   return fetchApi<{ id: string }>(`/provider-instances/${id}`, {
     method: "DELETE",
+  });
+}
+
+// Profiles API (named scrape sets)
+export interface ProfilesResponse {
+  profiles: Profile[];
+  defaultProfileId: string | null;
+}
+
+export async function getProfiles(): Promise<ProfilesResponse> {
+  return fetchApi<ProfilesResponse>("/profiles");
+}
+
+export async function createProfile(
+  input: CreateProfileInput,
+): Promise<Profile> {
+  return fetchApi<Profile>("/profiles", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updateProfile(
+  id: string,
+  patch: UpdateProfileInput,
+): Promise<Profile> {
+  return fetchApi<Profile>(`/profiles/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(patch),
+  });
+}
+
+export async function deleteProfile(id: string): Promise<{ id: string }> {
+  return fetchApi<{ id: string }>(`/profiles/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export async function setDefaultProfile(
+  id: string,
+): Promise<{ defaultProfileId: string }> {
+  return fetchApi<{ defaultProfileId: string }>(`/profiles/${id}/set-default`, {
+    method: "POST",
+  });
+}
+
+export async function duplicateProfile(id: string): Promise<Profile> {
+  return fetchApi<Profile>(`/profiles/${id}/duplicate`, {
+    method: "POST",
   });
 }
 
