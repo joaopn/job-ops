@@ -20,7 +20,7 @@ interface OrchestratorHeaderProps {
   isPipelineRunning: boolean;
   isCancelling: boolean;
   pipelineSources: JobSource[];
-  onOpenAutomaticRun: () => void;
+  onRunPipeline: () => void;
   onOpenBatchUrlImport: () => void;
   onOpenLlmQueue: () => void;
   llmActiveCount: number;
@@ -36,7 +36,7 @@ export const OrchestratorHeader: React.FC<OrchestratorHeaderProps> = ({
   isPipelineRunning,
   isCancelling,
   pipelineSources,
-  onOpenAutomaticRun,
+  onRunPipeline,
   onOpenBatchUrlImport,
   onOpenLlmQueue,
   llmActiveCount,
@@ -119,7 +119,7 @@ export const OrchestratorHeader: React.FC<OrchestratorHeaderProps> = ({
         <LinkIcon className="h-4 w-4" />
         <span className="hidden sm:inline">Fetch URLs</span>
       </Button>
-      <Button size="sm" onClick={onOpenAutomaticRun} className="gap-2">
+      <Button size="sm" onClick={onRunPipeline} className="gap-2">
         <Play className="h-4 w-4" />
         <span className="hidden sm:inline">Run pipeline</span>
       </Button>

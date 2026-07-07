@@ -9,10 +9,10 @@ import type {
   AppSettings,
   BatchUrlImportStreamEvent,
   BranchInfo,
-  CreateJobNoteInput,
   CoverLetterDocument,
   CoverLetterDocumentSummary,
   CoverLetterUploadTemplateResponse,
+  CreateJobNoteInput,
   CvDocument,
   CvDocumentSummary,
   CvUploadTemplateResponse,
@@ -28,9 +28,9 @@ import type {
   JobNote,
   JobOutcome,
   JobSource,
+  JobStatus,
   JobsListResponse,
   JobsRevisionResponse,
-  JobStatus,
   LocationMatchStrictness,
   LocationSearchScope,
   ManualJobDraft,
@@ -1160,6 +1160,7 @@ export async function getPipelineRunInsights(
 }
 
 export async function runPipeline(config?: {
+  profileId?: string;
   topN?: number;
   minSuitabilityCategory?: SuitabilityCategory;
   sources?: JobSource[];
@@ -1336,13 +1337,10 @@ export async function reExtractCvDocumentTemplate(
   id: string,
   options?: { maxRetries?: number; extractionPrompt?: string },
 ): Promise<CvUploadTemplateResponse> {
-  return fetchApi<CvUploadTemplateResponse>(
-    `/cv/${id}/re-extract-template`,
-    {
-      method: "POST",
-      body: JSON.stringify(options ?? {}),
-    },
-  );
+  return fetchApi<CvUploadTemplateResponse>(`/cv/${id}/re-extract-template`, {
+    method: "POST",
+    body: JSON.stringify(options ?? {}),
+  });
 }
 
 /**
@@ -1364,7 +1362,9 @@ export async function fetchExtractionPromptDefault(): Promise<string> {
   return result.prompt;
 }
 
-export async function listCoverLetters(): Promise<CoverLetterDocumentSummary[]> {
+export async function listCoverLetters(): Promise<
+  CoverLetterDocumentSummary[]
+> {
   return fetchApi<CoverLetterDocumentSummary[]>("/coverletter");
 }
 
@@ -1666,7 +1666,9 @@ export async function listPrompts(): Promise<PromptDescriptor[]> {
   return result.prompts;
 }
 
-export async function reloadPrompt(name?: string): Promise<{ reloaded: string }> {
+export async function reloadPrompt(
+  name?: string,
+): Promise<{ reloaded: string }> {
   return fetchApi<{ reloaded: string }>("/prompts/reload", {
     method: "POST",
     body: JSON.stringify(name ? { name } : {}),

@@ -33,7 +33,7 @@ const renderHeader = (
     isPipelineRunning: false,
     isCancelling: false,
     pipelineSources: ["linkedin"],
-    onOpenAutomaticRun: vi.fn(),
+    onRunPipeline: vi.fn(),
     onOpenBatchUrlImport: vi.fn(),
     onOpenLlmQueue: vi.fn(),
     llmActiveCount: 0,
@@ -55,10 +55,10 @@ const renderHeader = (
 };
 
 describe("OrchestratorHeader", () => {
-  it("opens automatic run from the navbar button", () => {
+  it("runs the pipeline from the navbar button", () => {
     const { props } = renderHeader();
     fireEvent.click(screen.getByRole("button", { name: /run pipeline/i }));
-    expect(props.onOpenAutomaticRun).toHaveBeenCalled();
+    expect(props.onRunPipeline).toHaveBeenCalled();
   });
 
   it("does not render manual import button", () => {

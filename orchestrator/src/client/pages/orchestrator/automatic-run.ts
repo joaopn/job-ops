@@ -1,93 +1,18 @@
-import {
-  buildLocationPreferencesSummary,
-  type LocationMatchStrictness,
-  type LocationSearchScope,
-  normalizeLocationMatchStrictness,
-  normalizeLocationSearchScope,
+import type {
+  LocationMatchStrictness,
+  LocationSearchScope,
 } from "@shared/location-preferences.js";
-import { deriveMaxJobsPerTerm as sharedDeriveMaxJobsPerTerm } from "@shared/run-budget.js";
 import {
   parseSearchCitiesSetting,
   serializeSearchCitiesSetting,
 } from "@shared/search-cities.js";
-import {
-  type JobSource,
-  SUITABILITY_CATEGORIES,
-  type SuitabilityCategory,
-} from "@shared/types";
 
-export type AutomaticPresetId = "fast" | "balanced" | "detailed";
-export type AutomaticPresetSelection = AutomaticPresetId | "custom";
 export type WorkplaceType = "remote" | "hybrid" | "onsite";
 export const WORKPLACE_TYPE_OPTIONS: WorkplaceType[] = [
   "remote",
   "hybrid",
   "onsite",
 ];
-
-export interface AutomaticRunValues {
-  topN: number;
-  minSuitabilityCategory: SuitabilityCategory;
-  searchTerms: string[];
-  runBudget: number;
-  country: string;
-  cityLocations: string[];
-  workplaceTypes: WorkplaceType[];
-  searchScope: LocationSearchScope;
-  matchStrictness: LocationMatchStrictness;
-}
-
-export interface AutomaticPresetValues {
-  topN: number;
-  minSuitabilityCategory: SuitabilityCategory;
-  runBudget: number;
-}
-
-export interface AutomaticEstimate {
-  discovered: {
-    min: number;
-    max: number;
-    cap: number;
-  };
-  processed: {
-    min: number;
-    max: number;
-  };
-}
-
-function isAutomaticPresetSelection(
-  value: unknown,
-): value is AutomaticPresetSelection {
-  return (
-    value === "custom" ||
-    value === "fast" ||
-    value === "balanced" ||
-    value === "detailed"
-  );
-}
-
-export const AUTOMATIC_PRESETS: Record<
-  AutomaticPresetId,
-  AutomaticPresetValues
-> = {
-  fast: {
-    topN: 5,
-    minSuitabilityCategory: "very_good_fit",
-    runBudget: 300,
-  },
-  balanced: {
-    topN: 10,
-    minSuitabilityCategory: "good_fit",
-    runBudget: 500,
-  },
-  detailed: {
-    topN: 20,
-    minSuitabilityCategory: "bad_fit",
-    runBudget: 750,
-  },
-};
-
-export const RUN_MEMORY_STORAGE_KEY = "jobops.pipeline.run-memory.v1";
 
 export const SEARCH_SCOPE_OPTIONS: Array<{
   value: LocationSearchScope;
@@ -121,13 +46,6 @@ export const MATCH_STRICTNESS_OPTIONS: Array<{
   },
 ];
 
-export interface AutomaticRunMemory {
-  topN: number;
-  minSuitabilityCategory: SuitabilityCategory;
-  presetId?: AutomaticPresetSelection;
-  runBudget?: number;
-}
-
 export function normalizeWorkplaceTypes(
   workplaceTypes: WorkplaceType[] | null | undefined,
 ): WorkplaceType[] {
@@ -142,62 +60,6 @@ export function normalizeWorkplaceTypes(
   }
 
   return out.length > 0 ? out : [...WORKPLACE_TYPE_OPTIONS];
-}
-
-export interface MaxJobsPerTermOverride {
-  /** Per-source per-term cap derived from the Run modal's budget. */
-  maxJobsPerTerm: number;
-}
-
-export function inferAutomaticPresetSelection(args: {
-  topN: number;
-  minSuitabilityCategory: SuitabilityCategory;
-  runBudget?: number | null;
-}): AutomaticPresetSelection {
-  const hasRunBudget = args.runBudget !== null && args.runBudget !== undefined;
-
-  if (
-    args.topN === AUTOMATIC_PRESETS.fast.topN &&
-    args.minSuitabilityCategory ===
-      AUTOMATIC_PRESETS.fast.minSuitabilityCategory &&
-    (!hasRunBudget || args.runBudget === AUTOMATIC_PRESETS.fast.runBudget)
-  ) {
-    return "fast";
-  }
-
-  if (
-    args.topN === AUTOMATIC_PRESETS.balanced.topN &&
-    args.minSuitabilityCategory ===
-      AUTOMATIC_PRESETS.balanced.minSuitabilityCategory &&
-    (!hasRunBudget || args.runBudget === AUTOMATIC_PRESETS.balanced.runBudget)
-  ) {
-    return "balanced";
-  }
-
-  if (
-    args.topN === AUTOMATIC_PRESETS.detailed.topN &&
-    args.minSuitabilityCategory ===
-      AUTOMATIC_PRESETS.detailed.minSuitabilityCategory &&
-    (!hasRunBudget || args.runBudget === AUTOMATIC_PRESETS.detailed.runBudget)
-  ) {
-    return "detailed";
-  }
-
-  return "custom";
-}
-
-export function deriveMaxJobsPerTerm(args: {
-  budget: number;
-  searchTerms: string[];
-  sources: JobSource[];
-}): MaxJobsPerTermOverride {
-  return {
-    maxJobsPerTerm: sharedDeriveMaxJobsPerTerm({
-      budget: args.budget,
-      termCount: args.searchTerms.length,
-      sourceCount: args.sources.length,
-    }),
-  };
 }
 
 export function parseSearchTermsInput(input: string): string[] {
@@ -228,140 +90,4 @@ export function parseCityLocationsSetting(
 
 export function serializeCityLocationsSetting(cities: string[]): string | null {
   return serializeSearchCitiesSetting(cities);
-}
-
-export function summarizeLocationPreferences(
-  values: Pick<
-    AutomaticRunValues,
-    | "country"
-    | "cityLocations"
-    | "workplaceTypes"
-    | "searchScope"
-    | "matchStrictness"
-  >,
-): string {
-  return buildLocationPreferencesSummary({
-    country: values.country,
-    cityLocations: values.cityLocations,
-    workplaceTypes: values.workplaceTypes,
-    searchScope: normalizeLocationSearchScope(values.searchScope),
-    matchStrictness: normalizeLocationMatchStrictness(values.matchStrictness),
-  });
-}
-
-export function stringifySearchTerms(terms: string[]): string {
-  return terms.join("\n");
-}
-
-export function calculateAutomaticEstimate(args: {
-  values: AutomaticRunValues;
-  sources: JobSource[];
-}): AutomaticEstimate {
-  const { values, sources } = args;
-  if (values.searchTerms.length === 0 || sources.length === 0) {
-    return {
-      discovered: { min: 0, max: 0, cap: 0 },
-      processed: { min: 0, max: 0 },
-    };
-  }
-
-  const discoveredCap = Math.max(1, Math.round(values.runBudget));
-  const discoveredMin = Math.round(discoveredCap * 0.35);
-  const discoveredMax = Math.round(discoveredCap * 0.75);
-  const processedMin = Math.min(values.topN, discoveredMin);
-  const processedMax = Math.min(values.topN, discoveredMax);
-
-  return {
-    discovered: {
-      min: discoveredMin,
-      max: discoveredMax,
-      cap: discoveredCap,
-    },
-    processed: {
-      min: processedMin,
-      max: processedMax,
-    },
-  };
-}
-
-function isSuitabilityCategory(value: unknown): value is SuitabilityCategory {
-  return (
-    typeof value === "string" &&
-    (SUITABILITY_CATEGORIES as readonly string[]).includes(value)
-  );
-}
-
-export function loadAutomaticRunMemory(): AutomaticRunMemory | null {
-  try {
-    const raw = localStorage.getItem(RUN_MEMORY_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    if (
-      typeof parsed.topN !== "number" ||
-      !isSuitabilityCategory(parsed.minSuitabilityCategory)
-    ) {
-      return null;
-    }
-    const topN = Math.min(50, Math.max(1, Math.round(parsed.topN)));
-    const minSuitabilityCategory = parsed.minSuitabilityCategory;
-    const runBudget =
-      typeof parsed.runBudget === "number"
-        ? Math.max(50, Math.round(parsed.runBudget))
-        : undefined;
-    const explicitPresetId = isAutomaticPresetSelection(parsed.presetId)
-      ? parsed.presetId
-      : null;
-
-    if (explicitPresetId && explicitPresetId !== "custom") {
-      const preset = AUTOMATIC_PRESETS[explicitPresetId];
-      return {
-        topN: preset.topN,
-        minSuitabilityCategory: preset.minSuitabilityCategory,
-        runBudget: preset.runBudget,
-        presetId: explicitPresetId,
-      };
-    }
-
-    if (explicitPresetId === "custom") {
-      return {
-        topN,
-        minSuitabilityCategory,
-        ...(runBudget !== undefined ? { runBudget } : {}),
-        presetId: "custom",
-      };
-    }
-
-    const inferredPresetId = inferAutomaticPresetSelection({
-      topN,
-      minSuitabilityCategory,
-      runBudget,
-    });
-
-    if (inferredPresetId !== "custom") {
-      const preset = AUTOMATIC_PRESETS[inferredPresetId];
-      return {
-        topN: preset.topN,
-        minSuitabilityCategory: preset.minSuitabilityCategory,
-        runBudget: preset.runBudget,
-        presetId: inferredPresetId,
-      };
-    }
-
-    return {
-      topN,
-      minSuitabilityCategory,
-      ...(runBudget !== undefined ? { runBudget } : {}),
-      presetId: "custom",
-    };
-  } catch {
-    return null;
-  }
-}
-
-export function saveAutomaticRunMemory(memory: AutomaticRunMemory): void {
-  try {
-    localStorage.setItem(RUN_MEMORY_STORAGE_KEY, JSON.stringify(memory));
-  } catch {
-    // Ignore localStorage failures
-  }
 }

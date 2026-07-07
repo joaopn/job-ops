@@ -7,39 +7,23 @@
 import { PageHeader } from "@client/components/layout";
 import { PipelineProgressStrip } from "@client/components/PipelineProgressStrip";
 import { ViewToggle } from "@client/components/ViewToggle";
-import { useSettings } from "@client/hooks/useSettings";
 import { Loader2, Play, Square } from "lucide-react";
 import type React from "react";
-import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { getEnabledSources } from "./orchestrator/utils";
-import { RunModeModal } from "./orchestrator/RunModeModal";
 import { useOrchestratorData } from "./orchestrator/useOrchestratorData";
 import { usePipelineControls } from "./orchestrator/usePipelineControls";
 import { SwipeDeck } from "./swipe/SwipeDeck";
 
 export const SwipePage: React.FC = () => {
-  const { settings } = useSettings();
   const { isPipelineRunning, setIsPipelineRunning, pipelineTerminalEvent } =
     useOrchestratorData(null);
-  const enabledSources = useMemo(
-    () => getEnabledSources(settings ?? null),
-    [settings],
-  );
 
-  const {
-    isRunModeModalOpen,
-    setIsRunModeModalOpen,
-    isCancelling,
-    openRunMode,
-    handleCancelPipeline,
-    handleSaveAndRunAutomatic,
-  } = usePipelineControls({
-    isPipelineRunning,
-    setIsPipelineRunning,
-    pipelineTerminalEvent,
-    pipelineSources: enabledSources,
-  });
+  const { isCancelling, runPipelineNow, handleCancelPipeline } =
+    usePipelineControls({
+      isPipelineRunning,
+      setIsPipelineRunning,
+      pipelineTerminalEvent,
+    });
 
   const actions = isPipelineRunning ? (
     <Button
@@ -57,7 +41,7 @@ export const SwipePage: React.FC = () => {
       <span className="hidden sm:inline">Cancel run</span>
     </Button>
   ) : (
-    <Button size="sm" onClick={openRunMode} className="gap-2">
+    <Button size="sm" onClick={runPipelineNow} className="gap-2">
       <Play className="h-4 w-4" />
       <span className="hidden sm:inline">Run pipeline</span>
     </Button>
@@ -83,18 +67,9 @@ export const SwipePage: React.FC = () => {
         <SwipeDeck
           pipelineTerminalEvent={pipelineTerminalEvent}
           isPipelineRunning={isPipelineRunning}
-          onRunPipeline={openRunMode}
+          onRunPipeline={runPipelineNow}
         />
       </main>
-
-      <RunModeModal
-        open={isRunModeModalOpen}
-        settings={settings}
-        enabledSources={enabledSources}
-        isPipelineRunning={isPipelineRunning}
-        onOpenChange={setIsRunModeModalOpen}
-        onSaveAndRunAutomatic={handleSaveAndRunAutomatic}
-      />
     </div>
   );
 };
