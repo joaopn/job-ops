@@ -5,6 +5,7 @@ import {
   isOnboardingComplete,
 } from "@client/lib/onboarding";
 import { queryKeys } from "@client/lib/queryKeys";
+import { toast } from "@client/lib/toast";
 import {
   getLlmProviderConfig,
   normalizeLlmProvider,
@@ -22,7 +23,6 @@ import { normalizeSearchTerms } from "@shared/utils/search-terms";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
-import { toast } from "@client/lib/toast";
 import { EMPTY_VALIDATION_STATE, STEP_COPY } from "./content";
 import type {
   BasicAuthChoice,
@@ -56,7 +56,7 @@ export function useOnboardingFlow() {
   >(null);
   const [searchTermsStale, setSearchTermsStale] = useState(false);
   const [currentStep, setCurrentStep] = useState<StepId | null>(null);
-  const searchTermsOverrideKeyRef = useRef<string | null>(null);
+  const profileTermsKeyRef = useRef<string | null>(null);
 
   const { control, getValues, reset, setValue, watch } =
     useForm<OnboardingFormData>({
@@ -79,20 +79,29 @@ export function useOnboardingFlow() {
     [queryClient],
   );
 
+  const profilesQuery = useQuery({
+    queryKey: queryKeys.profiles.list(),
+    queryFn: api.getProfiles,
+  });
+  const defaultProfileId =
+    profilesQuery.data?.defaultProfileId ??
+    profilesQuery.data?.profiles[0]?.id ??
+    null;
+  const defaultProfileTerms =
+    profilesQuery.data?.profiles.find(
+      (profile) => profile.id === defaultProfileId,
+    )?.config.searchTerms ?? [];
+
   useEffect(() => {
     if (!settings) return;
 
-    const searchTermsOverride = settings.searchTerms?.override ?? null;
-    const hasExplicitSearchTermsOverride =
-      Array.isArray(searchTermsOverride) && searchTermsOverride.length > 0;
-    const searchTermsOverrideKey = JSON.stringify(searchTermsOverride);
     setLlmValidation(EMPTY_VALIDATION_STATE);
     reset({
       llmProvider: settings.llmProvider?.value || "",
       llmBaseUrl: settings.llmBaseUrl?.value || "",
       llmApiKey: "",
       personalBrief: "",
-      searchTerms: settings.searchTerms?.value ?? [],
+      searchTerms: getValues().searchTerms,
       searchTermDraft: "",
       basicAuthUser: settings.basicAuthUser ?? "",
       basicAuthPassword: "",
@@ -104,14 +113,24 @@ export function useOnboardingFlow() {
           ? "skip"
           : "enable",
     );
-    if (searchTermsOverrideKeyRef.current !== searchTermsOverrideKey) {
-      searchTermsOverrideKeyRef.current = searchTermsOverrideKey;
-      setSearchTermsSaved(hasExplicitSearchTermsOverride);
-      setHasSavedSearchTermsInSession(hasExplicitSearchTermsOverride);
-      setSearchTermsSource(null);
-      setSearchTermsStale(false);
-    }
-  }, [reset, settings]);
+  }, [getValues, reset, settings]);
+
+  // Seed the search-terms field + completion flags from the default Profile.
+  // Key-guarded so a same-data refetch is a no-op (never clobbers unsaved
+  // mid-step edits); a genuinely changed value reseeds — the same semantics
+  // the settings-override key ref used to provide.
+  useEffect(() => {
+    if (!profilesQuery.data) return;
+    const key = JSON.stringify(defaultProfileTerms);
+    if (profileTermsKeyRef.current === key) return;
+    profileTermsKeyRef.current = key;
+    const hasSavedTerms = defaultProfileTerms.length > 0;
+    setValue("searchTerms", defaultProfileTerms);
+    setSearchTermsSaved(hasSavedTerms);
+    setHasSavedSearchTermsInSession(hasSavedTerms);
+    setSearchTermsSource(null);
+    setSearchTermsStale(false);
+  }, [defaultProfileTerms, profilesQuery.data, setValue]);
 
   const llmProvider = watch("llmProvider");
   const selectedProvider = normalizeLlmProvider(
@@ -408,12 +427,28 @@ export function useOnboardingFlow() {
       return false;
     }
 
+    if (!defaultProfileId) {
+      toast.error("No profile is available to save search terms to");
+      return false;
+    }
+
     try {
       setIsSaving(true);
-      const nextSettings = await api.updateSettings({
-        searchTerms: nextTerms,
+      const updated = await api.updateProfile(defaultProfileId, {
+        config: { searchTerms: nextTerms },
       });
-      syncSettingsCache(nextSettings);
+      queryClient.setQueryData<api.ProfilesResponse>(
+        queryKeys.profiles.list(),
+        (prev) =>
+          prev
+            ? {
+                ...prev,
+                profiles: prev.profiles.map((profile) =>
+                  profile.id === updated.id ? updated : profile,
+                ),
+              }
+            : prev,
+      );
       setValue("searchTerms", nextTerms);
       setValue("searchTermDraft", "");
       setSearchTermsSaved(true);
@@ -429,7 +464,7 @@ export function useOnboardingFlow() {
     } finally {
       setIsSaving(false);
     }
-  }, [getValues, setValue, syncSettingsCache]);
+  }, [defaultProfileId, getValues, queryClient, setValue]);
 
   const handleCompleteCv = useCallback(async () => {
     if (cvChoice === null) {
@@ -467,7 +502,9 @@ export function useOnboardingFlow() {
       return true;
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Failed to save personal brief",
+        error instanceof Error
+          ? error.message
+          : "Failed to save personal brief",
       );
       return false;
     } finally {
@@ -570,7 +607,11 @@ export function useOnboardingFlow() {
     : 0;
   const canGoBack = stepIndex > 0;
   const isBusy =
-    isSaving || settingsLoading || isGeneratingSearchTerms || isValidatingLlm;
+    isSaving ||
+    settingsLoading ||
+    isGeneratingSearchTerms ||
+    isValidatingLlm ||
+    profilesQuery.isLoading;
 
   const currentCopy = currentStep ? STEP_COPY[currentStep] : STEP_COPY.llm;
 

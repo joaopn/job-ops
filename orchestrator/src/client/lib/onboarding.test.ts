@@ -15,44 +15,19 @@ describe("onboarding helpers", () => {
     ).toBe(true);
   });
 
-  it("requires an explicit saved search-terms override by default", () => {
-    expect(
-      hasSavedSearchTermsOnboarding({
-        searchTerms: {
-          value: ["Platform Engineer"],
-          default: ["Software Engineer"],
-          override: ["Platform Engineer"],
-        },
-      } as any),
-    ).toBe(true);
-
-    expect(
-      isOnboardingComplete({
-        settings: {
-          basicAuthActive: false,
-          onboardingBasicAuthDecision: "skipped",
-          searchTerms: {
-            value: ["Software Engineer"],
-            default: ["Software Engineer"],
-            override: null,
-          },
-        } as any,
-        llmValid: true,
-      }),
-    ).toBe(false);
+  it("treats a non-empty search-terms list as saved", () => {
+    expect(hasSavedSearchTermsOnboarding(["Platform Engineer"])).toBe(true);
+    expect(hasSavedSearchTermsOnboarding([])).toBe(false);
+    expect(hasSavedSearchTermsOnboarding(undefined)).toBe(false);
+    expect(hasSavedSearchTermsOnboarding(null)).toBe(false);
   });
 
-  it("allows the flow to override search-term completion with session state", () => {
+  it("is incomplete when search terms have not been saved", () => {
     expect(
       isOnboardingComplete({
         settings: {
           basicAuthActive: false,
           onboardingBasicAuthDecision: "skipped",
-          searchTerms: {
-            value: ["Platform Engineer"],
-            default: ["Software Engineer"],
-            override: ["Platform Engineer"],
-          },
         } as any,
         llmValid: true,
         searchTermsValid: false,
@@ -66,13 +41,9 @@ describe("onboarding helpers", () => {
         settings: {
           basicAuthActive: false,
           onboardingBasicAuthDecision: "skipped",
-          searchTerms: {
-            value: ["Platform Engineer"],
-            default: ["Software Engineer"],
-            override: ["Platform Engineer"],
-          },
         } as any,
         llmValid: true,
+        searchTermsValid: true,
       }),
     ).toBe(true);
   });

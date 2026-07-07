@@ -9,27 +9,21 @@ export function hasCompletedBasicAuthOnboarding(
 }
 
 export function hasSavedSearchTermsOnboarding(
-  settings: AppSettings | null | undefined,
+  searchTerms: readonly string[] | null | undefined,
 ): boolean {
-  return Boolean(
-    Array.isArray(settings?.searchTerms?.override) &&
-      settings.searchTerms.override.length > 0,
-  );
+  return Boolean(Array.isArray(searchTerms) && searchTerms.length > 0);
 }
 
 export function isOnboardingComplete(input: {
   settings: AppSettings | null | undefined;
   llmValid: boolean;
-  searchTermsValid?: boolean;
+  searchTermsValid: boolean;
 }): boolean {
   if (!input.settings) return false;
 
-  const searchTermsValid =
-    input.searchTermsValid ?? hasSavedSearchTermsOnboarding(input.settings);
-
   return Boolean(
     input.llmValid &&
-      searchTermsValid &&
+      input.searchTermsValid &&
       hasCompletedBasicAuthOnboarding(input.settings),
   );
 }
