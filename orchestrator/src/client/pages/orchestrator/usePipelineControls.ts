@@ -12,7 +12,7 @@ type UsePipelineControlsArgs = {
 
 export type UsePipelineControlsResult = {
   isCancelling: boolean;
-  runPipelineNow: () => Promise<void>;
+  runPipelineNow: (profileId?: string) => Promise<void>;
   handleCancelPipeline: () => Promise<void>;
   handleRerunSource: (source: JobSource) => Promise<void>;
 };
@@ -82,9 +82,12 @@ export function usePipelineControls(
     [setIsPipelineRunning],
   );
 
-  const runPipelineNow = useCallback(async () => {
-    await startPipelineRun({});
-  }, [startPipelineRun]);
+  const runPipelineNow = useCallback(
+    async (profileId?: string) => {
+      await startPipelineRun({ profileId });
+    },
+    [startPipelineRun],
+  );
 
   const handleCancelPipeline = useCallback(async () => {
     if (isCancelling || !isPipelineRunning) return;

@@ -32,6 +32,7 @@ import {
 import { LlmCallQueueSheet } from "./orchestrator/LlmCallQueueSheet";
 import { OrchestratorFilters } from "./orchestrator/OrchestratorFilters";
 import { OrchestratorHeader } from "./orchestrator/OrchestratorHeader";
+import { ProfileSelect } from "./orchestrator/ProfileSelect";
 import { StaleControlBar } from "./orchestrator/StaleControlBar";
 import { useDuplicateGroups } from "./orchestrator/useDuplicateGroups";
 import { useFilteredJobs } from "./orchestrator/useFilteredJobs";
@@ -41,6 +42,7 @@ import { useOrchestratorData } from "./orchestrator/useOrchestratorData";
 import { useOrchestratorFilters } from "./orchestrator/useOrchestratorFilters";
 import { usePipelineControls } from "./orchestrator/usePipelineControls";
 import { useScrollToJobItem } from "./orchestrator/useScrollToJobItem";
+import { useSelectedProfile } from "./orchestrator/useSelectedProfile";
 import {
   UndoProvider,
   useUndoController,
@@ -270,6 +272,12 @@ export const OrchestratorPage: React.FC = () => {
     setIsPipelineRunning,
     pipelineTerminalEvent,
   });
+
+  const {
+    profiles,
+    selectedProfileId,
+    setSelected: setSelectedProfile,
+  } = useSelectedProfile();
 
   const activeJobs = useFilteredJobs(
     jobs,
@@ -512,23 +520,29 @@ export const OrchestratorPage: React.FC = () => {
     if (activeTab === "inbox" || activeTab === "all") {
       return {
         label: "Run pipeline",
-        onClick: () => runPipelineNow(),
+        onClick: () => runPipelineNow(selectedProfileId ?? undefined),
       };
     }
 
     return undefined;
-  }, [activeTab, counts.discovered, runPipelineNow, setActiveTab]);
+  }, [
+    activeTab,
+    counts.discovered,
+    runPipelineNow,
+    selectedProfileId,
+    setActiveTab,
+  ]);
 
   const secondaryEmptyStateAction = useMemo(() => {
     if (activeTab === "tailoring") {
       return {
         label: "Run pipeline",
-        onClick: () => runPipelineNow(),
+        onClick: () => runPipelineNow(selectedProfileId ?? undefined),
       };
     }
 
     return undefined;
-  }, [activeTab, runPipelineNow]);
+  }, [activeTab, runPipelineNow, selectedProfileId]);
 
   const emptyStateMessage = useMemo(() => {
     if (dateFilter.dimensions.length === 0) {
@@ -552,7 +566,14 @@ export const OrchestratorPage: React.FC = () => {
             isPipelineRunning={isPipelineRunning}
             isCancelling={isCancelling}
             pipelineSources={enabledSources}
-            onRunPipeline={() => runPipelineNow()}
+            profileSelect={
+              <ProfileSelect
+                profiles={profiles}
+                selectedProfileId={selectedProfileId}
+                onSelect={setSelectedProfile}
+              />
+            }
+            onRunPipeline={() => runPipelineNow(selectedProfileId ?? undefined)}
             onOpenBatchUrlImport={() => setIsBatchUrlImportOpen(true)}
             onOpenLlmQueue={() => setIsLlmQueueOpen(true)}
             llmActiveCount={llmQueue.active.length}

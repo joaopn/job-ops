@@ -28,6 +28,7 @@ interface OrchestratorHeaderProps {
   canUndo: boolean;
   undoLabel: string | null;
   onUndo: () => void;
+  profileSelect?: React.ReactNode;
 }
 
 export const OrchestratorHeader: React.FC<OrchestratorHeaderProps> = ({
@@ -44,6 +45,7 @@ export const OrchestratorHeader: React.FC<OrchestratorHeaderProps> = ({
   canUndo,
   undoLabel,
   onUndo,
+  profileSelect,
 }) => {
   const undoButton = (
     <Button
@@ -83,6 +85,7 @@ export const OrchestratorHeader: React.FC<OrchestratorHeaderProps> = ({
 
   const actions = isPipelineRunning ? (
     <div className="flex items-center gap-2">
+      {profileSelect}
       {undoButton}
       <ActivityLogButton />
       {queueButton}
@@ -107,6 +110,7 @@ export const OrchestratorHeader: React.FC<OrchestratorHeaderProps> = ({
     </div>
   ) : (
     <div className="flex items-center gap-2">
+      {profileSelect}
       {undoButton}
       <ActivityLogButton />
       {queueButton}
