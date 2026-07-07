@@ -9,13 +9,11 @@ import type {
 import {
   formatCountryLabel,
   normalizeCountryKey,
-  SUPPORTED_COUNTRY_KEYS,
 } from "@shared/location-support.js";
-import {
-  SUITABILITY_CATEGORY_LABELS,
-  type AppSettings,
-  type JobSource,
-  type SuitabilityCategory,
+import type {
+  AppSettings,
+  JobSource,
+  SuitabilityCategory,
 } from "@shared/types";
 import { Info, Loader2, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -30,11 +28,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 import { Separator } from "@/components/ui/separator";
 import { getDetectedCountryKey } from "@/lib/user-location";
 import { sourceLabel } from "@/lib/utils";
@@ -45,18 +39,23 @@ import {
   type AutomaticRunValues,
   calculateAutomaticEstimate,
   loadAutomaticRunMemory,
-  MATCH_STRICTNESS_OPTIONS,
   normalizeWorkplaceTypes,
   parseCityLocationsInput,
   parseCityLocationsSetting,
   parseSearchTermsInput,
-  SEARCH_SCOPE_OPTIONS,
   saveAutomaticRunMemory,
   summarizeLocationPreferences,
-  WORKPLACE_TYPE_OPTIONS,
   type WorkplaceType,
 } from "./automatic-run";
-import { TokenizedInput } from "./TokenizedInput";
+import {
+  CountryField,
+  LocationScopeField,
+  MatchStrictnessField,
+  MinFitField,
+  NumberField,
+  TokenizedField,
+  WorkplaceTypesField,
+} from "./run-fields";
 
 interface AutomaticRunTabProps {
   open: boolean;
@@ -92,7 +91,6 @@ interface AutomaticRunFormValues {
   searchTermDraft: string;
 }
 
-const HIDDEN_COUNTRY_KEYS = new Set(["usa/ca"]);
 const MIN_RUN_BUDGET = 50;
 const MAX_RUN_BUDGET = 1000;
 
@@ -110,20 +108,6 @@ function toNumber(input: string, min: number, max: number, fallback: number) {
 
 function normalizeRunBudget(value: number): number {
   return Math.min(MAX_RUN_BUDGET, Math.max(MIN_RUN_BUDGET, Math.round(value)));
-}
-
-function formatWorkplaceTypeLabel(workplaceType: WorkplaceType): string {
-  if (workplaceType === "onsite") return "Onsite";
-  return workplaceType.charAt(0).toUpperCase() + workplaceType.slice(1);
-}
-
-
-function getRadioOptionClassName(selected: boolean): string {
-  return `flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-3 text-sm transition-colors ${
-    selected
-      ? "border-border/70 bg-muted/20 text-foreground"
-      : "border-border/60 text-foreground hover:bg-muted/20"
-  }`;
 }
 
 export const AutomaticRunTab: React.FC<AutomaticRunTabProps> = ({
@@ -380,17 +364,6 @@ export const AutomaticRunTab: React.FC<AutomaticRunTabProps> = ({
     }
   };
 
-  const countryOptions = useMemo(
-    () =>
-      SUPPORTED_COUNTRY_KEYS.filter(
-        (country) => !HIDDEN_COUNTRY_KEYS.has(country),
-      ).map((country) => ({
-        value: country,
-        label: formatCountryLabel(country),
-      })),
-    [],
-  );
-
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="min-h-0 space-y-4 overflow-y-auto pr-1">
@@ -510,165 +483,59 @@ export const AutomaticRunTab: React.FC<AutomaticRunTabProps> = ({
                   ) : null}
 
                   <div className="grid gap-4 md:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
-                    <div className="space-y-2">
-                      <Label className="text-base font-semibold">Country</Label>
-                      <SearchableDropdown
-                        value={values.country}
-                        options={countryOptions}
-                        onValueChange={(country) =>
-                          setValue("country", country, {
-                            shouldDirty: true,
-                          })
-                        }
-                        placeholder="Select country"
-                        searchPlaceholder="Search country..."
-                        emptyText="No matching countries."
-                        triggerClassName="h-10 w-full"
-                        ariaLabel={
-                          values.country
-                            ? formatCountryLabel(values.country)
-                            : "Select country"
-                        }
-                      />
-                      {countrySelectionInvalid ? (
-                        <p className="text-xs text-destructive">
-                          {countrySuggestion
-                            ? "Select a country or use the browser suggestion."
-                            : "Select a country."}
-                        </p>
-                      ) : null}
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label
-                        htmlFor="city-locations-input"
-                        className="text-base font-semibold"
-                      >
-                        Cities
-                      </Label>
-                      <TokenizedInput
-                        id="city-locations-input"
-                        values={cityLocations}
-                        draft={cityLocationDraft}
-                        parseInput={parseCityLocationsInput}
-                        onDraftChange={(value) =>
-                          setValue("cityLocationDraft", value)
-                        }
-                        onValuesChange={(value) =>
-                          setValue("cityLocations", value, {
-                            shouldDirty: true,
-                          })
-                        }
-                        placeholder='e.g. "London"'
-                        removeLabelPrefix="Remove city"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                      Work arrangement
-                    </p>
-                    <div className="flex flex-wrap gap-2 gap-x-4">
-                      {WORKPLACE_TYPE_OPTIONS.map((workplaceType) => {
-                        const checkboxId = `workplace-type-${workplaceType}`;
-                        const checked = workplaceTypes.includes(workplaceType);
-
-                        return (
-                          <label
-                            key={workplaceType}
-                            htmlFor={checkboxId}
-                            className="flex cursor-pointer items-center gap-3 text-sm transition-colors"
-                          >
-                            <Checkbox
-                              id={checkboxId}
-                              checked={checked}
-                              onCheckedChange={(nextChecked) => {
-                                toggleWorkplaceType(
-                                  workplaceType,
-                                  nextChecked === true,
-                                );
-                              }}
-                            />
-                            {formatWorkplaceTypeLabel(workplaceType)}
-                          </label>
-                        );
-                      })}
-                    </div>
-                    {workplaceTypeSelectionInvalid ? (
-                      <p className="text-xs text-destructive">
-                        Select at least one workplace type.
-                      </p>
-                    ) : null}
-                  </div>
-
-                  <div className="space-y-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                      Location scope
-                    </p>
-                    <RadioGroup
-                      value={searchScope}
-                      onValueChange={(value) =>
-                        setValue("searchScope", value as LocationSearchScope, {
-                          shouldDirty: true,
-                        })
+                    <CountryField
+                      value={values.country}
+                      onChange={(country) =>
+                        setValue("country", country, { shouldDirty: true })
                       }
-                      className="gap-2"
-                    >
-                      {SEARCH_SCOPE_OPTIONS.map((option) => {
-                        const id = `search-scope-${option.value}`;
-                        const selected = searchScope === option.value;
-                        return (
-                          <label
-                            key={option.value}
-                            htmlFor={id}
-                            className={getRadioOptionClassName(selected)}
-                          >
-                            <RadioGroupItem value={option.value} id={id} />
-                            <span className="text-sm font-medium">
-                              {option.label}
-                            </span>
-                          </label>
-                        );
-                      })}
-                    </RadioGroup>
+                      error={
+                        countrySelectionInvalid ? (
+                          <p className="text-xs text-destructive">
+                            {countrySuggestion
+                              ? "Select a country or use the browser suggestion."
+                              : "Select a country."}
+                          </p>
+                        ) : null
+                      }
+                    />
+
+                    <TokenizedField
+                      id="city-locations-input"
+                      label="Cities"
+                      labelClassName="text-base font-semibold"
+                      values={cityLocations}
+                      draft={cityLocationDraft}
+                      parseInput={parseCityLocationsInput}
+                      onDraftChange={(value) =>
+                        setValue("cityLocationDraft", value)
+                      }
+                      onValuesChange={(value) =>
+                        setValue("cityLocations", value, { shouldDirty: true })
+                      }
+                      placeholder='e.g. "London"'
+                      removeLabelPrefix="Remove city"
+                    />
                   </div>
 
-                  <div className="space-y-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                      Match strictness
-                    </p>
-                    <RadioGroup
-                      value={matchStrictness}
-                      onValueChange={(value) =>
-                        setValue(
-                          "matchStrictness",
-                          value as LocationMatchStrictness,
-                          {
-                            shouldDirty: true,
-                          },
-                        )
-                      }
-                      className="gap-2"
-                    >
-                      {MATCH_STRICTNESS_OPTIONS.map((option) => {
-                        const id = `match-strictness-${option.value}`;
-                        const selected = matchStrictness === option.value;
-                        return (
-                          <label
-                            key={option.value}
-                            htmlFor={id}
-                            className={getRadioOptionClassName(selected)}
-                          >
-                            <RadioGroupItem value={option.value} id={id} />
-                            <span className="text-sm font-medium">
-                              {option.label}
-                            </span>
-                          </label>
-                        );
-                      })}
-                    </RadioGroup>
-                  </div>
+                  <WorkplaceTypesField
+                    value={workplaceTypes}
+                    onToggle={toggleWorkplaceType}
+                    invalid={workplaceTypeSelectionInvalid}
+                  />
+
+                  <LocationScopeField
+                    value={searchScope}
+                    onChange={(value) =>
+                      setValue("searchScope", value, { shouldDirty: true })
+                    }
+                  />
+
+                  <MatchStrictnessField
+                    value={matchStrictness}
+                    onChange={(value) =>
+                      setValue("matchStrictness", value, { shouldDirty: true })
+                    }
+                  />
                 </AccordionContent>
               </AccordionItem>
             </Accordion>
@@ -685,77 +552,37 @@ export const AutomaticRunTab: React.FC<AutomaticRunTabProps> = ({
                 </AccordionTrigger>
                 <AccordionContent className="pt-4">
                   <div className="grid gap-4 md:grid-cols-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="top-n">Resumes tailored</Label>
-                      <Input
-                        id="top-n"
-                        type="number"
-                        min={1}
-                        max={50}
-                        value={topNInput}
-                        onChange={(event) => {
-                          setSelectedPreset("custom");
-                          setValue("topN", event.target.value);
-                        }}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Min suitability</Label>
-                      <RadioGroup
-                        value={minCategoryInput}
-                        onValueChange={(value) => {
-                          setSelectedPreset("custom");
-                          setValue(
-                            "minSuitabilityCategory",
-                            value as SuitabilityCategory,
-                            { shouldDirty: true },
-                          );
-                        }}
-                        className="gap-2"
-                      >
-                        {(
-                          [
-                            "very_good_fit",
-                            "good_fit",
-                            "bad_fit",
-                          ] as const satisfies readonly SuitabilityCategory[]
-                        ).map((category) => {
-                          const id = `min-category-${category}`;
-                          const selected = minCategoryInput === category;
-                          return (
-                            <label
-                              key={category}
-                              htmlFor={id}
-                              className={getRadioOptionClassName(selected)}
-                            >
-                              <RadioGroupItem value={category} id={id} />
-                              <span className="text-sm font-medium">
-                                {SUITABILITY_CATEGORY_LABELS[category]}
-                                {category === "good_fit"
-                                  ? " (and better)"
-                                  : category === "bad_fit"
-                                    ? " (everything)"
-                                    : ""}
-                              </span>
-                            </label>
-                          );
-                        })}
-                      </RadioGroup>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="jobs-per-term">Max jobs discovered</Label>
-                      <Input
-                        id="jobs-per-term"
-                        type="number"
-                        min={MIN_RUN_BUDGET}
-                        max={MAX_RUN_BUDGET}
-                        value={runBudgetInput}
-                        onChange={(event) => {
-                          setSelectedPreset("custom");
-                          setValue("runBudget", event.target.value);
-                        }}
-                      />
-                    </div>
+                    <NumberField
+                      id="top-n"
+                      label="Resumes tailored"
+                      min={1}
+                      max={50}
+                      value={topNInput}
+                      onChange={(value) => {
+                        setSelectedPreset("custom");
+                        setValue("topN", value);
+                      }}
+                    />
+                    <MinFitField
+                      value={minCategoryInput}
+                      onChange={(value) => {
+                        setSelectedPreset("custom");
+                        setValue("minSuitabilityCategory", value, {
+                          shouldDirty: true,
+                        });
+                      }}
+                    />
+                    <NumberField
+                      id="jobs-per-term"
+                      label="Max jobs discovered"
+                      min={MIN_RUN_BUDGET}
+                      max={MAX_RUN_BUDGET}
+                      value={runBudgetInput}
+                      onChange={(value) => {
+                        setSelectedPreset("custom");
+                        setValue("runBudget", value);
+                      }}
+                    />
                   </div>
                 </AccordionContent>
               </AccordionItem>
@@ -768,7 +595,7 @@ export const AutomaticRunTab: React.FC<AutomaticRunTabProps> = ({
             <CardTitle>Search terms</CardTitle>
           </CardHeader>
           <CardContent>
-            <TokenizedInput
+            <TokenizedField
               id="search-terms-input"
               values={searchTerms}
               draft={searchTermDraft}
