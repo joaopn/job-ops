@@ -1,9 +1,11 @@
 import { notFound, toAppError } from "@infra/errors";
 import { fail, ok } from "@infra/http";
+import { getProvider, listProviders } from "@server/providers";
 import * as providersRepo from "@server/repositories/provider-instances";
 import * as settingsRepo from "@server/repositories/settings";
-import { getProvider, listProviders } from "@server/providers";
+import { getDefaultProfile } from "@server/services/profiles";
 import {
+  defaultProfileConfig,
   SOURCE_CONFIG_GLOBAL_FIELDS,
   type SourceConfigRunGlobals,
 } from "@shared/types";
@@ -124,35 +126,20 @@ providerInstancesRouter.post(
       }
       const provider = getProvider(instance.providerId);
       if (!provider) {
-        return fail(
-          res,
-          notFound(`Unknown provider: ${instance.providerId}`),
-        );
+        return fail(res, notFound(`Unknown provider: ${instance.providerId}`));
       }
 
-      const settings = await settingsRepo.getAllSettings();
+      const profileConfig =
+        (await getDefaultProfile())?.config ?? defaultProfileConfig();
       const runGlobals: SourceConfigRunGlobals = {
-        city: settings.searchCities ?? "",
-        country: settings.searchCountry ?? "",
-        workplaceTypes: settings.workplaceTypes ?? "[]",
-        ...(settings.scrapeMaxAgeDays
-          ? { maxAgeDays: settings.scrapeMaxAgeDays }
+        city: profileConfig.searchCities,
+        country: profileConfig.searchCountry,
+        workplaceTypes: JSON.stringify(profileConfig.workplaceTypes),
+        ...(profileConfig.scrapeMaxAgeDays
+          ? { maxAgeDays: String(profileConfig.scrapeMaxAgeDays) }
           : {}),
       };
-      const searchTermsRaw = settings.searchTerms;
-      let searchTerms: string[] = [];
-      if (searchTermsRaw) {
-        try {
-          const parsed = JSON.parse(searchTermsRaw);
-          if (Array.isArray(parsed)) {
-            searchTerms = parsed.filter(
-              (v): v is string => typeof v === "string",
-            );
-          }
-        } catch {
-          // ignore
-        }
-      }
+      const searchTerms = profileConfig.searchTerms;
 
       const apiToken =
         instance.providerId === "apify"
@@ -185,4 +172,3 @@ providerInstancesRouter.post(
     }
   },
 );
-

@@ -2,9 +2,10 @@ import { notFound, toAppError } from "@infra/errors";
 import { fail, ok } from "@infra/http";
 import { getExtractorRegistry } from "@server/extractors/registry";
 import * as repo from "@server/repositories/source-configs";
-import * as settingsRepo from "@server/repositories/settings";
+import { getDefaultProfile } from "@server/services/profiles";
 import { resolveSourceContextSettings } from "@server/services/source-configs/resolve";
 import {
+  defaultProfileConfig,
   SOURCE_CONFIG_GLOBAL_FIELDS,
   type SourceConfigRow,
   type SourceConfigRunGlobals,
@@ -38,20 +39,21 @@ function emptyRow(extractorId: string): SourceConfigRow {
 
 sourceConfigsRouter.get("/", async (_req: Request, res: Response) => {
   try {
-    const [rows, registry, settings] = await Promise.all([
+    const [rows, registry] = await Promise.all([
       repo.getAllSourceConfigs(),
       getExtractorRegistry(),
-      settingsRepo.getAllSettings(),
     ]);
     const rowsByExtractor = new Map<string, SourceConfigRow>();
     for (const row of rows) rowsByExtractor.set(row.extractorId, row);
 
+    const profileConfig =
+      (await getDefaultProfile())?.config ?? defaultProfileConfig();
     const runGlobals: SourceConfigRunGlobals = {
-      city: settings.searchCities ?? "",
-      country: settings.searchCountry ?? "",
-      workplaceTypes: settings.workplaceTypes ?? "[]",
-      ...(settings.scrapeMaxAgeDays
-        ? { maxAgeDays: settings.scrapeMaxAgeDays }
+      city: profileConfig.searchCities,
+      country: profileConfig.searchCountry,
+      workplaceTypes: JSON.stringify(profileConfig.workplaceTypes),
+      ...(profileConfig.scrapeMaxAgeDays
+        ? { maxAgeDays: String(profileConfig.scrapeMaxAgeDays) }
         : {}),
     };
 

@@ -67,7 +67,7 @@ function buildEffectiveConfigSnapshot(args: {
     country,
     countryLabel,
     searchCities: [...args.locationIntent.cityLocations],
-    searchTermsCount: args.settings.searchTerms.value.length,
+    searchTermsCount: args.config.searchTerms?.length ?? 0,
     workplaceTypes: [...args.locationIntent.workplaceTypes],
     locationSearchScope: args.locationIntent.searchScope,
     locationMatchStrictness: args.locationIntent.matchStrictness,
@@ -82,7 +82,7 @@ function buildEffectiveConfigSnapshot(args: {
             ?.reasons.join(" ") || "Not available for the selected location",
       })),
     blockedCompanyKeywordsCount:
-      args.settings.blockedCompanyKeywords.value.length,
+      args.config.blockedCompanyKeywords?.length ?? 0,
     sourceLimits: {
       maxJobsPerTerm: args.config.maxJobsPerTerm ?? null,
     },
