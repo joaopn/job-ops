@@ -1,39 +1,42 @@
 # Prompts
 
-Every LLM prompt the server sends lives in a YAML file in this directory. The
-container bind-mounts this folder, so editing a YAML on the host changes the
-next API call within ~5 seconds (mtime-based cache).
+Every LLM prompt the server sends is a YAML document. The files in this
+directory are the **seeds/defaults**: they are baked into the image, and on
+every boot the server syncs them into the `prompts` DB table, which holds the
+**live** copies the app actually uses.
 
-This is the single source of truth for prompts. There is no in-app editor and
-no DB-stored override layer.
+Seeding rules per prompt, per boot:
+
+- New file → inserted (live content = default).
+- File changed in a newer image → the stored default refreshes; if you never
+  edited that prompt, the live content follows automatically. If you edited
+  it, your text is kept and only the default updates — "Reset to default"
+  brings them back together.
+- Editing a file on the host does nothing at runtime anymore (there is no
+  bind mount); edit the live copy through the API (`GET/PUT
+  /api/prompts/<name>`, `POST /api/prompts/<name>/reset`; fragments via
+  `/api/prompts/fragments/<name>`) or the Settings → Prompts panel.
 
 ## File layout
 
 ```
 prompts/
-  README.md                 # this file
-  ghostwriter-system.yaml   # per-job ghostwriter chat system prompt
-  job-fetch-from-url.yaml   # extract structured job fields from raw HTML / pasted JD
-  job-score.yaml            # 0-100 candidate-fit score
-  job-summary.yaml          # tailor headline / summary / skills to a JD
-  onboarding-search-terms.yaml  # suggest job-title search terms from resume
-  project-select.yaml       # pick which projects to include on a tailored resume
+  README.md                       # this file
+  cover-letter-generate.yaml      # draft cover-letter field values for a JD
+  coverletter-template-extract.yaml  # extract template+fields from an uploaded cover letter
+  cv-adjust.yaml                  # tailor CV field values to a JD (ATS pass)
+  cv-extract.yaml                 # extract content JSON from flattened LaTeX
+  cv-generate-brief.yaml          # generate the personal brief from a CV
+  cv-template-extract.yaml        # extract template+fields from an uploaded CV
+  ghostwriter-system.yaml         # per-job ghostwriter chat system prompt
+  interview-qa-generate.yaml      # interview strategy + Q&A for a job
+  job-fetch-from-url.yaml         # extract structured job fields from raw HTML
+  job-fetch-selectors.yaml        # infer CSS selectors for a job page
+  job-score.yaml                  # candidate-fit scoring
+  onboarding-search-terms.yaml    # suggest search terms from the resume
   fragments/
-    output-language.yaml    # partial: "always respond in <lang>"
-    writing-style.yaml      # partial: tone / formality / constraints / avoid-terms
-```
-
-```
-  cv-extract.yaml           # extract free-form content JSON, Eta template,
-                            # and personalBrief draft from flattened LaTeX
-```
-
-Files added later (Phase 4 / Phase 5):
-
-```
-  cv-adjust.yaml            # adjust the content JSON for a specific JD using
-                            # the personal brief as the source of truth
-  ghostwriter-cv-edit.yaml  # propose CV-bullet diffs from chat
+    output-language.yaml          # partial: "always respond in <lang>"
+    writing-style.yaml            # partial: tone / formality / constraints
 ```
 
 ## YAML schema
@@ -64,14 +67,19 @@ template: |
   ...partial body with {{var}} interpolations...
 ```
 
+Saves through the API validate structure (YAML parses, schema accepts — the
+schema is strict, unknown keys are rejected — and every referenced
+`{{> partial}}` exists). `{{var}}` names are deliberately NOT validated at
+save time: a wrong variable fails loudly at the consuming call, and Reset
+recovers.
+
 ## Interpolation
 
 - `{{var}}` — Mustache-style variable. Empty string is a valid value;
   undefined throws.
 - `{{> partial}}` — splice a fragment in place. The loader looks up
-  `prompts/fragments/<partial>.yaml` first and falls back to
-  `prompts/<partial>.yaml`. Resolution is one level deep — partials cannot
-  reference other partials.
+  `fragments/<partial>` first and falls back to `<partial>`. Resolution is
+  one level deep — partials cannot reference other partials.
 
 No HTML escaping (LLM input doesn't need it).
 
@@ -90,11 +98,11 @@ Per-prompt variables are documented in each YAML's `variables` block.
 
 ## Caching and reload
 
-- mtime-based cache, 5-second TTL.
-- `PROMPTS_CACHE_TTL=0` disables the cache entirely (useful when tweaking a
-  prompt repeatedly).
-- The Settings → Prompts panel exposes a "Reload from disk" button per
-  prompt that busts the cache for that file.
+Edits propagate on the next LLM call automatically — the loader re-parses a
+prompt whenever its row's `updated_at` changes. `POST /api/prompts/reload`
+(the panel's Reload button) survives as a forced revalidation: reloading a
+named prompt surfaces a broken row as an error immediately instead of at the
+next pipeline run.
 
 ## Editing tips
 

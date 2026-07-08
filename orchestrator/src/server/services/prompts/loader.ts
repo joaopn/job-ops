@@ -1,5 +1,7 @@
-import { promises as fs } from "node:fs";
-import { join, resolve } from "node:path";
+import {
+  getAllPromptRows,
+  getPromptRow,
+} from "@server/repositories/prompts";
 import { parse as parseYaml } from "yaml";
 import { getDefaultPromptVars } from "./fragments";
 import { type ModelHints, type PromptFile, promptFileSchema } from "./schema";
@@ -14,9 +16,13 @@ export type LoadedPrompt = {
   modelHints: ModelHints;
 };
 
+// Parse memo, keyed by prompt name. The DB row is fetched on every load (that
+// IS the read — there is no way to skip it without staleness), so the only
+// cacheable cost is the YAML parse; `updated_at` decides reuse. Both API
+// edits and direct-DB edits bump `updated_at`, so changes propagate on the
+// next call with no reload step.
 type CacheEntry = {
-  mtimeMs: number;
-  loadedAt: number;
+  updatedAt: string;
   parsed: PromptFile;
 };
 
@@ -24,20 +30,6 @@ const cache = new Map<string, CacheEntry>();
 
 const VARIABLE_PATTERN = /\{\{\s*([\w.-]+)\s*\}\}/g;
 const PARTIAL_PATTERN = /\{\{>\s*([\w.-]+)\s*\}\}/g;
-
-function getCacheTtlMs(): number {
-  const raw = process.env.PROMPTS_CACHE_TTL;
-  if (raw == null || raw === "") return 5_000;
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || parsed < 0) return 5_000;
-  return parsed * 1000;
-}
-
-export function getPromptsDir(): string {
-  const fromEnv = (process.env.PROMPTS_DIR ?? "").trim();
-  if (fromEnv) return resolve(fromEnv);
-  return "/app/prompts";
-}
 
 function normalizeVars(vars: PromptVars): Record<string, string> {
   const out: Record<string, string> = {};
@@ -48,15 +40,7 @@ function normalizeVars(vars: PromptVars): Record<string, string> {
   return out;
 }
 
-async function readAndParse(absPath: string, name: string): Promise<PromptFile> {
-  let raw: string;
-  try {
-    raw = await fs.readFile(absPath, "utf8");
-  } catch (error) {
-    const cause = error instanceof Error ? error.message : String(error);
-    throw new Error(`Failed to read prompt "${name}" at ${absPath}: ${cause}`);
-  }
-
+function parseContent(raw: string, name: string): PromptFile {
   let yamlValue: unknown;
   try {
     yamlValue = parseYaml(raw);
@@ -75,46 +59,29 @@ async function readAndParse(absPath: string, name: string): Promise<PromptFile> 
 }
 
 async function loadFile(name: string): Promise<PromptFile> {
-  const dir = getPromptsDir();
-  const absPath = join(dir, `${name}.yaml`);
-  const ttl = getCacheTtlMs();
-
-  let stat: Awaited<ReturnType<typeof fs.stat>>;
-  try {
-    stat = await fs.stat(absPath);
-  } catch (error) {
-    const cause = error instanceof Error ? error.message : String(error);
-    throw new Error(`Failed to read prompt "${name}" at ${absPath}: ${cause}`);
+  const row = await getPromptRow(name);
+  if (!row) {
+    throw new Error(
+      `Failed to read prompt "${name}": not found in prompts table`,
+    );
   }
 
-  const cached = cache.get(absPath);
-  if (
-    ttl > 0 &&
-    cached &&
-    cached.mtimeMs === stat.mtimeMs &&
-    Date.now() - cached.loadedAt < ttl
-  ) {
+  const cached = cache.get(name);
+  if (cached && cached.updatedAt === row.updatedAt) {
     return cached.parsed;
   }
 
-  const parsed = await readAndParse(absPath, name);
-  cache.set(absPath, {
-    mtimeMs: stat.mtimeMs,
-    loadedAt: Date.now(),
-    parsed,
-  });
+  const parsed = parseContent(row.content, name);
+  cache.set(name, { updatedAt: row.updatedAt, parsed });
   return parsed;
 }
 
 async function loadFragment(name: string): Promise<PromptFile> {
-  const dir = getPromptsDir();
-  const fragmentPath = join(dir, "fragments", `${name}.yaml`);
-  try {
-    await fs.access(fragmentPath);
+  const fragmentRow = await getPromptRow(`fragments/${name}`);
+  if (fragmentRow) {
     return loadFile(`fragments/${name}`);
-  } catch {
-    return loadFile(name);
   }
+  return loadFile(name);
 }
 
 function interpolate(
@@ -148,6 +115,7 @@ async function expandPartials(
   template: string,
   vars: Record<string, string>,
   contextLabel: string,
+  options?: { interpolateFragments?: boolean },
 ): Promise<string> {
   if (!template || !PARTIAL_PATTERN.test(template)) {
     PARTIAL_PATTERN.lastIndex = 0;
@@ -155,6 +123,7 @@ async function expandPartials(
   }
   PARTIAL_PATTERN.lastIndex = 0;
 
+  const interpolateFragments = options?.interpolateFragments ?? true;
   const matches = Array.from(template.matchAll(PARTIAL_PATTERN));
   const replacements = new Map<string, string>();
 
@@ -178,7 +147,9 @@ async function expandPartials(
 
     replacements.set(
       partialName,
-      interpolate(fragmentFile.template, vars, `fragment:${partialName}`),
+      interpolateFragments
+        ? interpolate(fragmentFile.template, vars, `fragment:${partialName}`)
+        : fragmentFile.template,
     );
   }
 
@@ -221,61 +192,62 @@ export async function loadPrompt(
   };
 }
 
+/**
+ * Structural validation for a prompt save: YAML parses, the (strict) prompt
+ * schema accepts it, and every `{{> partial}}` it references exists and is
+ * expandable. Deliberately does NOT validate `{{var}}` names — variables are
+ * call-time-checked (a bad edit fails loudly at the consuming call, and Reset
+ * recovers), so fragments are expanded WITHOUT interpolating their variables.
+ */
+export async function validatePromptContent(
+  name: string,
+  content: string,
+): Promise<void> {
+  const parsed = parseContent(content, name);
+  const noInterpolation = { interpolateFragments: false };
+  await expandPartials(parsed.system, {}, name, noInterpolation);
+  await expandPartials(parsed.user, {}, name, noInterpolation);
+  await expandPartials(parsed.template, {}, name, noInterpolation);
+}
+
 export function clearPromptCache(name?: string): void {
   if (!name) {
     cache.clear();
     return;
   }
-  const dir = getPromptsDir();
-  const directKey = join(dir, `${name}.yaml`);
-  const fragmentKey = join(dir, "fragments", `${name}.yaml`);
-  cache.delete(directKey);
-  cache.delete(fragmentKey);
+  cache.delete(name);
+  cache.delete(`fragments/${name}`);
 }
 
 export type PromptDescriptor = {
   name: string;
+  /** Kept for API compatibility; holds the prompt name post-DB-move. */
   path: string;
   description: string;
   modifiedAt: string;
+  /** True when the live content differs from the baked default. */
+  edited: boolean;
 };
 
 export async function listPrompts(): Promise<PromptDescriptor[]> {
-  const dir = getPromptsDir();
+  const rows = await getAllPromptRows();
   const out: PromptDescriptor[] = [];
 
-  async function walk(subdir: string, prefix: string): Promise<void> {
-    const fullDir = join(dir, subdir);
-    const entries = await fs
-      .readdir(fullDir, { withFileTypes: true })
-      .catch(() => []);
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
-        await walk(join(subdir, entry.name), `${prefix}${entry.name}/`);
-        continue;
-      }
-      if (!entry.isFile() || !entry.name.endsWith(".yaml")) continue;
-      const baseName = entry.name.slice(0, -".yaml".length);
-      const promptName = `${prefix}${baseName}`;
-      const absPath = join(fullDir, entry.name);
-      try {
-        const [stat, parsed] = await Promise.all([
-          fs.stat(absPath),
-          readAndParse(absPath, promptName),
-        ]);
-        out.push({
-          name: promptName,
-          path: absPath,
-          description: parsed.description,
-          modifiedAt: new Date(stat.mtimeMs).toISOString(),
-        });
-      } catch {
-        // skip files that fail to parse — listPrompts should never throw
-      }
+  for (const row of rows) {
+    try {
+      const parsed = parseContent(row.content, row.name);
+      out.push({
+        name: row.name,
+        path: row.name,
+        description: parsed.description,
+        modifiedAt: row.updatedAt,
+        edited: row.content !== row.defaultContent,
+      });
+    } catch {
+      // skip rows that fail to parse — listPrompts should never throw
     }
   }
 
-  await walk("", "");
   out.sort((a, b) => a.name.localeCompare(b.name));
   return out;
 }

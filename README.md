@@ -27,8 +27,7 @@ Workflow:
 6. Move the job through Inbox → Live → Closed with outcome tagging.
 
 LLM providers: OpenAI, Gemini, OpenRouter, Codex, or any
-OpenAI-compatible endpoint. Prompts live in `prompts/` as YAML and are
-hot-reloaded.
+OpenAI-compatible endpoint. Prompts are stored in the database (seeded from `prompts/` YAML defaults) and editable in-app.
 
 ## Where it came from
 
@@ -62,7 +61,7 @@ Replaced or added:
 - Batch URL import via streaming sheet.
 - LLM observability: structured per-call logs, live call queue, status
   button, persistent upload spinner.
-- User-editable YAML prompts in `prompts/`.
+- User-editable LLM prompts, stored in the DB and seeded from `prompts/` YAML defaults.
 - Onboarding wizard with a CV upload step.
 
 ## Operator manual
@@ -78,10 +77,8 @@ included [`Dockerfile`](Dockerfile); nothing is pulled from a registry.
 
 ### Persistent state
 
-- `data/` — SQLite DB (`data/jobs.db`), generated PDFs, JWT secret
-  (`data/jwt-secret`, mode 0600). Gitignored. Back this up.
-- `prompts/` — bind-mounted into the container; edits hot-reload via
-  mtime cache. Edit YAML in place.
+- `data/` — SQLite DB (`data/jobs.db`) — the complete installation: jobs, settings, CV/cover-letter archives, generated PDFs, prompts, and the JWT secret all live inside it. Gitignored. Back this up (or use the in-app snapshot export).
+- `prompts/` — baked into the image as the SEED defaults for the DB prompts table. Edit live prompts in-app, not on disk.
 - `codex-home` named volume — Codex provider auth, if used.
 
 ### Configuration

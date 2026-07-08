@@ -4,7 +4,13 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import {
+  type Dirent,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+} from "node:fs";
 import { basename, dirname, isAbsolute, join } from "node:path";
 import Database from "better-sqlite3";
 import { getDataDir } from "../config/dataDir";
@@ -573,6 +579,16 @@ const migrations: string[] = [
      value TEXT NOT NULL,
      created_at TEXT NOT NULL DEFAULT (datetime('now'))
    )`,
+
+  // LLM prompts. `content` is the live raw YAML document; `default_content`
+  // is the baked image default so Reset needs no filesystem. Seeded/refreshed
+  // from PROMPTS_DIR by the guarded JS block near the bottom of this file.
+  `CREATE TABLE IF NOT EXISTS prompts (
+     name TEXT PRIMARY KEY,
+     content TEXT NOT NULL,
+     default_content TEXT NOT NULL,
+     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+   )`,
 ];
 
 console.log("🔧 Running database migrations...");
@@ -998,6 +1014,86 @@ try {
   }
 } catch (error) {
   console.error("❌ jwt-secret import failed:", error);
+  process.exit(1);
+}
+
+// Prompt seeding + default refresh.
+//
+// The baked image copy under PROMPTS_DIR is the SEED source; the live prompt
+// text lives in the `prompts` table (`content`), with the baked default kept
+// beside it (`default_content`) so Reset needs no filesystem. Per file:
+//   - no row                     → insert content = default_content = file.
+//   - file changed vs stored default:
+//       row UNEDITED (content === default_content) → refresh BOTH (image
+//         upgrades transparently reach untouched prompts);
+//       row EDITED → refresh default_content only (user text never clobbered;
+//         the Reset button converges them again).
+//   - file identical to stored default → no-op (steady-state boots write
+//     nothing and don't churn updated_at).
+// A missing/unreadable prompts dir is silently skipped — the tools-image test
+// environment has no /app/prompts, and a snapshot restored onto a prompt-less
+// host must still boot. Rows whose file disappeared from a future image are
+// LEFT in place (they keep working and stay listed).
+try {
+  const promptsDir = (process.env.PROMPTS_DIR ?? "").trim() || "/app/prompts";
+
+  const getRow = sqlite.prepare(
+    "SELECT content, default_content FROM prompts WHERE name = ?",
+  );
+  const insertRow = sqlite.prepare(
+    "INSERT INTO prompts (name, content, default_content) VALUES (?, ?, ?)",
+  );
+  const refreshBoth = sqlite.prepare(
+    "UPDATE prompts SET content = ?, default_content = ?, updated_at = datetime('now') WHERE name = ?",
+  );
+  const refreshDefault = sqlite.prepare(
+    "UPDATE prompts SET default_content = ?, updated_at = datetime('now') WHERE name = ?",
+  );
+
+  const walk = (subdir: string): void => {
+    const fullDir = join(promptsDir, subdir);
+    let entries: Dirent[];
+    try {
+      entries = readdirSync(fullDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const relPath = subdir ? `${subdir}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        walk(relPath);
+        continue;
+      }
+      if (!entry.isFile() || !entry.name.endsWith(".yaml")) continue;
+      const name = relPath.slice(0, -".yaml".length);
+
+      let file: string;
+      try {
+        file = readFileSync(join(promptsDir, relPath), "utf8");
+      } catch (readError) {
+        console.error(`⚠️ prompts seed: could not read ${relPath}:`, readError);
+        continue;
+      }
+
+      const row = getRow.get(name) as
+        | { content: string; default_content: string }
+        | undefined;
+      if (!row) {
+        insertRow.run(name, file, file);
+        continue;
+      }
+      if (file === row.default_content) continue;
+      if (row.content === row.default_content) {
+        refreshBoth.run(file, file, name);
+      } else {
+        refreshDefault.run(file, name);
+      }
+    }
+  };
+
+  walk("");
+} catch (error) {
+  console.error("❌ prompts seed failed:", error);
   process.exit(1);
 }
 

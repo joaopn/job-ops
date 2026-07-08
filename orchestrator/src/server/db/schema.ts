@@ -202,6 +202,15 @@ export const runtimeSecrets = sqliteTable("runtime_secrets", {
   createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
 });
 
+// LLM prompts: `content` is the live raw YAML; `default_content` the baked
+// image default (Reset copies it over content, no filesystem involved).
+export const prompts = sqliteTable("prompts", {
+  name: text("name").primaryKey(),
+  content: text("content").notNull(),
+  defaultContent: text("default_content").notNull(),
+  updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+});
+
 export const tasks = sqliteTable("tasks", {
   id: text("id").primaryKey(),
   applicationId: text("application_id")

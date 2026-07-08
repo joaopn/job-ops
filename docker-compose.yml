@@ -14,8 +14,6 @@ services:
     volumes:
       # Persist database and generated PDFs
       - ./data:/app/data
-      # User-editable LLM prompts (YAML); host edits hot-reload via mtime cache
-      - ./prompts:/app/prompts
       # Persist Codex login/session data for app-server provider
       - codex-home:/app/codex-home
     environment:
@@ -30,7 +28,8 @@ services:
       - PYTHON_PATH=/usr/bin/python3
       # Codex runtime home (stores auth and config)
       - CODEX_HOME=/app/codex-home
-      # Prompts directory (bind-mounted above)
+      # Baked prompt YAMLs — the SEED source for the DB prompts table (live
+      # copies are edited in-app / via the API, not on disk)
       - PROMPTS_DIR=/app/prompts
 
     env_file:
@@ -60,10 +59,6 @@ services:
         - path: ./extractors/jobspy
           target: /app/extractors/jobspy
           action: sync+restart
-        # Sync prompts so YAML edits propagate without an explicit reload
-        - path: ./prompts
-          target: /app/prompts
-          action: sync
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
