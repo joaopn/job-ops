@@ -1,13 +1,22 @@
 import * as api from "@client/api";
 import type { PromptDescriptor } from "@client/api";
 import { queryKeys } from "@client/lib/queryKeys";
+import { PromptEditor } from "@client/pages/settings/components/PromptEditor";
 import { SettingsSectionFrame } from "@client/pages/settings/components/SettingsSectionFrame";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, FileText, Loader2, RefreshCw } from "lucide-react";
+import {
+  AlertCircle,
+  FileText,
+  Loader2,
+  Pencil,
+  RefreshCw,
+  X,
+} from "lucide-react";
 import type React from "react";
 import { useState } from "react";
 import { toast } from "@client/lib/toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 type PromptsPanelProps = {
@@ -17,6 +26,7 @@ type PromptsPanelProps = {
 export const PromptsPanel: React.FC<PromptsPanelProps> = ({ layoutMode }) => {
   const queryClient = useQueryClient();
   const [reloadingName, setReloadingName] = useState<string | null>(null);
+  const [expandedName, setExpandedName] = useState<string | null>(null);
 
   const promptsQuery = useQuery<PromptDescriptor[]>({
     queryKey: queryKeys.prompts.list(),
@@ -27,9 +37,7 @@ export const PromptsPanel: React.FC<PromptsPanelProps> = ({ layoutMode }) => {
     mutationFn: async (name: string | null) => api.reloadPrompt(name ?? undefined),
     onSuccess: async (_result, name) => {
       toast.success(
-        name
-          ? `Reloaded ${name} from disk`
-          : "Reloaded all prompts from disk",
+        name ? `Revalidated ${name}` : "Prompt cache cleared",
       );
       await queryClient.invalidateQueries({
         queryKey: queryKeys.prompts.all,
@@ -69,18 +77,19 @@ export const PromptsPanel: React.FC<PromptsPanelProps> = ({ layoutMode }) => {
     >
       <div className="space-y-4 pt-2">
         <p className="text-xs text-muted-foreground">
-          LLM prompts are loaded from <code>prompts/*.yaml</code>, bind-mounted
-          into the container. Edit the files on the host with any editor, then
-          click Reload to drop the in-memory cache so the next pipeline run
-          picks up your edits. Reload validates the YAML and surfaces parse
-          errors here instead of letting them bleed into the next pipeline run.
+          LLM prompts live in the database and can be edited right here — a
+          saved change applies from the next LLM call. The YAML files in{" "}
+          <code>prompts/</code> are the seed defaults baked into the image;
+          "Reset to default" restores them. Saves are validated (YAML, schema,
+          referenced partials), so a broken edit is rejected instead of
+          breaking the next pipeline run.
         </p>
 
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs text-muted-foreground">
             {promptsQuery.isLoading
               ? "Loading…"
-              : `${prompts.length} prompts on disk`}
+              : `${prompts.length} prompts`}
           </span>
           <Button
             type="button"
@@ -115,38 +124,65 @@ export const PromptsPanel: React.FC<PromptsPanelProps> = ({ layoutMode }) => {
             {prompts.map((prompt) => {
               const isReloading =
                 reloadingName === prompt.name && reloadMutation.isPending;
+              const isExpanded = expandedName === prompt.name;
               return (
-                <div
-                  key={prompt.name}
-                  className="flex items-start justify-between gap-3 px-4 py-3"
-                >
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <div className="flex items-center gap-2">
-                      <code className="text-xs font-medium">{prompt.name}</code>
-                      <span className="text-[10px] text-muted-foreground tabular-nums">
-                        modified {new Date(prompt.modifiedAt).toLocaleString()}
-                      </span>
+                <div key={prompt.name}>
+                  <div className="flex items-start justify-between gap-3 px-4 py-3">
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <code className="text-xs font-medium">
+                          {prompt.name}
+                        </code>
+                        {prompt.edited ? (
+                          <Badge variant="secondary" className="text-[10px]">
+                            modified
+                          </Badge>
+                        ) : null}
+                        <span className="text-[10px] text-muted-foreground tabular-nums">
+                          updated {new Date(prompt.modifiedAt).toLocaleString()}
+                        </span>
+                      </div>
+                      {prompt.description ? (
+                        <p className="text-xs text-muted-foreground">
+                          {prompt.description}
+                        </p>
+                      ) : null}
                     </div>
-                    {prompt.description ? (
-                      <p className="text-xs text-muted-foreground">
-                        {prompt.description}
-                      </p>
-                    ) : null}
+                    <div className="flex items-center gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          setExpandedName(isExpanded ? null : prompt.name)
+                        }
+                      >
+                        {isExpanded ? (
+                          <X className="h-3.5 w-3.5" />
+                        ) : (
+                          <Pencil className="h-3.5 w-3.5" />
+                        )}
+                        <span className="ml-2 hidden sm:inline">
+                          {isExpanded ? "Close" : "Edit"}
+                        </span>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleReload(prompt.name)}
+                        disabled={reloadMutation.isPending}
+                      >
+                        {isReloading ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-3.5 w-3.5" />
+                        )}
+                        <span className="ml-2 hidden sm:inline">Reload</span>
+                      </Button>
+                    </div>
                   </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleReload(prompt.name)}
-                    disabled={reloadMutation.isPending}
-                  >
-                    {isReloading ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <RefreshCw className="h-3.5 w-3.5" />
-                    )}
-                    <span className="ml-2 hidden sm:inline">Reload</span>
-                  </Button>
+                  {isExpanded ? <PromptEditor name={prompt.name} /> : null}
                 </div>
               );
             })}

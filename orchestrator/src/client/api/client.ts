@@ -1659,11 +1659,50 @@ export interface PromptDescriptor {
   path: string;
   description: string;
   modifiedAt: string;
+  edited: boolean;
+}
+
+export interface PromptDetail {
+  name: string;
+  content: string;
+  defaultContent: string;
+  edited: boolean;
+  updatedAt: string;
+}
+
+// DB prompt names may carry a `fragments/` prefix, which maps to the
+// dedicated /prompts/fragments/:name routes (Express :name is single-segment).
+function promptPath(name: string): string {
+  if (name.startsWith("fragments/")) {
+    const bare = name.slice("fragments/".length);
+    return `/prompts/fragments/${encodeURIComponent(bare)}`;
+  }
+  return `/prompts/${encodeURIComponent(name)}`;
 }
 
 export async function listPrompts(): Promise<PromptDescriptor[]> {
   const result = await fetchApi<{ prompts: PromptDescriptor[] }>("/prompts");
   return result.prompts;
+}
+
+export async function getPrompt(name: string): Promise<PromptDetail> {
+  return fetchApi<PromptDetail>(promptPath(name));
+}
+
+export async function updatePrompt(
+  name: string,
+  content: string,
+): Promise<PromptDetail> {
+  return fetchApi<PromptDetail>(promptPath(name), {
+    method: "PUT",
+    body: JSON.stringify({ content }),
+  });
+}
+
+export async function resetPrompt(name: string): Promise<PromptDetail> {
+  return fetchApi<PromptDetail>(`${promptPath(name)}/reset`, {
+    method: "POST",
+  });
 }
 
 export async function reloadPrompt(

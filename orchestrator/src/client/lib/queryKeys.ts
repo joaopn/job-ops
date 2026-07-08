@@ -47,6 +47,8 @@ export const queryKeys = {
   prompts: {
     all: ["prompts"] as const,
     list: () => [...queryKeys.prompts.all, "list"] as const,
+    detail: (name: string) =>
+      [...queryKeys.prompts.all, "detail", name] as const,
   },
   sourceConfigs: {
     all: ["source-configs"] as const,

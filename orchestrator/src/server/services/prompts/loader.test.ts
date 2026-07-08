@@ -280,6 +280,26 @@ user: ""
     ).resolves.toBeUndefined();
   });
 
+  it("rejects a FRAGMENT that references another partial, even an existing one", async () => {
+    setPrompt(
+      "fragments/other",
+      `name: other
+template: |
+  inner
+`,
+    );
+
+    await expect(
+      validatePromptContent(
+        "fragments/style",
+        `name: style
+template: |
+  {{> other}}
+`,
+      ),
+    ).rejects.toThrow(/fragments cannot include/i);
+  });
+
   it("rejects content referencing a missing fragment", async () => {
     await expect(
       validatePromptContent(

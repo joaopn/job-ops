@@ -198,12 +198,32 @@ export async function loadPrompt(
  * expandable. Deliberately does NOT validate `{{var}}` names — variables are
  * call-time-checked (a bad edit fails loudly at the consuming call, and Reset
  * recovers), so fragments are expanded WITHOUT interpolating their variables.
+ *
+ * A FRAGMENT may not reference other partials at all: expansion is one level
+ * deep, so a `{{> ...}}` inside a fragment would pass a naive existence check
+ * here yet break every consuming prompt at render time.
  */
 export async function validatePromptContent(
   name: string,
   content: string,
 ): Promise<void> {
   const parsed = parseContent(content, name);
+
+  if (name.startsWith("fragments/")) {
+    const referencesPartial = [parsed.system, parsed.user, parsed.template].some(
+      (body) => {
+        const matched = PARTIAL_PATTERN.test(body);
+        PARTIAL_PATTERN.lastIndex = 0;
+        return matched;
+      },
+    );
+    if (referencesPartial) {
+      throw new Error(
+        `Fragment "${name}" references another partial; fragments cannot include {{> ...}} (expansion is one level deep).`,
+      );
+    }
+  }
+
   const noInterpolation = { interpolateFragments: false };
   await expandPartials(parsed.system, {}, name, noInterpolation);
   await expandPartials(parsed.user, {}, name, noInterpolation);
