@@ -40,6 +40,7 @@ export type EnvSettingsValues = {
     basicAuthPasswordHint: string | null;
   };
   basicAuthActive: boolean;
+  jwtExpirySeconds: EffectiveDefault<number | null>;
 };
 
 export type PipelineSettingsValues = {

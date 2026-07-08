@@ -1,6 +1,4 @@
-import { readFile } from "node:fs/promises";
 import type { Server } from "node:http";
-import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { startServer, stopServer } from "./test-utils";
 
@@ -90,10 +88,11 @@ describe.sequential("Auth routes", () => {
       });
 
       expect(res.status).toBe(200);
-      const persistedSecret = (
-        await readFile(join(tempDir, "jwt-secret"), "utf8")
-      ).trim();
-      expect(persistedSecret.length).toBeGreaterThanOrEqual(32);
+      const { getRuntimeSecret } = await import(
+        "@server/repositories/runtime-secrets"
+      );
+      const persistedSecret = await getRuntimeSecret("jwt_secret");
+      expect(persistedSecret?.length).toBeGreaterThanOrEqual(32);
     });
   });
 

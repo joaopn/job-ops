@@ -562,6 +562,17 @@ const migrations: string[] = [
      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
      PRIMARY KEY (job_id, kind)
    )`,
+
+  // Server-internal secrets (currently just the JWT signing secret).
+  // Deliberately NOT settings-registry rows: registry values echo through
+  // GET /api/settings, and a signing secret must have no read surface.
+  // Legacy DATA_DIR/jwt-secret file import lives in a guarded JS block
+  // near the bottom of this file.
+  `CREATE TABLE IF NOT EXISTS runtime_secrets (
+     key TEXT PRIMARY KEY,
+     value TEXT NOT NULL,
+     created_at TEXT NOT NULL DEFAULT (datetime('now'))
+   )`,
 ];
 
 console.log("🔧 Running database migrations...");
@@ -950,6 +961,43 @@ try {
   }
 } catch (error) {
   console.error("❌ job_pdfs backfill failed:", error);
+  process.exit(1);
+}
+
+// Legacy JWT-secret file import.
+//
+// The signing secret used to live at DATA_DIR/jwt-secret (mode 0600); it now
+// lives in runtime_secrets so a DB snapshot restores working sessions. Import
+// the file's value once so existing sessions stay valid across the cutover:
+// only when no row exists yet, and only when the file's content passes the
+// same ≥32-char minimum jwt.ts enforces (a shorter file is NOT imported — the
+// server lazy-generates a fresh secret instead of throwing like the old file
+// path did; sessions are invalidated, nothing crashes). The file is left on
+// disk for the user to delete manually. Idempotent via the row-exists guard.
+try {
+  const secretRow = sqlite
+    .prepare("SELECT 1 FROM runtime_secrets WHERE key = 'jwt_secret'")
+    .get();
+  if (!secretRow) {
+    const legacyPath = join(getDataDir(), "jwt-secret");
+    if (existsSync(legacyPath)) {
+      const content = readFileSync(legacyPath, "utf8").trim();
+      if (content.length >= 32) {
+        sqlite
+          .prepare(
+            "INSERT INTO runtime_secrets (key, value) VALUES ('jwt_secret', ?)",
+          )
+          .run(content);
+        console.log("✅ imported legacy jwt-secret file into runtime_secrets");
+      } else {
+        console.log(
+          "↩️ legacy jwt-secret file too short to import — a fresh secret will be generated on first use",
+        );
+      }
+    }
+  }
+} catch (error) {
+  console.error("❌ jwt-secret import failed:", error);
   process.exit(1);
 }
 

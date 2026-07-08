@@ -5,6 +5,7 @@ import type { UpdateSettingsInput } from "@shared/settings-schema.js";
 import type React from "react";
 import { Controller, useFormContext } from "react-hook-form";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 
 type EnvironmentSettingsSectionProps = {
   values: EnvSettingsValues;
@@ -63,24 +64,71 @@ export const EnvironmentSettingsSection: React.FC<
         </div>
 
         {isBasicAuthEnabled && (
-          <div className="grid gap-4 pt-2 md:grid-cols-2">
-            <SettingsInput
-              label="Username"
-              inputProps={register("basicAuthUser")}
-              placeholder="username"
-              disabled={isLoading || isSaving}
-              error={errors.basicAuthUser?.message as string | undefined}
-            />
+          <>
+            <div className="grid gap-4 pt-2 md:grid-cols-2">
+              <SettingsInput
+                label="Username"
+                inputProps={register("basicAuthUser")}
+                placeholder="username"
+                disabled={isLoading || isSaving}
+                error={errors.basicAuthUser?.message as string | undefined}
+              />
 
-            <SettingsInput
-              label="Password"
-              inputProps={register("basicAuthPassword")}
-              type="password"
-              placeholder="Enter new password"
-              disabled={isLoading || isSaving}
-              error={errors.basicAuthPassword?.message as string | undefined}
-            />
-          </div>
+              <SettingsInput
+                label="Password"
+                inputProps={register("basicAuthPassword")}
+                type="password"
+                placeholder="Enter new password"
+                disabled={isLoading || isSaving}
+                error={errors.basicAuthPassword?.message as string | undefined}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label
+                htmlFor="jwtExpirySeconds"
+                className="text-sm font-medium"
+              >
+                Session expiry (seconds)
+              </label>
+              <Controller
+                name="jwtExpirySeconds"
+                control={control}
+                rules={{
+                  validate: (v) =>
+                    v === null ||
+                    v === undefined ||
+                    (Number.isInteger(v) && v >= 60 && v <= 31536000) ||
+                    "Must be between 60 and 31536000",
+                }}
+                render={({ field }) => (
+                  <Input
+                    id="jwtExpirySeconds"
+                    type="number"
+                    min={60}
+                    max={31536000}
+                    step={1}
+                    placeholder="86400"
+                    disabled={isLoading || isSaving}
+                    value={field.value ?? ""}
+                    onChange={(e) => {
+                      const value = e.target.valueAsNumber;
+                      field.onChange(Number.isFinite(value) ? value : null);
+                    }}
+                  />
+                )}
+              />
+              {errors.jwtExpirySeconds && (
+                <div className="text-xs text-destructive">
+                  {errors.jwtExpirySeconds.message as string}
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                How long a sign-in stays valid. Leave empty to use the
+                server/env default (86400 = 24 hours).
+              </p>
+            </div>
+          </>
         )}
       </div>
     </SettingsSectionFrame>

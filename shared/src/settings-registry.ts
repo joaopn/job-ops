@@ -440,6 +440,22 @@ export const settingsRegistry = {
     schema: z.string().trim().max(200),
   },
 
+  // --- Auth / session ---
+  // Session-token lifetime. Default is deliberately null (= jwt.ts's built-in
+  // 86400s fallback), NOT read from process.env: applyStoredEnvOverrides
+  // writes the DB override into process.env at boot, so an env-reading
+  // default() would echo the override back as the default and break the
+  // client's nullIfSame collapse (the llmBaseUrl trap). The JWT_EXPIRY_SECONDS
+  // env var stays an invisible baseline; a DB override wins over it.
+  jwtExpirySeconds: {
+    kind: "typed" as const,
+    envKey: "JWT_EXPIRY_SECONDS",
+    schema: z.number().int().min(60).max(31536000).nullable(),
+    default: (): number | null => null,
+    parse: parseIntOrNull,
+    serialize: serializeNullableNumber,
+  },
+
   // --- Simple Strings ---
   // Server-managed pointer to the default Profile. Set via the profiles
   // set-default / delete routes, not the Settings UI, so it's a plain

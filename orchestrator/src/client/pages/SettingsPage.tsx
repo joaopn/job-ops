@@ -65,6 +65,7 @@ const DEFAULT_FORM_VALUES: UpdateSettingsInput = {
   basicAuthUser: "",
   basicAuthPassword: "",
   enableBasicAuth: false,
+  jwtExpirySeconds: null,
   penalizeMissingSalary: null,
   missingSalaryPenalty: null,
   autoSkipCategory: null,
@@ -159,7 +160,7 @@ const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         id: "environment",
         label: "Accounts & Access",
         description: "Service credentials and authentication protection.",
-        searchTerms: ["security", "auth"],
+        searchTerms: ["security", "auth", "jwt", "session"],
       },
     ],
   },
@@ -242,7 +243,12 @@ const SECTION_FIELD_MAP: Record<
     "maxFetchedJobHtmlChars",
     "maxExtractionPromptChars",
   ],
-  environment: ["enableBasicAuth", "basicAuthUser", "basicAuthPassword"],
+  environment: [
+    "enableBasicAuth",
+    "basicAuthUser",
+    "basicAuthPassword",
+    "jwtExpirySeconds",
+  ],
   display: ["showSponsorInfo", "renderMarkdownInJobDescriptions"],
   pipeline: [
     "autoTailoringEnabled",
@@ -295,6 +301,7 @@ const NULL_SETTINGS_PAYLOAD: UpdateSettingsInput = {
   basicAuthUser: null,
   basicAuthPassword: null,
   enableBasicAuth: undefined,
+  jwtExpirySeconds: null,
   penalizeMissingSalary: null,
   missingSalaryPenalty: null,
   autoSkipCategory: null,
@@ -339,6 +346,7 @@ const mapSettingsToForm = (data: AppSettings): UpdateSettingsInput => ({
   basicAuthUser: data.basicAuthUser ?? "",
   basicAuthPassword: data.basicAuthPassword ?? "",
   enableBasicAuth: data.basicAuthActive,
+  jwtExpirySeconds: data.jwtExpirySeconds.override ?? null,
   penalizeMissingSalary: data.penalizeMissingSalary.override,
   missingSalaryPenalty: data.missingSalaryPenalty.override,
   autoSkipCategory: data.autoSkipCategory.override,
@@ -438,6 +446,10 @@ const getDerivedSettings = (settings: AppSettings | null) => {
         basicAuthPasswordHint: settings?.basicAuthPasswordHint ?? null,
       },
       basicAuthActive: settings?.basicAuthActive ?? false,
+      jwtExpirySeconds: {
+        effective: settings?.jwtExpirySeconds?.value ?? null,
+        default: settings?.jwtExpirySeconds?.default ?? null,
+      },
     },
     scoring: {
       penalizeMissingSalary: {
@@ -695,6 +707,10 @@ export const SettingsPage: React.FC = () => {
         autoTailoringEnabled: nullIfSame(
           data.autoTailoringEnabled,
           pipeline.autoTailoringEnabled.default,
+        ),
+        jwtExpirySeconds: nullIfSame(
+          data.jwtExpirySeconds,
+          envSettings.jwtExpirySeconds.default,
         ),
         enableJobScoring: nullIfSame(
           data.enableJobScoring,

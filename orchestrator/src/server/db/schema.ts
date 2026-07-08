@@ -193,6 +193,15 @@ export const jobPdfs = sqliteTable(
   }),
 );
 
+// Server-internal secrets (currently just the JWT signing secret). Not a
+// settings-registry row: registry values echo through GET /api/settings, and
+// a signing secret must have no read surface.
+export const runtimeSecrets = sqliteTable("runtime_secrets", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+});
+
 export const tasks = sqliteTable("tasks", {
   id: text("id").primaryKey(),
   applicationId: text("application_id")

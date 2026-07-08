@@ -73,6 +73,7 @@ export interface AppSettings {
   autoSkipCategory: Resolved<SuitabilityCategory | null>;
   autoTailoringEnabled: Resolved<boolean>;
   enableJobScoring: Resolved<boolean>;
+  jwtExpirySeconds: Resolved<number | null>;
   inboxStaleThresholdDays: Resolved<number>;
   maxBriefChars: Resolved<number>;
   maxJobDescriptionChars: Resolved<number>;

@@ -3,9 +3,12 @@
  *
  * The DB is the installation: every CV / cover-letter archive AND every
  * generated job PDF lives as a BLOB inside `jobs.db` (`job_pdfs`), alongside
- * all jobs, settings, and provider config. A single consistent snapshot of
- * `jobs.db` is therefore a complete, portable backup; `jwt-secret`
- * regenerates, so it is not bundled.
+ * all jobs, settings, provider config, and the JWT signing secret
+ * (`runtime_secrets`). A single consistent snapshot of `jobs.db` is therefore
+ * a complete, portable backup. Secrets-stripped exports clear both the
+ * credential settings AND `runtime_secrets` — restoring one regenerates the
+ * signing secret at first login (sessions from before the export won't
+ * carry over); with-secrets exports keep sessions working after restore.
  *
  * This module is deliberately import-free of `./index` (the DB singleton opens
  * SQLite at module load). The pure export/validate helpers open their own
@@ -104,6 +107,18 @@ function stampVersion(d: Database.Database): void {
 function redactSecrets(d: Database.Database): void {
   const stmt = d.prepare("DELETE FROM settings WHERE key = ?");
   for (const key of SECRET_SETTING_KEYS) stmt.run(key);
+
+  // The JWT signing secret lives outside `settings`. Table-existence guard:
+  // this also runs against test fixtures / older snapshots that predate
+  // runtime_secrets.
+  const hasRuntimeSecrets = d
+    .prepare(
+      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'runtime_secrets'",
+    )
+    .get();
+  if (hasRuntimeSecrets) {
+    d.prepare("DELETE FROM runtime_secrets").run();
+  }
 }
 
 export type ValidateResult =

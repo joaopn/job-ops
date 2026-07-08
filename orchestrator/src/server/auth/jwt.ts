@@ -1,69 +1,42 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import { logger } from "@infra/logger";
-import { getDataDir } from "@server/config/dataDir";
 import * as authSessionsRepo from "@server/repositories/auth-sessions";
+import {
+  getRuntimeSecret,
+  insertRuntimeSecretIfAbsent,
+} from "@server/repositories/runtime-secrets";
 import jwt from "jsonwebtoken";
 
 const DEFAULT_EXPIRY_SECONDS = 86400; // 24 hours
 const MIN_JWT_SECRET_LENGTH = 32;
-const LOCAL_JWT_SECRET_FILENAME = "jwt-secret";
+const JWT_SECRET_KEY = "jwt_secret";
 let cachedJwtSecret: string | null = null;
 
-async function readPersistedJwtSecret(
-  secretPath: string,
-): Promise<string | null> {
-  try {
-    const stored = (await readFile(secretPath, "utf8")).trim();
-    return stored || null;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return null;
-    }
-    throw error;
-  }
-}
-
 async function ensurePersistedJwtSecret(): Promise<string> {
-  const dataDir = getDataDir();
-  const secretPath = join(dataDir, LOCAL_JWT_SECRET_FILENAME);
-
-  await mkdir(dataDir, { recursive: true });
-
-  const existing = await readPersistedJwtSecret(secretPath);
+  const existing = await getRuntimeSecret(JWT_SECRET_KEY);
   if (existing) {
     if (existing.length < MIN_JWT_SECRET_LENGTH) {
       throw new Error(
-        `Persisted JWT secret at ${secretPath} must be at least ${MIN_JWT_SECRET_LENGTH} characters long`,
+        `Persisted JWT secret must be at least ${MIN_JWT_SECRET_LENGTH} characters long`,
       );
     }
     return existing;
   }
 
+  // Insert-if-absent + re-read: concurrent first sign-ins both generate, one
+  // insert wins, both converge on the stored winner.
   const generated = randomBytes(48).toString("base64url");
-  try {
-    await writeFile(secretPath, `${generated}\n`, {
-      encoding: "utf8",
-      flag: "wx",
-      mode: 0o600,
-    });
-    logger.info("Generated local JWT secret", {
-      path: secretPath,
-    });
-    return generated;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
-      throw error;
-    }
-    const raced = await readPersistedJwtSecret(secretPath);
-    if (!raced || raced.length < MIN_JWT_SECRET_LENGTH) {
-      throw new Error(
-        `Persisted JWT secret at ${secretPath} must be at least ${MIN_JWT_SECRET_LENGTH} characters long`,
-      );
-    }
-    return raced;
+  await insertRuntimeSecretIfAbsent(JWT_SECRET_KEY, generated);
+  const stored = await getRuntimeSecret(JWT_SECRET_KEY);
+  if (!stored || stored.length < MIN_JWT_SECRET_LENGTH) {
+    throw new Error(
+      `Persisted JWT secret must be at least ${MIN_JWT_SECRET_LENGTH} characters long`,
+    );
   }
+  if (stored === generated) {
+    logger.info("Generated local JWT secret");
+  }
+  return stored;
 }
 
 async function getJwtSecret(): Promise<string> {
