@@ -3,7 +3,6 @@ import {
   planLocationSources,
 } from "@shared/location-domain.js";
 import { formatCountryLabel } from "@shared/location-support.js";
-import { parseSearchCitiesSetting } from "@shared/search-cities.js";
 import type {
   AppSettings,
   PipelineConfig,
@@ -17,20 +16,10 @@ import { getEffectiveSettings } from "../services/settings";
 
 type SnapshotLocationIntent = NonNullable<PipelineConfig["locationIntent"]>;
 
-function resolveLocationIntentSnapshot(args: {
-  config: PipelineConfig;
-  settings: AppSettings;
-}): SnapshotLocationIntent {
-  return (
-    args.config.locationIntent ??
-    createLocationIntentFromLegacyInputs({
-      country: args.settings.searchCountry.value,
-      searchCities: parseSearchCitiesSetting(args.settings.searchCities.value),
-      workplaceTypes: args.settings.workplaceTypes.value,
-      searchScope: args.settings.locationSearchScope.value,
-      matchStrictness: args.settings.locationMatchStrictness.value,
-    })
-  );
+function resolveLocationIntentSnapshot(
+  config: PipelineConfig,
+): SnapshotLocationIntent {
+  return config.locationIntent ?? createLocationIntentFromLegacyInputs({});
 }
 
 export function buildRequestedConfigSnapshot(
@@ -99,7 +88,7 @@ export async function buildPipelineRunSavedDetails(
 ): Promise<PipelineRunSavedDetails> {
   const requestedConfig = buildRequestedConfigSnapshot(config);
   const settings = await getEffectiveSettings();
-  const locationIntent = resolveLocationIntentSnapshot({ config, settings });
+  const locationIntent = resolveLocationIntentSnapshot(config);
 
   return {
     requestedConfig,

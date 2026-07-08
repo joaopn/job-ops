@@ -1,10 +1,8 @@
+import { createLocationIntentFromLegacyInputs } from "@shared/location-domain.js";
+import { resolveSearchCities } from "@shared/search-cities.js";
 import type { PipelineConfig } from "@shared/types";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { selectJobsStep } from "./select-jobs";
-
-vi.mock("@server/repositories/settings", () => ({
-  getAllSettings: vi.fn().mockResolvedValue({}),
-}));
 
 const baseConfig: PipelineConfig = {
   topN: 2,
@@ -91,12 +89,11 @@ describe("selectJobsStep", () => {
   });
 
   it("breaks category ties toward selected locations when requested", async () => {
-    const settingsRepo = await import("@server/repositories/settings");
-    vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
-      locationSearchScope: "remote_worldwide_prioritize_selected",
-      searchCountry: "croatia",
-      searchCities: "Zagreb",
-    } as any);
+    const locationIntent = createLocationIntentFromLegacyInputs({
+      selectedCountry: "croatia",
+      cityLocations: resolveSearchCities({ single: "Zagreb" }),
+      geoScope: "remote_worldwide_prioritize_selected",
+    });
 
     const jobs = [
       {
@@ -121,7 +118,7 @@ describe("selectJobsStep", () => {
 
     const selected = await selectJobsStep({
       scoredJobs: jobs,
-      mergedConfig: { ...baseConfig, topN: 1 },
+      mergedConfig: { ...baseConfig, topN: 1, locationIntent },
     });
 
     expect(selected.map((job) => job.id)).toEqual(["zagreb"]);

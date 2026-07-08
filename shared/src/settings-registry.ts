@@ -1,8 +1,4 @@
 import { z } from "zod";
-import {
-  LOCATION_MATCH_STRICTNESS_VALUES,
-  LOCATION_SEARCH_SCOPE_VALUES,
-} from "./location-preferences";
 import { SUITABILITY_CATEGORIES, type SuitabilityCategory } from "./types/jobs";
 import {
   CHAT_STYLE_LANGUAGE_MODE_VALUES,
@@ -19,16 +15,6 @@ function parseIntOrNull(raw: string | undefined): number | null {
   if (!raw) return null;
   const parsed = parseInt(raw, 10);
   return Number.isNaN(parsed) ? null : parsed;
-}
-
-function parseJsonArrayOrNull(raw: string | undefined): string[] | null {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as string[]) : null;
-  } catch {
-    return null;
-  }
 }
 
 function parseBitBoolOrNull(raw: string | undefined): boolean | null {
@@ -77,12 +63,6 @@ function serializeNullableNumber(
   return value !== null && value !== undefined ? String(value) : null;
 }
 
-function serializeNullableJsonArray(
-  value: string[] | null | undefined,
-): string | null {
-  return value !== null && value !== undefined ? JSON.stringify(value) : null;
-}
-
 function serializeBitBool(value: boolean | null | undefined): string | null {
   if (value === null || value === undefined) return null;
   return value ? "1" : "0";
@@ -99,50 +79,12 @@ function createEnumParser<const TValues extends readonly [string, ...string[]]>(
   };
 }
 
-function createEnumArrayParser<
-  const TValues extends readonly [string, ...string[]],
->(values: TValues): (raw: string | undefined) => TValues[number][] | null {
-  const allowedValues = new Set<string>(values);
-
-  return (raw: string | undefined): TValues[number][] | null => {
-    if (!raw) return null;
-    try {
-      const parsed = JSON.parse(raw) as unknown;
-      if (!Array.isArray(parsed)) return null;
-
-      const out: TValues[number][] = [];
-      const seen = new Set<string>();
-      for (const value of parsed) {
-        if (typeof value !== "string" || !allowedValues.has(value)) {
-          return null;
-        }
-        if (seen.has(value)) continue;
-        seen.add(value);
-        out.push(value as TValues[number]);
-      }
-      if (out.length === 0) return null;
-      return out;
-    } catch {
-      return null;
-    }
-  };
-}
-
 const parseChatStyleLanguageModeOrNull = createEnumParser(
   CHAT_STYLE_LANGUAGE_MODE_VALUES,
 );
 
 const parseChatStyleManualLanguageOrNull = createEnumParser(
   CHAT_STYLE_MANUAL_LANGUAGE_VALUES,
-);
-
-const WORKPLACE_TYPE_VALUES = ["remote", "hybrid", "onsite"] as const;
-const parseWorkplaceTypesOrNull = createEnumArrayParser(WORKPLACE_TYPE_VALUES);
-const parseLocationSearchScopeOrNull = createEnumParser(
-  LOCATION_SEARCH_SCOPE_VALUES,
-);
-const parseLocationMatchStrictnessOrNull = createEnumParser(
-  LOCATION_MATCH_STRICTNESS_VALUES,
 );
 
 export const settingsRegistry = {
@@ -199,38 +141,6 @@ export const settingsRegistry = {
     serialize: (value: string | null | undefined): string | null =>
       value ?? null,
   },
-  searchTerms: {
-    kind: "typed" as const,
-    schema: z.array(z.string().trim().min(1).max(200)).max(100),
-    default: (): string[] =>
-      (typeof process !== "undefined"
-        ? process.env.JOBSPY_SEARCH_TERMS || "web developer"
-        : "web developer"
-      )
-        .split("|")
-        .map((v) => v.trim())
-        .filter(Boolean),
-    parse: parseJsonArrayOrNull,
-    serialize: serializeNullableJsonArray,
-  },
-  workplaceTypes: {
-    kind: "typed" as const,
-    schema: z.array(z.enum(WORKPLACE_TYPE_VALUES)).min(1).max(3),
-    default: (): Array<(typeof WORKPLACE_TYPE_VALUES)[number]> => [
-      "remote",
-      "hybrid",
-      "onsite",
-    ],
-    parse: parseWorkplaceTypesOrNull,
-    serialize: serializeNullableJsonArray,
-  },
-  blockedCompanyKeywords: {
-    kind: "typed" as const,
-    schema: z.array(z.string().trim().min(1).max(200)).max(200),
-    default: (): string[] => [],
-    parse: parseJsonArrayOrNull,
-    serialize: serializeNullableJsonArray,
-  },
   scoringInstructions: {
     kind: "typed" as const,
     schema: z.string().trim().max(4000),
@@ -241,46 +151,6 @@ export const settingsRegistry = {
   },
   // ghostwriterSystemPromptTemplate, tailoringPromptTemplate, scoringPromptTemplate
   // were removed — all LLM prompts now live in user-editable YAML under prompts/.
-  searchCities: {
-    kind: "typed" as const,
-    schema: z.string().trim().max(100),
-    default: (): string =>
-      typeof process !== "undefined"
-        ? process.env.SEARCH_CITIES || process.env.JOBSPY_LOCATION || ""
-        : "",
-    parse: parseNonEmptyStringOrNull,
-    serialize: (value: string | null | undefined): string | null =>
-      value ?? null,
-  },
-  locationSearchScope: {
-    kind: "typed" as const,
-    schema: z.enum(LOCATION_SEARCH_SCOPE_VALUES),
-    default: () => "selected_only" as const,
-    parse: parseLocationSearchScopeOrNull,
-    serialize: (value: string | null | undefined): string | null =>
-      value ?? null,
-  },
-  locationMatchStrictness: {
-    kind: "typed" as const,
-    schema: z.enum(LOCATION_MATCH_STRICTNESS_VALUES),
-    default: () => "exact_only" as const,
-    parse: parseLocationMatchStrictnessOrNull,
-    serialize: (value: string | null | undefined): string | null =>
-      value ?? null,
-  },
-  searchCountry: {
-    kind: "typed" as const,
-    schema: z.string().trim().max(100),
-    default: (): string =>
-      typeof process !== "undefined"
-        ? process.env.SEARCH_COUNTRY ||
-          process.env.JOBSPY_COUNTRY_INDEED ||
-          ""
-        : "",
-    parse: parseNonEmptyStringOrNull,
-    serialize: (value: string | null | undefined): string | null =>
-      value ?? null,
-  },
   showSponsorInfo: {
     kind: "typed" as const,
     schema: z.boolean(),
@@ -456,17 +326,6 @@ export const settingsRegistry = {
       const parsed = raw ? parseInt(raw, 10) : NaN;
       return Number.isNaN(parsed) ? null : Math.min(365, Math.max(0, parsed));
     },
-    serialize: serializeNullableNumber,
-  },
-  // Global "max age to scrape" — only postings newer than N days are
-  // requested. Threaded into every extractor's run via the `maxAgeDays`
-  // global mapping; extractors that lack a recency parameter ignore it.
-  // null (default) means no global cap — each extractor keeps its own default.
-  scrapeMaxAgeDays: {
-    kind: "typed" as const,
-    schema: z.number().int().min(1).max(365).nullable(),
-    default: (): number | null => null,
-    parse: parseIntOrNull,
     serialize: serializeNullableNumber,
   },
   // --- Context limits (LLM-bound character caps) ---

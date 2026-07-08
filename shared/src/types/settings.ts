@@ -1,7 +1,3 @@
-import type {
-  LocationMatchStrictness,
-  LocationSearchScope,
-} from "../location-preferences";
 import type { SuitabilityCategory } from "./jobs";
 
 export const CHAT_STYLE_LANGUAGE_MODE_VALUES = [
@@ -60,14 +56,7 @@ export interface AppSettings {
   model: Resolved<string>;
   llmProvider: Resolved<string>;
   llmBaseUrl: Resolved<string>;
-  searchTerms: Resolved<string[]>;
-  workplaceTypes: Resolved<Array<"remote" | "hybrid" | "onsite">>;
-  blockedCompanyKeywords: Resolved<string[]>;
   scoringInstructions: Resolved<string>;
-  searchCities: Resolved<string>;
-  locationSearchScope: Resolved<LocationSearchScope>;
-  locationMatchStrictness: Resolved<LocationMatchStrictness>;
-  searchCountry: Resolved<string>;
   showSponsorInfo: Resolved<boolean>;
   renderMarkdownInJobDescriptions: Resolved<boolean>;
   chatStyleTone: Resolved<string>;
@@ -85,7 +74,6 @@ export interface AppSettings {
   autoTailoringEnabled: Resolved<boolean>;
   enableJobScoring: Resolved<boolean>;
   inboxStaleThresholdDays: Resolved<number>;
-  scrapeMaxAgeDays: Resolved<number | null>;
   maxBriefChars: Resolved<number>;
   maxJobDescriptionChars: Resolved<number>;
   maxTailoredContentChars: Resolved<number>;

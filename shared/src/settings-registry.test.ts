@@ -5,100 +5,17 @@ import {
 } from "./settings-registry";
 
 describe("settingsRegistry helpers", () => {
-  describe("searchCities defaults", () => {
-    it("defaults to empty when no location env is configured", () => {
-      const previousSearchCities = process.env.SEARCH_CITIES;
-      const previousJobspyLocation = process.env.JOBSPY_LOCATION;
-
-      delete process.env.SEARCH_CITIES;
-      delete process.env.JOBSPY_LOCATION;
-
-      try {
-        expect(settingsRegistry.searchCities.default()).toBe("");
-      } finally {
-        if (previousSearchCities === undefined) {
-          delete process.env.SEARCH_CITIES;
-        } else {
-          process.env.SEARCH_CITIES = previousSearchCities;
-        }
-
-        if (previousJobspyLocation === undefined) {
-          delete process.env.JOBSPY_LOCATION;
-        } else {
-          process.env.JOBSPY_LOCATION = previousJobspyLocation;
-        }
-      }
-    });
-
-    it("uses explicit SEARCH_CITIES or legacy JOBSPY_LOCATION env values", () => {
-      const previousSearchCities = process.env.SEARCH_CITIES;
-      const previousJobspyLocation = process.env.JOBSPY_LOCATION;
-
-      process.env.SEARCH_CITIES = "Leeds|London";
-      process.env.JOBSPY_LOCATION = "Manchester";
-
-      try {
-        expect(settingsRegistry.searchCities.default()).toBe("Leeds|London");
-        delete process.env.SEARCH_CITIES;
-        expect(settingsRegistry.searchCities.default()).toBe("Manchester");
-      } finally {
-        if (previousSearchCities === undefined) {
-          delete process.env.SEARCH_CITIES;
-        } else {
-          process.env.SEARCH_CITIES = previousSearchCities;
-        }
-
-        if (previousJobspyLocation === undefined) {
-          delete process.env.JOBSPY_LOCATION;
-        } else {
-          process.env.JOBSPY_LOCATION = previousJobspyLocation;
-        }
-      }
-    });
-
-    it("does not default searchCountry when no env is configured", () => {
-      const previousSearchCountry = process.env.SEARCH_COUNTRY;
-      const previousJobspyCountryIndeed = process.env.JOBSPY_COUNTRY_INDEED;
-      delete process.env.SEARCH_COUNTRY;
-      delete process.env.JOBSPY_COUNTRY_INDEED;
-
-      try {
-        expect(settingsRegistry.searchCountry.default()).toBe("");
-      } finally {
-        if (previousSearchCountry === undefined) {
-          delete process.env.SEARCH_COUNTRY;
-        } else {
-          process.env.SEARCH_COUNTRY = previousSearchCountry;
-        }
-        if (previousJobspyCountryIndeed === undefined) {
-          delete process.env.JOBSPY_COUNTRY_INDEED;
-        } else {
-          process.env.JOBSPY_COUNTRY_INDEED = previousJobspyCountryIndeed;
-        }
-      }
-    });
-
-    it("defaults location scope and strictness to explicit local matching", () => {
-      expect(settingsRegistry.locationSearchScope.default()).toBe(
-        "selected_only",
-      );
-      expect(settingsRegistry.locationMatchStrictness.default()).toBe(
-        "exact_only",
-      );
-    });
-  });
-
   describe("string parsing (parseNonEmptyStringOrNull)", () => {
     it("returns null for undefined", () => {
       expect(settingsRegistry.model.parse(undefined)).toBeNull();
     });
 
     it("returns null for empty string", () => {
-      expect(settingsRegistry.searchCities.parse("")).toBeNull();
+      expect(settingsRegistry.model.parse("")).toBeNull();
     });
 
     it("returns the string for non-empty string", () => {
-      expect(settingsRegistry.searchCities.parse("London")).toBe("London");
+      expect(settingsRegistry.model.parse("gpt-test")).toBe("gpt-test");
     });
   });
 
@@ -106,9 +23,7 @@ describe("settingsRegistry helpers", () => {
     it("returns null for empty/invalid values", () => {
       expect(settingsRegistry.missingSalaryPenalty.parse("")).toBeNull();
       expect(settingsRegistry.missingSalaryPenalty.parse("abc")).toBeNull();
-      expect(
-        settingsRegistry.missingSalaryPenalty.parse(undefined),
-      ).toBeNull();
+      expect(settingsRegistry.missingSalaryPenalty.parse(undefined)).toBeNull();
     });
 
     it("parses valid numbers", () => {
@@ -149,41 +64,6 @@ describe("settingsRegistry helpers", () => {
       expect(
         settingsRegistry.renderMarkdownInJobDescriptions.serialize(false),
       ).toBe("0");
-    });
-  });
-
-  describe("JSON array parsing", () => {
-    it("parses valid JSON arrays", () => {
-      expect(settingsRegistry.searchTerms.parse('["dev", "engineer"]')).toEqual(
-        ["dev", "engineer"],
-      );
-    });
-
-    it("returns null for invalid JSON or non-arrays", () => {
-      expect(settingsRegistry.searchTerms.parse('{"not": "array"}')).toBeNull();
-      expect(settingsRegistry.searchTerms.parse("invalid json")).toBeNull();
-      expect(settingsRegistry.searchTerms.parse("")).toBeNull();
-      expect(settingsRegistry.searchTerms.parse(undefined)).toBeNull();
-    });
-
-    it("serializes arrays back to JSON", () => {
-      expect(settingsRegistry.searchTerms.serialize(["dev", "engineer"])).toBe(
-        '["dev","engineer"]',
-      );
-      expect(settingsRegistry.searchTerms.serialize(null)).toBeNull();
-    });
-
-    it("parses valid workplace type arrays", () => {
-      expect(
-        settingsRegistry.workplaceTypes.parse('["remote","onsite"]'),
-      ).toEqual(["remote", "onsite"]);
-    });
-
-    it("rejects invalid workplace type arrays", () => {
-      expect(
-        settingsRegistry.workplaceTypes.parse('["remote","satellite"]'),
-      ).toBeNull();
-      expect(settingsRegistry.workplaceTypes.parse("[]")).toBeNull();
     });
   });
 

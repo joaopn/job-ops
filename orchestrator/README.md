@@ -134,9 +134,6 @@ npm run dev:server
 # Run just the client
 npm run dev:client
 
-# Run the pipeline manually
-npm run pipeline:run
-
 # Build for production
 npm run build
 npm start

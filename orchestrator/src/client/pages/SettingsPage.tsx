@@ -1,8 +1,9 @@
 import * as api from "@client/api";
 import { ActivityLogButton } from "@client/components/ActivityLogButton";
-import { PageHeader } from "@client/components/layout";
 import { LlmStatusButton } from "@client/components/LlmStatusButton";
+import { PageHeader } from "@client/components/layout";
 import { useUpdateSettingsMutation } from "@client/hooks/queries/useSettingsMutation";
+import { toast } from "@client/lib/toast";
 import { ChatSettingsSection } from "@client/pages/settings/components/ChatSettingsSection";
 import { ContextLimitsSection } from "@client/pages/settings/components/ContextLimitsSection";
 import { DangerZoneSection } from "@client/pages/settings/components/DangerZoneSection";
@@ -21,9 +22,9 @@ import {
   updateSettingsSchema,
 } from "@shared/settings-schema.js";
 import {
-  SUITABILITY_CATEGORY_LABELS,
   type AppSettings,
   type JobStatus,
+  SUITABILITY_CATEGORY_LABELS,
   type SuitabilityCategory,
 } from "@shared/types.js";
 import { useQuery } from "@tanstack/react-query";
@@ -32,7 +33,6 @@ import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { FormProvider, type Resolver, useForm } from "react-hook-form";
 import { useLocation } from "react-router-dom";
-import { toast } from "@client/lib/toast";
 import { useQueryErrorToast } from "@/client/hooks/useQueryErrorToast";
 import { queryKeys } from "@/client/lib/queryKeys";
 import {
@@ -71,7 +71,6 @@ const DEFAULT_FORM_VALUES: UpdateSettingsInput = {
   autoTailoringEnabled: null,
   enableJobScoring: null,
   inboxStaleThresholdDays: null,
-  scrapeMaxAgeDays: null,
   maxBriefChars: null,
   maxJobDescriptionChars: null,
   maxTailoredContentChars: null,
@@ -249,7 +248,6 @@ const SECTION_FIELD_MAP: Record<
     "autoTailoringEnabled",
     "enableJobScoring",
     "inboxStaleThresholdDays",
-    "scrapeMaxAgeDays",
     "manualJobFetchTimeoutMs",
     "manualJobFetchMinExtractedChars",
     "manualJobFetchBrowserSettleMs",
@@ -303,7 +301,6 @@ const NULL_SETTINGS_PAYLOAD: UpdateSettingsInput = {
   autoTailoringEnabled: null,
   enableJobScoring: null,
   inboxStaleThresholdDays: null,
-  scrapeMaxAgeDays: null,
   maxBriefChars: null,
   maxJobDescriptionChars: null,
   maxTailoredContentChars: null,
@@ -348,14 +345,14 @@ const mapSettingsToForm = (data: AppSettings): UpdateSettingsInput => ({
   autoTailoringEnabled: data.autoTailoringEnabled.override,
   enableJobScoring: data.enableJobScoring.override,
   inboxStaleThresholdDays: data.inboxStaleThresholdDays.override,
-  scrapeMaxAgeDays: data.scrapeMaxAgeDays.override ?? null,
   maxBriefChars: data.maxBriefChars.override,
   maxJobDescriptionChars: data.maxJobDescriptionChars.override,
   maxTailoredContentChars: data.maxTailoredContentChars.override,
   maxCoverLetterChars: data.maxCoverLetterChars.override,
   maxFetchedJobHtmlChars: data.maxFetchedJobHtmlChars.override,
   manualJobFetchTimeoutMs: data.manualJobFetchTimeoutMs.override,
-  manualJobFetchMinExtractedChars: data.manualJobFetchMinExtractedChars.override,
+  manualJobFetchMinExtractedChars:
+    data.manualJobFetchMinExtractedChars.override,
   manualJobFetchBrowserSettleMs: data.manualJobFetchBrowserSettleMs.override,
   maxExtractionPromptChars: data.maxExtractionPromptChars.override,
   maxCvUploadBytes: data.maxCvUploadBytes.override,
@@ -468,10 +465,6 @@ const getDerivedSettings = (settings: AppSettings | null) => {
       inboxStaleThresholdDays: {
         effective: settings?.inboxStaleThresholdDays?.value ?? 7,
         default: settings?.inboxStaleThresholdDays?.default ?? 7,
-      },
-      scrapeMaxAgeDays: {
-        effective: settings?.scrapeMaxAgeDays?.value ?? null,
-        default: settings?.scrapeMaxAgeDays?.default ?? null,
       },
       manualJobFetchTimeoutMs: {
         effective: settings?.manualJobFetchTimeoutMs?.value ?? 15_000,
@@ -710,10 +703,6 @@ export const SettingsPage: React.FC = () => {
         inboxStaleThresholdDays: nullIfSame(
           data.inboxStaleThresholdDays,
           pipeline.inboxStaleThresholdDays.default,
-        ),
-        scrapeMaxAgeDays: nullIfSame(
-          data.scrapeMaxAgeDays,
-          pipeline.scrapeMaxAgeDays.default,
         ),
         manualJobFetchTimeoutMs: nullIfSame(
           data.manualJobFetchTimeoutMs,

@@ -1,7 +1,6 @@
 import type {
   ChatStyleLanguageMode,
   ChatStyleManualLanguage,
-  SuitabilityCategory,
 } from "@shared/types.js";
 
 export type EffectiveDefault<T> = {
@@ -43,19 +42,10 @@ export type EnvSettingsValues = {
   basicAuthActive: boolean;
 };
 
-export type ScoringValues = {
-  penalizeMissingSalary: EffectiveDefault<boolean>;
-  missingSalaryPenalty: EffectiveDefault<number>;
-  autoSkipCategory: EffectiveDefault<SuitabilityCategory | null>;
-  blockedCompanyKeywords: EffectiveDefault<string[]>;
-  scoringInstructions: EffectiveDefault<string>;
-};
-
 export type PipelineSettingsValues = {
   autoTailoringEnabled: EffectiveDefault<boolean>;
   enableJobScoring: EffectiveDefault<boolean>;
   inboxStaleThresholdDays: EffectiveDefault<number>;
-  scrapeMaxAgeDays: EffectiveDefault<number | null>;
   manualJobFetchTimeoutMs: EffectiveDefault<number>;
   manualJobFetchMinExtractedChars: EffectiveDefault<number>;
   manualJobFetchBrowserSettleMs: EffectiveDefault<number>;

@@ -164,42 +164,7 @@ export const createAppSettings = (
   },
   defaultProfileId: null,
   onboardingBasicAuthDecision: null,
-  searchTerms: {
-    value: ["Software Engineer"],
-    default: ["Software Engineer"],
-    override: null,
-  },
-  workplaceTypes: {
-    value: ["remote", "hybrid", "onsite"],
-    default: ["remote", "hybrid", "onsite"],
-    override: null,
-  },
-  blockedCompanyKeywords: {
-    value: [],
-    default: [],
-    override: null,
-  },
   scoringInstructions: {
-    value: "",
-    default: "",
-    override: null,
-  },
-  searchCities: {
-    value: "",
-    default: "",
-    override: null,
-  },
-  locationSearchScope: {
-    value: "selected_only",
-    default: "selected_only",
-    override: null,
-  },
-  locationMatchStrictness: {
-    value: "exact_only",
-    default: "exact_only",
-    override: null,
-  },
-  searchCountry: {
     value: "",
     default: "",
     override: null,
@@ -247,7 +212,6 @@ export const createAppSettings = (
   autoTailoringEnabled: { value: false, default: false, override: null },
   enableJobScoring: { value: true, default: true, override: null },
   inboxStaleThresholdDays: { value: 7, default: 7, override: null },
-  scrapeMaxAgeDays: { value: null, default: null, override: null },
   maxBriefChars: { value: 200_000, default: 200_000, override: null },
   maxJobDescriptionChars: { value: 100_000, default: 100_000, override: null },
   maxTailoredContentChars: {

@@ -11,7 +11,6 @@
         "src/server/index.ts",
         "src/server/db/migrate.ts",
         "src/server/db/clear.ts",
-        "src/server/pipeline/run.ts",
         "src/client/main.tsx",
         "vite.config.ts",
         "src/setupTests.ts",

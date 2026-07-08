@@ -1,10 +1,10 @@
+import { createLocationIntentFromLegacyInputs } from "@shared/location-domain.js";
 import type { PipelineConfig } from "@shared/types";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getProgress, resetProgress } from "../progress";
 import { discoverJobsStep } from "./discover-jobs";
 
 vi.mock("@server/repositories/settings", () => ({
-  getAllSettings: vi.fn(),
   getSetting: vi.fn().mockResolvedValue(null),
 }));
 
@@ -62,6 +62,10 @@ const baseConfig: PipelineConfig = {
   enableScoring: true,
   enableImporting: true,
   enableAutoTailoring: true,
+  searchTerms: ["engineer"],
+  locationIntent: createLocationIntentFromLegacyInputs({
+    selectedCountry: "united kingdom",
+  }),
 };
 
 describe("discoverJobsStep", () => {
@@ -71,7 +75,6 @@ describe("discoverJobsStep", () => {
   });
 
   it("aggregates source errors for enabled sources", async () => {
-    const settingsRepo = await import("@server/repositories/settings");
     const registryModule = await import("@server/extractors/registry");
 
     const jobspyManifest = {
@@ -108,11 +111,6 @@ describe("discoverJobsStep", () => {
       }),
     };
 
-    vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
-      searchTerms: JSON.stringify(["engineer"]),
-      searchCountry: "united kingdom",
-    } as any);
-
     vi.mocked(registryModule.getExtractorRegistry).mockResolvedValue({
       manifests: new Map([
         ["jobspy", jobspyManifest as any],
@@ -139,7 +137,6 @@ describe("discoverJobsStep", () => {
   });
 
   it("throws when all enabled sources fail", async () => {
-    const settingsRepo = await import("@server/repositories/settings");
     const registryModule = await import("@server/extractors/registry");
 
     const ukvisaManifest = {
@@ -152,11 +149,6 @@ describe("discoverJobsStep", () => {
         error: "boom",
       }),
     };
-
-    vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
-      searchTerms: JSON.stringify(["engineer"]),
-      searchCountry: "united kingdom",
-    } as any);
 
     vi.mocked(registryModule.getExtractorRegistry).mockResolvedValue({
       manifests: new Map([["hiringcafe", ukvisaManifest as any]]),
@@ -177,15 +169,7 @@ describe("discoverJobsStep", () => {
   });
 
   it("throws when all requested sources are incompatible for country", async () => {
-    const settingsRepo = await import("@server/repositories/settings");
     const registryModule = await import("@server/extractors/registry");
-
-    // Glassdoor is the only kept source with country restrictions; pick a
-    // country it does not support so the country-compat filter rejects it.
-    vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
-      searchTerms: JSON.stringify(["engineer"]),
-      searchCountry: "croatia",
-    } as any);
 
     vi.mocked(registryModule.getExtractorRegistry).mockResolvedValue({
       manifests: new Map(),
@@ -193,24 +177,23 @@ describe("discoverJobsStep", () => {
       availableSources: [],
     } as any);
 
+    // Glassdoor is the only kept source with country restrictions; pick a
+    // country it does not support so the country-compat filter rejects it.
     await expect(
       discoverJobsStep({
         mergedConfig: {
           ...baseConfig,
           sources: ["glassdoor"],
+          locationIntent: createLocationIntentFromLegacyInputs({
+            selectedCountry: "croatia",
+          }),
         },
       }),
     ).rejects.toThrow("No compatible sources for selected country: Croatia");
   });
 
   it("does not throw when no sources are requested", async () => {
-    const settingsRepo = await import("@server/repositories/settings");
     const registryModule = await import("@server/extractors/registry");
-
-    vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
-      searchTerms: JSON.stringify(["engineer"]),
-      searchCountry: "united states",
-    } as any);
 
     vi.mocked(registryModule.getExtractorRegistry).mockResolvedValue({
       manifests: new Map(),
@@ -222,6 +205,9 @@ describe("discoverJobsStep", () => {
       mergedConfig: {
         ...baseConfig,
         sources: [],
+        locationIntent: createLocationIntentFromLegacyInputs({
+          selectedCountry: "united states",
+        }),
       },
     });
 
@@ -230,7 +216,6 @@ describe("discoverJobsStep", () => {
   });
 
   it("drops discovered jobs when employer matches blocked company keywords", async () => {
-    const settingsRepo = await import("@server/repositories/settings");
     const registryModule = await import("@server/extractors/registry");
 
     const jobspyManifest = {
@@ -256,11 +241,6 @@ describe("discoverJobsStep", () => {
       }),
     };
 
-    vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
-      searchTerms: JSON.stringify(["engineer"]),
-      blockedCompanyKeywords: JSON.stringify(["recruit", "staffing"]),
-    } as any);
-
     vi.mocked(registryModule.getExtractorRegistry).mockResolvedValue({
       manifests: new Map([["jobspy", jobspyManifest as any]]),
       manifestBySource: new Map([
@@ -275,6 +255,8 @@ describe("discoverJobsStep", () => {
       mergedConfig: {
         ...baseConfig,
         sources: ["linkedin"],
+        blockedCompanyKeywords: ["recruit", "staffing"],
+        locationIntent: createLocationIntentFromLegacyInputs({}),
       },
     });
 
@@ -283,7 +265,6 @@ describe("discoverJobsStep", () => {
   });
 
   it("applies shared city filtering for sources without native city filtering", async () => {
-    const settingsRepo = await import("@server/repositories/settings");
     const registryModule = await import("@server/extractors/registry");
 
     const workingnomadsManifest = {
@@ -328,12 +309,6 @@ describe("discoverJobsStep", () => {
       }),
     };
 
-    vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
-      searchTerms: JSON.stringify(["engineer"]),
-      searchCities: "Leeds",
-      searchCountry: "united kingdom",
-    } as any);
-
     vi.mocked(registryModule.getExtractorRegistry).mockResolvedValue({
       manifests: new Map([
         ["workingnomads", workingnomadsManifest as any],
@@ -350,6 +325,10 @@ describe("discoverJobsStep", () => {
       mergedConfig: {
         ...baseConfig,
         sources: ["workingnomads", "hiringcafe"],
+        locationIntent: createLocationIntentFromLegacyInputs({
+          selectedCountry: "united kingdom",
+          searchCities: "Leeds",
+        }),
       },
     });
 
@@ -360,7 +339,6 @@ describe("discoverJobsStep", () => {
   });
 
   it("drops discovered jobs outside the selected country when no cities are set", async () => {
-    const settingsRepo = await import("@server/repositories/settings");
     const registryModule = await import("@server/extractors/registry");
 
     const jobspyManifest = {
@@ -395,12 +373,6 @@ describe("discoverJobsStep", () => {
       }),
     };
 
-    vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
-      searchTerms: JSON.stringify(["engineer"]),
-      searchCountry: "croatia",
-      searchCities: null,
-    } as any);
-
     vi.mocked(registryModule.getExtractorRegistry).mockResolvedValue({
       manifests: new Map([["jobspy", jobspyManifest as any]]),
       manifestBySource: new Map([
@@ -415,6 +387,9 @@ describe("discoverJobsStep", () => {
       mergedConfig: {
         ...baseConfig,
         sources: ["linkedin"],
+        locationIntent: createLocationIntentFromLegacyInputs({
+          selectedCountry: "croatia",
+        }),
       },
     });
 
@@ -423,7 +398,6 @@ describe("discoverJobsStep", () => {
   });
 
   it("keeps jobs that only expose structured location evidence", async () => {
-    const settingsRepo = await import("@server/repositories/settings");
     const registryModule = await import("@server/extractors/registry");
 
     const jobspyManifest = {
@@ -448,12 +422,6 @@ describe("discoverJobsStep", () => {
       }),
     };
 
-    vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
-      searchTerms: JSON.stringify(["engineer"]),
-      searchCountry: "croatia",
-      searchCities: null,
-    } as any);
-
     vi.mocked(registryModule.getExtractorRegistry).mockResolvedValue({
       manifests: new Map([["jobspy", jobspyManifest as any]]),
       manifestBySource: new Map([
@@ -468,6 +436,9 @@ describe("discoverJobsStep", () => {
       mergedConfig: {
         ...baseConfig,
         sources: ["linkedin"],
+        locationIntent: createLocationIntentFromLegacyInputs({
+          selectedCountry: "croatia",
+        }),
       },
     });
 
@@ -481,7 +452,6 @@ describe("discoverJobsStep", () => {
   });
 
   it("keeps remote jobs worldwide when scope allows them", async () => {
-    const settingsRepo = await import("@server/repositories/settings");
     const registryModule = await import("@server/extractors/registry");
 
     const jobspyManifest = {
@@ -511,14 +481,6 @@ describe("discoverJobsStep", () => {
       }),
     };
 
-    vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
-      searchTerms: JSON.stringify(["engineer"]),
-      searchCountry: "croatia",
-      searchCities: null,
-      workplaceTypes: JSON.stringify(["remote", "hybrid"]),
-      locationSearchScope: "selected_plus_remote_worldwide",
-    } as any);
-
     vi.mocked(registryModule.getExtractorRegistry).mockResolvedValue({
       manifests: new Map([["jobspy", jobspyManifest as any]]),
       manifestBySource: new Map([
@@ -533,6 +495,11 @@ describe("discoverJobsStep", () => {
       mergedConfig: {
         ...baseConfig,
         sources: ["linkedin"],
+        locationIntent: createLocationIntentFromLegacyInputs({
+          selectedCountry: "croatia",
+          workplaceTypes: ["remote", "hybrid"],
+          searchScope: "selected_plus_remote_worldwide",
+        }),
       },
     });
 
@@ -544,7 +511,6 @@ describe("discoverJobsStep", () => {
   });
 
   it("keeps country matches when strictness is flexible and city metadata disagrees", async () => {
-    const settingsRepo = await import("@server/repositories/settings");
     const registryModule = await import("@server/extractors/registry");
 
     const jobspyManifest = {
@@ -565,13 +531,6 @@ describe("discoverJobsStep", () => {
       }),
     };
 
-    vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
-      searchTerms: JSON.stringify(["engineer"]),
-      searchCountry: "croatia",
-      searchCities: "Zagreb",
-      locationMatchStrictness: "flexible",
-    } as any);
-
     vi.mocked(registryModule.getExtractorRegistry).mockResolvedValue({
       manifests: new Map([["jobspy", jobspyManifest as any]]),
       manifestBySource: new Map([
@@ -586,6 +545,11 @@ describe("discoverJobsStep", () => {
       mergedConfig: {
         ...baseConfig,
         sources: ["linkedin"],
+        locationIntent: createLocationIntentFromLegacyInputs({
+          selectedCountry: "croatia",
+          searchCities: "Zagreb",
+          matchStrictness: "flexible",
+        }),
       },
     });
 
@@ -594,7 +558,6 @@ describe("discoverJobsStep", () => {
   });
 
   it("tracks source completion counters across source transitions", async () => {
-    const settingsRepo = await import("@server/repositories/settings");
     const jobsRepo = await import("@server/repositories/jobs");
     const registryModule = await import("@server/extractors/registry");
 
@@ -617,10 +580,6 @@ describe("discoverJobsStep", () => {
       run: vi.fn().mockResolvedValue({ success: true, jobs: [] }),
     };
 
-    vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
-      searchTerms: JSON.stringify(["engineer"]),
-      searchCountry: "united kingdom",
-    } as any);
     vi.mocked(jobsRepo.getAllJobUrls).mockResolvedValue([
       "https://example.com/existing",
     ]);
@@ -670,8 +629,7 @@ describe("discoverJobsStep", () => {
     ]);
   });
 
-  it("prefers mergedConfig.searchTerms over the settings value", async () => {
-    const settingsRepo = await import("@server/repositories/settings");
+  it("passes mergedConfig.searchTerms to the extractor run", async () => {
     const registryModule = await import("@server/extractors/registry");
 
     const jobspyManifest = {
@@ -680,11 +638,6 @@ describe("discoverJobsStep", () => {
       providesSources: ["indeed", "linkedin", "glassdoor"],
       run: vi.fn().mockResolvedValue({ success: true, jobs: [] }),
     };
-
-    vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
-      searchTerms: JSON.stringify(["engineer"]),
-      searchCountry: "united kingdom",
-    } as any);
 
     vi.mocked(registryModule.getExtractorRegistry).mockResolvedValue({
       manifests: new Map([["jobspy", jobspyManifest as any]]),
@@ -707,114 +660,5 @@ describe("discoverJobsStep", () => {
     expect(jobspyManifest.run).toHaveBeenCalledWith(
       expect.objectContaining({ searchTerms: ["rust developer"] }),
     );
-  });
-
-  it("prefers mergedConfig.blockedCompanyKeywords over the settings value", async () => {
-    const settingsRepo = await import("@server/repositories/settings");
-    const registryModule = await import("@server/extractors/registry");
-
-    const jobspyManifest = {
-      id: "jobspy",
-      displayName: "JobSpy",
-      providesSources: ["indeed", "linkedin", "glassdoor"],
-      run: vi.fn().mockResolvedValue({
-        success: true,
-        jobs: [
-          {
-            source: "linkedin",
-            title: "Engineer",
-            employer: "Acme Staffing",
-            jobUrl: "https://example.com/job-1",
-          },
-          {
-            source: "linkedin",
-            title: "Engineer II",
-            employer: "Contoso",
-            jobUrl: "https://example.com/job-2",
-          },
-        ],
-      }),
-    };
-
-    // Settings would NOT block "Acme Staffing"; the config keyword must.
-    vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
-      searchTerms: JSON.stringify(["engineer"]),
-      blockedCompanyKeywords: JSON.stringify([]),
-    } as any);
-
-    vi.mocked(registryModule.getExtractorRegistry).mockResolvedValue({
-      manifests: new Map([["jobspy", jobspyManifest as any]]),
-      manifestBySource: new Map([
-        ["indeed", jobspyManifest as any],
-        ["linkedin", jobspyManifest as any],
-        ["glassdoor", jobspyManifest as any],
-      ]),
-      availableSources: ["indeed", "linkedin", "glassdoor"],
-    } as any);
-
-    const result = await discoverJobsStep({
-      mergedConfig: {
-        ...baseConfig,
-        sources: ["linkedin"],
-        blockedCompanyKeywords: ["staffing"],
-      },
-    });
-
-    expect(result.discoveredJobs).toHaveLength(1);
-    expect(result.discoveredJobs[0]?.employer).toBe("Contoso");
-  });
-
-  it("treats an empty mergedConfig.blockedCompanyKeywords as an override, not a fallback", async () => {
-    const settingsRepo = await import("@server/repositories/settings");
-    const registryModule = await import("@server/extractors/registry");
-
-    const jobspyManifest = {
-      id: "jobspy",
-      displayName: "JobSpy",
-      providesSources: ["indeed", "linkedin", "glassdoor"],
-      run: vi.fn().mockResolvedValue({
-        success: true,
-        jobs: [
-          {
-            source: "linkedin",
-            title: "Engineer",
-            employer: "Acme Staffing",
-            jobUrl: "https://example.com/job-1",
-          },
-          {
-            source: "linkedin",
-            title: "Engineer II",
-            employer: "Contoso",
-            jobUrl: "https://example.com/job-2",
-          },
-        ],
-      }),
-    };
-
-    // Settings WOULD block "Acme Staffing"; an explicit empty config overrides.
-    vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
-      searchTerms: JSON.stringify(["engineer"]),
-      blockedCompanyKeywords: JSON.stringify(["staffing"]),
-    } as any);
-
-    vi.mocked(registryModule.getExtractorRegistry).mockResolvedValue({
-      manifests: new Map([["jobspy", jobspyManifest as any]]),
-      manifestBySource: new Map([
-        ["indeed", jobspyManifest as any],
-        ["linkedin", jobspyManifest as any],
-        ["glassdoor", jobspyManifest as any],
-      ]),
-      availableSources: ["indeed", "linkedin", "glassdoor"],
-    } as any);
-
-    const result = await discoverJobsStep({
-      mergedConfig: {
-        ...baseConfig,
-        sources: ["linkedin"],
-        blockedCompanyKeywords: [],
-      },
-    });
-
-    expect(result.discoveredJobs).toHaveLength(2);
   });
 });

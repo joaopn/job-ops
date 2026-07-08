@@ -68,12 +68,13 @@ describe.sequential("profiles first-boot seed", () => {
   });
 
   it("re-seeds from current settings once profiles are cleared", async () => {
-    await settingsRepo.setSetting(
-      "searchTerms",
-      JSON.stringify(["rust engineer"]),
-    );
-    await settingsRepo.setSetting("searchCountry", "Germany");
-    await settingsRepo.setSetting("scrapeMaxAgeDays", "14");
+    // The seed reads legacy scrape rows straight off the settings table; the
+    // keys are gone from the registry, so write them untyped.
+    await db.insert(schema.settings).values([
+      { key: "searchTerms", value: JSON.stringify(["rust engineer"]) },
+      { key: "searchCountry", value: "Germany" },
+      { key: "scrapeMaxAgeDays", value: "14" },
+    ]);
     await db.delete(schema.profiles);
     await settingsRepo.setSetting("defaultProfileId", null);
 

@@ -59,7 +59,6 @@ export const PipelineSettingsSection: React.FC<
     autoTailoringEnabled,
     enableJobScoring,
     inboxStaleThresholdDays,
-    scrapeMaxAgeDays,
     manualJobFetchTimeoutMs,
     manualJobFetchMinExtractedChars,
     manualJobFetchBrowserSettleMs,
@@ -223,56 +222,6 @@ export const PipelineSettingsSection: React.FC<
         </div>
 
         <div className="space-y-2">
-          <label htmlFor="scrapeMaxAgeDays" className="text-sm font-medium">
-            Max job age to scrape (days)
-          </label>
-          <Controller
-            name="scrapeMaxAgeDays"
-            control={control}
-            rules={{
-              validate: (v) =>
-                v === null ||
-                v === undefined ||
-                (Number.isInteger(v) && v >= 1 && v <= 365) ||
-                "Must be between 1 and 365",
-            }}
-            render={({ field }) => (
-              <Input
-                id="scrapeMaxAgeDays"
-                type="number"
-                min={1}
-                max={365}
-                step={1}
-                placeholder="No limit"
-                disabled={isLoading || isSaving}
-                value={field.value ?? ""}
-                onChange={(e) => {
-                  const value = e.target.valueAsNumber;
-                  field.onChange(Number.isFinite(value) ? value : null);
-                }}
-              />
-            )}
-          />
-          {errors.scrapeMaxAgeDays && (
-            <div className="text-xs text-destructive">
-              {errors.scrapeMaxAgeDays.message as string}
-            </div>
-          )}
-          <div className="text-xs text-muted-foreground">
-            Global recency cap passed to every scraper that supports it (JobSpy,
-            Hiring Cafe). Sources without a recency parameter ignore it. Leave
-            blank for no global limit — each source keeps its own default. Can be
-            overridden or disabled per source on the Sources page.
-          </div>
-          <div className="text-xs text-muted-foreground">
-            Current:{" "}
-            <span className="font-mono">
-              {scrapeMaxAgeDays.effective ?? "No limit"}
-            </span>
-          </div>
-        </div>
-
-        <div className="space-y-2">
           <label
             htmlFor="manualJobFetchTimeoutMs"
             className="text-sm font-medium"
@@ -365,8 +314,8 @@ export const PipelineSettingsSection: React.FC<
           )}
           <div className="text-xs text-muted-foreground">
             If the static fetch extracts fewer than this many chars (SPA shell
-            pages return ~0), fall through to the in-process Playwright
-            browser. Set to 0 to disable the browser fallback entirely.
+            pages return ~0), fall through to the in-process Playwright browser.
+            Set to 0 to disable the browser fallback entirely.
           </div>
           <div className="text-xs text-muted-foreground">
             Current:{" "}
@@ -417,9 +366,9 @@ export const PipelineSettingsSection: React.FC<
           )}
           <div className="text-xs text-muted-foreground">
             After the browser fallback navigates, wait up to this many ms for
-            the page's network to go idle (SPA hydration). Returns sooner if
-            the network settles. Bump for slow SPAs; 0 reads the DOM as soon
-            as goto resolves.
+            the page's network to go idle (SPA hydration). Returns sooner if the
+            network settles. Bump for slow SPAs; 0 reads the DOM as soon as goto
+            resolves.
           </div>
           <div className="text-xs text-muted-foreground">
             Current:{" "}

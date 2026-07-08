@@ -17,7 +17,6 @@ import {
   planLocationSource,
 } from "@shared/location-domain.js";
 import { formatCountryLabel } from "@shared/location-support.js";
-import { normalizeStringArray } from "@shared/normalize-string-array.js";
 import { serializeSearchCitiesSetting } from "@shared/search-cities.js";
 import type {
   CapturedRunJob,
@@ -47,35 +46,6 @@ type DiscoverySourceTask = {
   label?: string;
   run: () => Promise<DiscoveryTaskResult>;
 };
-
-function parseBlockedCompanyKeywords(raw: string | undefined): string[] {
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return normalizeStringArray(
-      parsed.filter((value): value is string => typeof value === "string"),
-    );
-  } catch {
-    return [];
-  }
-}
-
-function parseWorkplaceTypes(
-  raw: string | undefined,
-): Array<"remote" | "hybrid" | "onsite"> {
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (value): value is "remote" | "hybrid" | "onsite" =>
-        value === "remote" || value === "hybrid" || value === "onsite",
-    );
-  } catch {
-    return [];
-  }
-}
 
 function isBlockedEmployer(
   employer: string | null | undefined,
@@ -137,16 +107,13 @@ export async function discoverJobsStep(args: {
   const discoveredJobs: CreateJobInput[] = [];
   const sourceErrors: string[] = [];
 
-  const settings = await settingsRepo.getAllSettings();
   const registry = await getExtractorRegistry();
 
-  // Prefer the Profile-driven config; fall back to the global setting, then
-  // the env default, so no-profile / transitional runs are unchanged.
+  // Prefer the Profile-driven config; fall back to the env default so direct
+  // callers without a config still run.
   let searchTerms: string[];
   if (args.mergedConfig.searchTerms !== undefined) {
     searchTerms = args.mergedConfig.searchTerms;
-  } else if (settings.searchTerms) {
-    searchTerms = JSON.parse(settings.searchTerms) as string[];
   } else {
     const defaultSearchTermsEnv =
       process.env.JOBSPY_SEARCH_TERMS || "web developer";
@@ -158,13 +125,7 @@ export async function discoverJobsStep(args: {
 
   const locationIntent =
     args.mergedConfig.locationIntent ??
-    createLocationIntentFromLegacyInputs({
-      selectedCountry: settings.searchCountry ?? "",
-      searchCities: settings.searchCities ?? "",
-      workplaceTypes: parseWorkplaceTypes(settings.workplaceTypes),
-      searchScope: settings.locationSearchScope,
-      matchStrictness: settings.locationMatchStrictness,
-    });
+    createLocationIntentFromLegacyInputs({});
 
   const sourceConfigRows = await sourceConfigsRepo.getAllSourceConfigs();
   const sourceConfigByExtractor = new Map<string, SourceConfigRow>();
@@ -191,26 +152,20 @@ export async function discoverJobsStep(args: {
       : args.mergedConfig.sources;
 
   const runGlobals: SourceConfigRunGlobals = {
-    // Derived from locationIntent (already config-preferred) so a run's
-    // location is atomic. On the settings-fallback path locationIntent is
-    // itself built from these same settings, so this round-trips — it only
-    // normalizes a non-canonical stored searchCities, which is a downstream
-    // no-op (extractors re-parse the city global).
+    // Derived from locationIntent (Profile-driven via the run config) so a
+    // run's location is atomic.
     city: serializeSearchCitiesSetting(locationIntent.cityLocations) ?? "",
     country: locationIntent.selectedCountry ?? "",
     workplaceTypes: JSON.stringify(locationIntent.workplaceTypes),
     ...(args.mergedConfig.maxJobsPerTerm !== undefined
       ? { maxJobsPerTerm: String(args.mergedConfig.maxJobsPerTerm) }
       : {}),
-    // Max-age: prefer the Profile-driven config value (a real number gets
-    // String()'d), else the global setting verbatim. null/undefined = unset →
+    // Max-age comes from the Profile-driven config. null/undefined = unset →
     // no key → each extractor keeps its own default.
     ...(args.mergedConfig.scrapeMaxAgeDays !== undefined &&
     args.mergedConfig.scrapeMaxAgeDays !== null
       ? { maxAgeDays: String(args.mergedConfig.scrapeMaxAgeDays) }
-      : settings.scrapeMaxAgeDays
-        ? { maxAgeDays: settings.scrapeMaxAgeDays }
-        : {}),
+      : {}),
   };
 
   const sourcePlans = requestedSources.map((source) => ({
@@ -556,9 +511,7 @@ export async function discoverJobsStep(args: {
     );
   }
 
-  const blockedCompanyKeywords =
-    args.mergedConfig.blockedCompanyKeywords ??
-    parseBlockedCompanyKeywords(settings.blockedCompanyKeywords);
+  const blockedCompanyKeywords = args.mergedConfig.blockedCompanyKeywords ?? [];
   const blockedKeywordsLowerCase = blockedCompanyKeywords.map((value) =>
     value.toLowerCase(),
   );

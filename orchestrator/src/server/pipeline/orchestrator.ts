@@ -20,12 +20,12 @@ import { llmAdjustContent } from "../services/cv";
 import { getActiveCvDocument } from "../services/cv-active";
 import { generatePdf } from "../services/pdf";
 import { progressHelpers, resetProgress } from "./progress";
-import { resetRunJobCapture } from "./run-job-capture";
 import {
   buildPipelineRunSavedDetails,
   createPipelineRunResultSummary,
   updatePipelineRunResultSummary,
 } from "./run-details";
+import { resetRunJobCapture } from "./run-job-capture";
 import {
   discoverJobsStep,
   importJobsStep,
@@ -62,37 +62,10 @@ let isPipelineRunning = false;
 let activePipelineRunId: string | null = null;
 let cancelRequestedAt: string | null = null;
 
-function parseWorkplaceTypes(
-  raw: string | undefined,
-): Array<"remote" | "hybrid" | "onsite"> {
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (value): value is "remote" | "hybrid" | "onsite" =>
-        value === "remote" || value === "hybrid" || value === "onsite",
-    );
-  } catch {
-    return [];
-  }
-}
-
-async function resolveLocationIntent(
+function resolveLocationIntent(
   config: Partial<PipelineConfig>,
-): Promise<NonNullable<PipelineConfig["locationIntent"]>> {
-  if (config.locationIntent) {
-    return createLocationIntentFromLegacyInputs(config.locationIntent);
-  }
-
-  const settings = await settingsRepo.getAllSettings();
-  return createLocationIntentFromLegacyInputs({
-    selectedCountry: settings.searchCountry ?? "",
-    searchCities: settings.searchCities ?? "",
-    workplaceTypes: parseWorkplaceTypes(settings.workplaceTypes),
-    searchScope: settings.locationSearchScope,
-    matchStrictness: settings.locationMatchStrictness,
-  });
+): NonNullable<PipelineConfig["locationIntent"]> {
+  return createLocationIntentFromLegacyInputs(config.locationIntent ?? {});
 }
 
 class PipelineCancelledError extends Error {
@@ -139,7 +112,7 @@ export async function runPipeline(
   if (!partial) {
     resetRunJobCapture();
   }
-  const locationIntent = await resolveLocationIntent(config);
+  const locationIntent = resolveLocationIntent(config);
   const enableAutoTailoring = await resolveAutoTailoring(
     config.enableAutoTailoring,
   );
@@ -484,8 +457,7 @@ export async function generateFinalPdf(
       if (!cvDocumentId) {
         return {
           success: false,
-          error:
-            "Job is not pinned to a CV document. Run summarizeJob first.",
+          error: "Job is not pinned to a CV document. Run summarizeJob first.",
         };
       }
 
@@ -571,7 +543,7 @@ export async function processJob(
       const current = await jobsRepo.getJobById(jobId);
       const statusPatch =
         current?.status === "processing"
-          ? ({ status: "discovered" as const })
+          ? { status: "discovered" as const }
           : {};
       await jobsRepo.updateJob(jobId, {
         ...statusPatch,
