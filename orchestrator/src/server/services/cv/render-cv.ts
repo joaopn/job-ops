@@ -14,9 +14,9 @@ export type RenderCvResult =
 
 /**
  * 5i manual CV render. Substitutes the per-job `tailoredFields` overrides
- * into the resolved CV doc's templated tex, runs tectonic, writes
- * `data/pdfs/resume_<jobId>.pdf`, persists the path on `jobs.pdfPath`.
- * No LLM call — just template + render.
+ * into the resolved CV doc's templated tex, runs tectonic, stores the PDF
+ * bytes in `job_pdfs` and persists the canonical relative filename on
+ * `jobs.pdfPath`. No LLM call — just template + render.
  *
  * The resolved doc id is the job's pinned `cvDocumentId` if present,
  * falling back to the most-recently-updated CV doc (the same fallback

@@ -42,7 +42,7 @@ describe("renderCvPdf", () => {
       cvDocumentId: "cv-pinned",
       tailoredFields: { "experience.0.bullet.0": "Edited bullet" },
     });
-    const expectedPdfPath = "/tmp/pdfs/resume_job-render.pdf";
+    const expectedPdfPath = "resume_job-render.pdf";
     mocks.getJobById
       .mockResolvedValueOnce(job)
       .mockResolvedValueOnce({ ...job, pdfPath: expectedPdfPath });
@@ -75,7 +75,7 @@ describe("renderCvPdf", () => {
       cvDocumentId: null,
       tailoredFields: {},
     });
-    const expectedPdfPath = "/tmp/pdfs/resume_job-fallback.pdf";
+    const expectedPdfPath = "resume_job-fallback.pdf";
     mocks.getJobById
       .mockResolvedValueOnce(job)
       .mockResolvedValueOnce({

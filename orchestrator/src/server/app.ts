@@ -17,7 +17,7 @@ import { verifyToken } from "@server/auth/jwt";
 import cors from "cors";
 import express from "express";
 import { apiRouter } from "./api/index";
-import { getDataDir } from "./config/dataDir";
+import { pdfFilesRouter } from "./api/routes/pdf-files";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -128,9 +128,9 @@ export function createApp() {
   app.use("/api", apiRouter);
   app.use(notFoundApiHandler());
 
-  // Serve static files for generated PDFs
-  const pdfDir = join(getDataDir(), "pdfs");
-  app.use("/pdfs", express.static(pdfDir));
+  // Serve generated job PDFs from the job_pdfs BLOB table (same URL shape
+  // as the old express.static(data/pdfs) mount).
+  app.use("/pdfs", pdfFilesRouter);
 
   // Health check
   app.get("/health", (_req, res) => {

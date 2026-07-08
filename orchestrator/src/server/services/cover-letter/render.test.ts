@@ -1,9 +1,6 @@
 // @vitest-environment node
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { createCoverLetterDocument, createJob } from "@shared/testing/factories";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   runTectonic: vi.fn(),
@@ -13,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   listCoverLetterDocuments: vi.fn(),
   getCoverLetterDocumentById: vi.fn(),
   getCoverLetterDocumentArchive: vi.fn(),
-  dataDir: { current: "" as string },
+  upsertJobPdf: vi.fn(),
 }));
 
 vi.mock("@server/services/cv/run-tectonic", async (importActual) => {
@@ -42,8 +39,8 @@ vi.mock("@server/repositories/cover-letter-documents", () => ({
     mocks.getCoverLetterDocumentArchive(...args),
 }));
 
-vi.mock("@server/config/dataDir", () => ({
-  getDataDir: () => mocks.dataDir.current,
+vi.mock("@server/repositories/job-pdfs", () => ({
+  upsertJobPdf: (...args: unknown[]) => mocks.upsertJobPdf(...args),
 }));
 
 vi.mock("@infra/logger", () => ({
@@ -52,7 +49,7 @@ vi.mock("@infra/logger", () => ({
 
 import { renderCoverLetterPdf } from "./render";
 
-beforeEach(async () => {
+beforeEach(() => {
   mocks.runTectonic.mockReset();
   mocks.renderTemplate.mockReset();
   mocks.getJobById.mockReset();
@@ -60,15 +57,11 @@ beforeEach(async () => {
   mocks.listCoverLetterDocuments.mockReset();
   mocks.getCoverLetterDocumentById.mockReset();
   mocks.getCoverLetterDocumentArchive.mockReset();
-  mocks.dataDir.current = await mkdtemp(join(tmpdir(), "cl-render-"));
-});
-
-afterEach(async () => {
-  await rm(mocks.dataDir.current, { recursive: true, force: true });
+  mocks.upsertJobPdf.mockReset();
 });
 
 describe("renderCoverLetterPdf", () => {
-  it("merges defaults with overrides (overrides win), writes PDF, persists path, pins doc", async () => {
+  it("merges defaults with overrides (overrides win), stores the PDF blob, persists path, pins doc", async () => {
     const job = createJob({
       id: "job-render",
       coverLetterDocumentId: null,
@@ -91,11 +84,7 @@ describe("renderCoverLetterPdf", () => {
       .mockResolvedValueOnce({
         ...job,
         coverLetterDocumentId: "cl-render",
-        coverLetterPdfPath: join(
-          mocks.dataDir.current,
-          "pdfs",
-          "cover_letter_job-render.pdf",
-        ),
+        coverLetterPdfPath: "cover_letter_job-render.pdf",
       });
     mocks.listCoverLetterDocuments.mockResolvedValue([{ id: "cl-render" }]);
     mocks.getCoverLetterDocumentById.mockResolvedValue(doc);
@@ -116,18 +105,16 @@ describe("renderCoverLetterPdf", () => {
       recipient: "Hiring Team",
     });
 
-    const expectedPath = join(
-      mocks.dataDir.current,
-      "pdfs",
-      "cover_letter_job-render.pdf",
-    );
-    expect(result.pdfPath).toBe(expectedPath);
-    const written = await readFile(expectedPath);
-    expect(written).toEqual(Buffer.from([0x25, 0x50, 0x44, 0x46]));
+    expect(result.pdfPath).toBe("cover_letter_job-render.pdf");
+    expect(mocks.upsertJobPdf).toHaveBeenCalledWith({
+      jobId: "job-render",
+      kind: "cover_letter",
+      data: Buffer.from([0x25, 0x50, 0x44, 0x46]),
+    });
 
     expect(mocks.updateJob).toHaveBeenCalledWith("job-render", {
       coverLetterDocumentId: "cl-render",
-      coverLetterPdfPath: expectedPath,
+      coverLetterPdfPath: "cover_letter_job-render.pdf",
     });
   });
 
@@ -181,5 +168,6 @@ describe("renderCoverLetterPdf", () => {
     expect(result.success).toBe(false);
     if (result.success) return;
     expect(result.error).toMatch(/no templated tex/i);
+    expect(mocks.upsertJobPdf).not.toHaveBeenCalled();
   });
 });

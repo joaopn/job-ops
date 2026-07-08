@@ -85,7 +85,7 @@ const baseJob: Job = {
   id: "job-1",
   cvDocumentId: "cv-1",
   tailoredFields: baseOverrides,
-  pdfPath: "/data/pdfs/resume_job-1.pdf",
+  pdfPath: "resume_job-1.pdf",
 } as unknown as Job;
 
 const baseCvDocument: CvDocument = {
@@ -140,7 +140,7 @@ describe("acceptEditForJob: cv-edit", () => {
     mocks.cvRepo.getCvDocumentById.mockResolvedValue(baseCvDocument);
     mocks.pdf.generatePdf.mockResolvedValue({
       success: true,
-      pdfPath: "/data/pdfs/resume_job-1.pdf",
+      pdfPath: "resume_job-1.pdf",
     });
   });
 

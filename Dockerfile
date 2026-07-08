@@ -166,7 +166,7 @@ COPY extractors/workingnomads ./extractors/workingnomads
 COPY prompts ./prompts
 
 # Create runtime directories.
-RUN mkdir -p /app/data/pdfs /app/codex-home
+RUN mkdir -p /app/codex-home
 
 ENV PROMPTS_DIR=/app/prompts
 

@@ -1,11 +1,11 @@
 /**
  * DB portability — consistent snapshot export + restore validation.
  *
- * The DB is the installation: every CV / cover-letter archive lives as a BLOB
- * inside `jobs.db`, alongside all jobs, settings, and provider config. A single
- * consistent snapshot of `jobs.db` is therefore a complete, portable backup;
- * the `pdfs/` dir is a re-renderable cache and `jwt-secret` regenerates, so
- * neither is bundled.
+ * The DB is the installation: every CV / cover-letter archive AND every
+ * generated job PDF lives as a BLOB inside `jobs.db` (`job_pdfs`), alongside
+ * all jobs, settings, and provider config. A single consistent snapshot of
+ * `jobs.db` is therefore a complete, portable backup; `jwt-secret`
+ * regenerates, so it is not bundled.
  *
  * This module is deliberately import-free of `./index` (the DB singleton opens
  * SQLite at module load). The pure export/validate helpers open their own
@@ -27,7 +27,7 @@ import { getDataDir } from "../config/dataDir";
  * forward-migrate older snapshots (migrations are idempotent on boot) but
  * never down-migrate.
  */
-export const BACKUP_FORMAT_VERSION = 1;
+export const BACKUP_FORMAT_VERSION = 2;
 
 const VERSION_SETTING_KEY = "__backup_format_version";
 

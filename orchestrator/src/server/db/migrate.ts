@@ -4,8 +4,8 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { basename, dirname, isAbsolute, join } from "node:path";
 import Database from "better-sqlite3";
 import { getDataDir } from "../config/dataDir";
 
@@ -548,6 +548,20 @@ const migrations: string[] = [
      created_at TEXT NOT NULL DEFAULT (datetime('now')),
      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
    )`,
+
+  // Generated job PDFs (tailored resume + cover letter) as BLOBs, so the DB
+  // is the complete portable installation. No REFERENCES clause: the runtime
+  // connection never enables PRAGMA foreign_keys, so a cascade would be dead
+  // code — cleanup is explicit at the delete sites (db/clear.ts, the
+  // jobs-repo bulk deletes). Backfill from the legacy data/pdfs files lives
+  // in a guarded JS block near the bottom of this file.
+  `CREATE TABLE IF NOT EXISTS job_pdfs (
+     job_id TEXT NOT NULL,
+     kind TEXT NOT NULL CHECK (kind IN ('resume','cover_letter')),
+     data BLOB NOT NULL,
+     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+     PRIMARY KEY (job_id, kind)
+   )`,
 ];
 
 console.log("🔧 Running database migrations...");
@@ -852,6 +866,90 @@ try {
   }
 } catch (error) {
   console.error("❌ cv_documents legacy-column rebuild failed:", error);
+  process.exit(1);
+}
+
+// Job-PDF blob backfill + path normalization.
+//
+// Older installs stored generated PDFs on disk under DATA_DIR/pdfs and kept
+// ABSOLUTE paths in jobs.pdf_path / cover_letter_pdf_path. Now the bytes
+// live in job_pdfs and the columns hold the canonical relative filename
+// (resume_<id>.pdf / cover_letter_<id>.pdf) purely as an existence flag. Per
+// row and kind:
+//   - blob row already exists  → just normalize the column (crash recovery).
+//   - legacy file found        → import bytes, normalize the column.
+//   - file genuinely absent    → NULL the column (client shows "no PDF";
+//                                re-render is pure tectonic, no LLM cost).
+//   - file exists but unreadable (EACCES/IO) → skip + log, retry next boot;
+//     the pointer must survive while the bytes are still recoverable.
+// Idempotent: after a clean pass every non-empty column has a blob row and
+// the canonical name, so subsequent boots reduce to a no-op SELECT. Never
+// deletes disk files — the user cleans data/pdfs manually.
+try {
+  const pdfDir = join(getDataDir(), "pdfs");
+  const KINDS = [
+    { column: "pdf_path", kind: "resume", prefix: "resume" },
+    {
+      column: "cover_letter_pdf_path",
+      kind: "cover_letter",
+      prefix: "cover_letter",
+    },
+  ] as const;
+
+  const hasBlob = sqlite.prepare(
+    "SELECT 1 FROM job_pdfs WHERE job_id = ? AND kind = ?",
+  );
+  const insertBlob = sqlite.prepare(
+    "INSERT INTO job_pdfs (job_id, kind, data) VALUES (?, ?, ?)",
+  );
+
+  for (const { column, kind, prefix } of KINDS) {
+    const rows = sqlite
+      .prepare(
+        `SELECT id, ${column} AS path FROM jobs
+         WHERE ${column} IS NOT NULL AND ${column} != ''`,
+      )
+      .all() as Array<{ id: string; path: string }>;
+
+    for (const row of rows) {
+      const canonicalName = `${prefix}_${row.id}.pdf`;
+      const setColumn = (value: string | null) => {
+        if (value !== row.path) {
+          sqlite
+            .prepare(`UPDATE jobs SET ${column} = ? WHERE id = ?`)
+            .run(value, row.id);
+        }
+      };
+
+      if (hasBlob.get(row.id, kind)) {
+        setColumn(canonicalName);
+        continue;
+      }
+
+      const candidates = [
+        ...(isAbsolute(row.path) ? [row.path] : []),
+        join(pdfDir, basename(row.path)),
+        join(pdfDir, canonicalName),
+      ];
+      const filePath = candidates.find((p) => existsSync(p));
+      if (!filePath) {
+        setColumn(null);
+        continue;
+      }
+
+      try {
+        insertBlob.run(row.id, kind, readFileSync(filePath));
+        setColumn(canonicalName);
+      } catch (readError) {
+        console.error(
+          `⚠️ job_pdfs backfill: could not import ${filePath} for job ${row.id} (${kind}) — leaving pointer for retry next boot:`,
+          readError,
+        );
+      }
+    }
+  }
+} catch (error) {
+  console.error("❌ job_pdfs backfill failed:", error);
   process.exit(1);
 }
 

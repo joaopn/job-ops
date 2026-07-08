@@ -216,11 +216,11 @@ export interface Job {
   tailoringSkipped: string[] | null; // JD keywords dropped for lack of evidence
   tailoringFailureReason: string | null; // Last processJob error; null = no recorded failure
   cvDocumentId: string | null; // FK to cv_documents.id; pins which CV was tailored
-  pdfPath: string | null; // Path to generated PDF
+  pdfPath: string | null; // Canonical filename of the generated PDF (bytes live in job_pdfs); truthiness = "a PDF exists"
   coverLetterDraft: string; // Legacy plain-text draft, kept until the field-overrides path fully replaces it
   coverLetterDocumentId: string | null; // FK to cover_letter_documents.id; null = "use the active doc"
   coverLetterFieldOverrides: CvFieldOverrides; // Per-job cover-letter overrides; body field's value is the textarea state
-  coverLetterPdfPath: string | null; // Path to rendered cover-letter PDF
+  coverLetterPdfPath: string | null; // Canonical filename of the rendered cover-letter PDF (bytes live in job_pdfs); truthiness = "a PDF exists"
   interviewPrep: string; // User-generated interview strategy (freeform markdown); "" until generated
   appliedDuplicateMatch?: AppliedDuplicateMatch | null; // Included on detail responses and may be omitted on list responses
 

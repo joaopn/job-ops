@@ -1,8 +1,6 @@
-import { promises as fs } from "node:fs";
-import { join } from "node:path";
 import { logger } from "@infra/logger";
-import { getDataDir } from "@server/config/dataDir";
 import * as repo from "@server/repositories/cover-letter-documents";
+import { upsertJobPdf } from "@server/repositories/job-pdfs";
 import * as jobsRepo from "@server/repositories/jobs";
 import {
   RenderTemplateError,
@@ -16,8 +14,8 @@ import type { CvFieldOverrides, Job } from "@shared/types";
 
 /**
  * 5h cover-letter Render path. Substitutes the per-job overrides into
- * the active cover-letter doc's templated tex, runs tectonic, writes
- * `data/pdfs/cover_letter_<jobId>.pdf`, persists the path on
+ * the active cover-letter doc's templated tex, runs tectonic, stores the
+ * PDF bytes in `job_pdfs` and persists the canonical relative filename on
  * `jobs.coverLetterPdfPath`. No LLM call — just template + render.
  *
  * The resolved doc id is the job's pinned `coverLetterDocumentId` if
@@ -86,9 +84,9 @@ export async function renderCoverLetterPdf(
     throw error;
   }
 
-  const pdfDir = join(getDataDir(), "pdfs");
-  await fs.mkdir(pdfDir, { recursive: true });
-  const pdfPath = join(pdfDir, `cover_letter_${args.jobId}.pdf`);
+  // Canonical relative filename — persisted on the job purely as an
+  // existence flag; the bytes live in job_pdfs and are served from there.
+  const pdfPath = `cover_letter_${args.jobId}.pdf`;
 
   let pdfBytes: Uint8Array;
   try {
@@ -107,7 +105,11 @@ export async function renderCoverLetterPdf(
     throw error;
   }
 
-  await fs.writeFile(pdfPath, Buffer.from(pdfBytes));
+  await upsertJobPdf({
+    jobId: args.jobId,
+    kind: "cover_letter",
+    data: Buffer.from(pdfBytes),
+  });
 
   // Pin doc id if not already pinned (e.g. user clicked Render without
   // first running Generate).

@@ -1,7 +1,4 @@
 // @vitest-environment node
-import { promises as fs } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import type { CvDocument, CvField } from "@shared/types";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -29,6 +26,10 @@ vi.mock("@server/repositories/cv-documents", () => ({
   getCvDocumentArchive: vi.fn(),
 }));
 
+vi.mock("@server/repositories/job-pdfs", () => ({
+  upsertJobPdf: vi.fn(),
+}));
+
 vi.mock("@server/services/cv/run-tectonic", async () => {
   const actual = await vi.importActual<
     typeof import("@server/services/cv/run-tectonic")
@@ -40,14 +41,11 @@ vi.mock("@server/services/cv/run-tectonic", async () => {
 });
 
 import * as cvRepo from "@server/repositories/cv-documents";
+import { upsertJobPdf } from "@server/repositories/job-pdfs";
 import { RunTectonicError, runTectonic } from "@server/services/cv/run-tectonic";
 import { generatePdf } from "./pdf";
 
-let dataDir: string;
-
-beforeEach(async () => {
-  dataDir = await fs.mkdtemp(join(tmpdir(), "pdf-svc-test-"));
-  process.env.DATA_DIR = dataDir;
+beforeEach(() => {
   vi.mocked(cvRepo.getCvDocumentById).mockResolvedValue(FAKE_CV);
   vi.mocked(cvRepo.getCvDocumentArchive).mockResolvedValue(
     Buffer.from("\\documentclass{article}\n", "utf8"),
@@ -58,8 +56,7 @@ beforeEach(async () => {
   });
 });
 
-afterEach(async () => {
-  await fs.rm(dataDir, { recursive: true, force: true });
+afterEach(() => {
   vi.clearAllMocks();
 });
 
@@ -71,11 +68,13 @@ describe("generatePdf", () => {
     });
 
     expect(result.success).toBe(true);
-    const expectedPath = join(dataDir, "pdfs", "resume_job-42.pdf");
-    expect(result.pdfPath).toBe(expectedPath);
+    expect(result.pdfPath).toBe("resume_job-42.pdf");
 
-    const written = await fs.readFile(expectedPath);
-    expect(written.subarray(0, 4).toString("ascii")).toBe("%PDF");
+    expect(upsertJobPdf).toHaveBeenCalledTimes(1);
+    const upsertArgs = vi.mocked(upsertJobPdf).mock.calls[0][0];
+    expect(upsertArgs.jobId).toBe("job-42");
+    expect(upsertArgs.kind).toBe("resume");
+    expect(upsertArgs.data.subarray(0, 4).toString("ascii")).toBe("%PDF");
 
     expect(runTectonic).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -116,6 +115,7 @@ describe("generatePdf", () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/no actual change to the CV/);
+    expect(upsertJobPdf).not.toHaveBeenCalled();
   });
 
   it("renders successfully when overrides are no-op but allowBaselineRender is true", async () => {
@@ -133,7 +133,7 @@ describe("generatePdf", () => {
     });
 
     expect(result.success).toBe(true);
-    expect(result.pdfPath).toBe(join(dataDir, "pdfs", "resume_job-44b.pdf"));
+    expect(result.pdfPath).toBe("resume_job-44b.pdf");
   });
 
   it("hard-fails when the CV has no templatedTex (legacy upload)", async () => {
@@ -172,5 +172,6 @@ describe("generatePdf", () => {
     });
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/LaTeX compile failed/);
+    expect(upsertJobPdf).not.toHaveBeenCalled();
   });
 });

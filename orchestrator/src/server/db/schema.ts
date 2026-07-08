@@ -18,6 +18,7 @@ import {
   blob,
   index,
   integer,
+  primaryKey,
   real,
   sqliteTable,
   text,
@@ -174,6 +175,23 @@ export const jobs = sqliteTable("jobs", {
   createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
   updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
 });
+
+// Generated job PDFs (tailored resume + cover letter) stored as BLOBs so the
+// DB is the complete portable installation. No .references(): the runtime
+// connection never enables PRAGMA foreign_keys, so cascade would be dead
+// code — cleanup is explicit at the delete sites.
+export const jobPdfs = sqliteTable(
+  "job_pdfs",
+  {
+    jobId: text("job_id").notNull(),
+    kind: text("kind", { enum: ["resume", "cover_letter"] }).notNull(),
+    data: blob("data", { mode: "buffer" }).notNull(),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.jobId, table.kind] }),
+  }),
+);
 
 export const tasks = sqliteTable("tasks", {
   id: text("id").primaryKey(),

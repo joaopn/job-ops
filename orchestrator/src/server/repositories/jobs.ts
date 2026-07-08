@@ -35,6 +35,7 @@ import {
   isProviderInstanceSource,
   resolveSourceDisplayLabel,
 } from "../services/sources/display";
+import { deleteOrphanedJobPdfs } from "./job-pdfs";
 import { getAllProviderInstances } from "./provider-instances";
 import { db, schema } from "../db/index";
 
@@ -825,6 +826,9 @@ export async function getUnscoredDiscoveredJobs(
  */
 export async function deleteJobsByStatus(status: JobStatus): Promise<number> {
   const result = await db.delete(jobs).where(eq(jobs.status, status)).run();
+  // No FK cascade at runtime (PRAGMA foreign_keys is never enabled) — sweep
+  // the deleted jobs' PDF blobs explicitly.
+  await deleteOrphanedJobPdfs();
   return result.changes;
 }
 
@@ -920,6 +924,8 @@ export async function deleteJobsByCategory(
       ),
     )
     .run();
+  // No FK cascade at runtime — sweep the deleted jobs' PDF blobs explicitly.
+  await deleteOrphanedJobPdfs();
   return result.changes;
 }
 

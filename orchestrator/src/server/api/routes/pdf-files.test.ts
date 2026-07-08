@@ -1,0 +1,70 @@
+import type { Server } from "node:http";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { startServer, stopServer } from "./test-utils";
+
+const PDF_BYTES = Buffer.from("%PDF-1.7 fake body", "utf8");
+
+describe.sequential("GET /pdfs/:filename", () => {
+  let server: Server;
+  let baseUrl: string;
+  let closeDb: () => void;
+  let tempDir: string;
+
+  beforeEach(async () => {
+    ({ server, baseUrl, closeDb, tempDir } = await startServer());
+  });
+
+  afterEach(async () => {
+    await stopServer({ server, closeDb, tempDir });
+  });
+
+  it("serves a stored resume PDF with inline headers", async () => {
+    const { upsertJobPdf } = await import("@server/repositories/job-pdfs");
+    await upsertJobPdf({ jobId: "job-1", kind: "resume", data: PDF_BYTES });
+
+    const res = await fetch(`${baseUrl}/pdfs/resume_job-1.pdf?v=cachebust`);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("application/pdf");
+    expect(res.headers.get("content-disposition")).toBe(
+      'inline; filename="resume_job-1.pdf"',
+    );
+    const body = Buffer.from(await res.arrayBuffer());
+    expect(body).toEqual(PDF_BYTES);
+  });
+
+  it("serves a stored cover-letter PDF", async () => {
+    const { upsertJobPdf } = await import("@server/repositories/job-pdfs");
+    await upsertJobPdf({
+      jobId: "job-2",
+      kind: "cover_letter",
+      data: PDF_BYTES,
+    });
+
+    const res = await fetch(`${baseUrl}/pdfs/cover_letter_job-2.pdf`);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("application/pdf");
+  });
+
+  it("404s when no blob row exists", async () => {
+    const res = await fetch(`${baseUrl}/pdfs/resume_missing-job.pdf`);
+    expect(res.status).toBe(404);
+  });
+
+  it("404s on a malformed filename", async () => {
+    const res = await fetch(`${baseUrl}/pdfs/evil..%2Fjobs.db`);
+    expect(res.status).toBe(404);
+  });
+
+  it("upsert replaces the stored bytes for the same job and kind", async () => {
+    const { upsertJobPdf } = await import("@server/repositories/job-pdfs");
+    await upsertJobPdf({ jobId: "job-3", kind: "resume", data: PDF_BYTES });
+    const updated = Buffer.from("%PDF-1.7 updated body", "utf8");
+    await upsertJobPdf({ jobId: "job-3", kind: "resume", data: updated });
+
+    const res = await fetch(`${baseUrl}/pdfs/resume_job-3.pdf`);
+    const body = Buffer.from(await res.arrayBuffer());
+    expect(body).toEqual(updated);
+  });
+});
