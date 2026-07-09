@@ -94,6 +94,7 @@ export interface AppSettings {
 
   // Simple strings:
   defaultProfileId: string | null;
+  userProfileName: string | null;
   onboardingBasicAuthDecision: "enabled" | "skipped" | null;
   basicAuthUser: string | null;
   basicAuthPassword: string | null;

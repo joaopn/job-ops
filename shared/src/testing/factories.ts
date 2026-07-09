@@ -163,6 +163,7 @@ export const createAppSettings = (
     override: null,
   },
   defaultProfileId: null,
+  userProfileName: null,
   onboardingBasicAuthDecision: null,
   scoringInstructions: {
     value: "",

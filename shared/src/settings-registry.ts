@@ -464,6 +464,13 @@ export const settingsRegistry = {
     kind: "string" as const,
     schema: z.string().trim().max(100),
   },
+  // Server-managed self-identity of this database ("user profile" = a whole
+  // DB). Set by the user-profiles routes and a migrate seed, never the
+  // Settings form.
+  userProfileName: {
+    kind: "string" as const,
+    schema: z.string().trim().min(1).max(200),
+  },
   onboardingBasicAuthDecision: {
     kind: "string" as const,
     schema: z.enum(["enabled", "skipped"]),

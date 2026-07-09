@@ -11,3 +11,4 @@ export * from "./profile";
 export * from "./provider-instances";
 export * from "./settings";
 export * from "./source-config";
+export * from "./user-profiles";

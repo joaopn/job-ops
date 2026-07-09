@@ -1198,5 +1198,30 @@ try {
   process.exit(1);
 }
 
+// Seed the user-profile self-identity name — guarded, absent-only.
+//
+// Every database ("user profile") self-describes via a `userProfileName`
+// settings row so the user-profiles store can list closed files by name.
+// Absent-only: a rename must never be overwritten on a later boot. Existing
+// installs self-identify as "Default" on first boot after upgrade; the fresh
+// DB created after "New profile" gets the same seed.
+try {
+  const row = sqlite
+    .prepare("SELECT value FROM settings WHERE key = ?")
+    .get("userProfileName") as { value: string } | undefined;
+  if (!row) {
+    sqlite
+      .prepare(
+        `INSERT INTO settings (key, value, created_at, updated_at)
+         VALUES (?, ?, datetime('now'), datetime('now'))`,
+      )
+      .run("userProfileName", "Default");
+    console.log("✅ seeded userProfileName");
+  }
+} catch (error) {
+  console.error("❌ userProfileName seed failed:", error);
+  process.exit(1);
+}
+
 sqlite.close();
 console.log("🎉 Database migrations complete!");
