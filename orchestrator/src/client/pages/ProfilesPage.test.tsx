@@ -11,6 +11,8 @@ vi.mock("@client/api", () => ({
   deleteProfile: vi.fn(),
   setDefaultProfile: vi.fn(),
   duplicateProfile: vi.fn(),
+  // Consumed by PageHeader's nav-drawer profile line.
+  getActiveUserProfile: vi.fn().mockResolvedValue({ name: "Default" }),
 }));
 
 vi.mock("@client/lib/toast", () => ({

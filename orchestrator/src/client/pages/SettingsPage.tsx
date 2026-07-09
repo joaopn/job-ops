@@ -12,6 +12,7 @@ import { EnvironmentSettingsSection } from "@client/pages/settings/components/En
 import { ModelSettingsSection } from "@client/pages/settings/components/ModelSettingsSection";
 import { PipelineSettingsSection } from "@client/pages/settings/components/PipelineSettingsSection";
 import { PromptsPanel } from "@client/pages/settings/components/PromptsPanel";
+import { UserProfilesPanel } from "@client/pages/settings/components/UserProfilesPanel";
 import {
   type LlmProviderId,
   normalizeLlmProvider,
@@ -93,6 +94,7 @@ type SettingsSectionId =
   | "chat"
   | "context-limits"
   | "environment"
+  | "user-profiles"
   | "display"
   | "pipeline"
   | "prompts"
@@ -161,6 +163,20 @@ const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         label: "Accounts & Access",
         description: "Service credentials and authentication protection.",
         searchTerms: ["security", "auth", "jwt", "session"],
+      },
+      {
+        id: "user-profiles",
+        label: "User Profiles",
+        description: "Switch, import, and export whole job databases.",
+        searchTerms: [
+          "database",
+          "profile",
+          "backup",
+          "restore",
+          "export",
+          "import",
+          "switch",
+        ],
       },
     ],
   },
@@ -261,6 +277,7 @@ const SECTION_FIELD_MAP: Record<
     "maxCoverLetterUploadBytes",
     "maxExpandedLatexBytes",
   ],
+  "user-profiles": [],
   prompts: [],
   "danger-zone": [],
 };
@@ -1030,6 +1047,9 @@ export const SettingsPage: React.FC = () => {
           layoutMode="panel"
         />
       );
+      break;
+    case "user-profiles":
+      activeSectionContent = <UserProfilesPanel layoutMode="panel" />;
       break;
     case "prompts":
       activeSectionContent = <PromptsPanel layoutMode="panel" />;

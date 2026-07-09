@@ -42,8 +42,10 @@ import type {
   RunJobBucket,
   RunJobsResponse,
   SearchTermsSuggestionResponse,
+  StoredUserProfile,
   SuitabilityCategory,
   UpdateJobNoteInput,
+  UserProfilesListResponse,
   ValidationResult,
 } from "@shared/types";
 
@@ -1729,27 +1731,52 @@ export async function clearDatabase(): Promise<{
   });
 }
 
+// User Profiles API (whole switchable databases)
+
+export async function getUserProfiles(): Promise<UserProfilesListResponse> {
+  return fetchApi<UserProfilesListResponse>("/user-profiles");
+}
+
+export async function getActiveUserProfile(): Promise<{ name: string }> {
+  return fetchApi<{ name: string }>("/user-profiles/active");
+}
+
+export async function importUserProfile(
+  file: File,
+): Promise<StoredUserProfile> {
+  const form = new FormData();
+  form.append("file", file);
+  return fetchApi<StoredUserProfile>("/user-profiles/import", {
+    method: "POST",
+    body: form,
+  });
+}
+
 /**
- * Download a DB snapshot. Bypasses the JSON `fetchApi` path since the response
- * is a binary SQLite file; triggers a browser download from the blob.
+ * Download a profile snapshot. Bypasses the JSON `fetchApi` path since the
+ * response is a binary SQLite file; triggers a browser download from the blob.
  */
-export async function exportDatabaseBackup(
-  includeSecrets: boolean,
-): Promise<void> {
+export async function exportUserProfile(opts: {
+  includeSecrets: boolean;
+  id?: string;
+}): Promise<void> {
   const authHeader = getCachedAuthHeader();
+  const endpoint = opts.id
+    ? `/user-profiles/${opts.id}/export`
+    : "/user-profiles/export";
   const response = await fetch(
-    `${API_BASE}/database/export?includeSecrets=${includeSecrets ? "1" : "0"}`,
+    `${API_BASE}${endpoint}?includeSecrets=${opts.includeSecrets ? "1" : "0"}`,
     { headers: authHeader ? { Authorization: authHeader } : {} },
   );
   if (!response.ok) {
-    throw new ApiClientError(`Backup export failed (${response.status}).`, {
+    throw new ApiClientError(`Profile export failed (${response.status}).`, {
       status: response.status,
     });
   }
   const blob = await response.blob();
   const disposition = response.headers.get("Content-Disposition") ?? "";
   const filename =
-    disposition.match(/filename="?([^"]+)"?/)?.[1] ?? "jobops-backup.db";
+    disposition.match(/filename="?([^"]+)"?/)?.[1] ?? "jobops-profile.db";
 
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -1761,15 +1788,53 @@ export async function exportDatabaseBackup(
   URL.revokeObjectURL(url);
 }
 
-export async function restoreDatabaseBackup(
-  file: File,
-): Promise<{ message: string; restartRequired: boolean }> {
-  const form = new FormData();
-  form.append("file", file);
-  return fetchApi<{ message: string; restartRequired: boolean }>(
-    "/database/restore",
-    { method: "POST", body: form },
-  );
+export async function activateUserProfile(id: string): Promise<{
+  message: string;
+  restartRequired: boolean;
+  stashedId: string;
+}> {
+  return fetchApi<{
+    message: string;
+    restartRequired: boolean;
+    stashedId: string;
+  }>(`/user-profiles/${id}/activate`, { method: "POST" });
+}
+
+export async function newUserProfile(): Promise<{
+  message: string;
+  restartRequired: boolean;
+  stashedId: string;
+}> {
+  return fetchApi<{
+    message: string;
+    restartRequired: boolean;
+    stashedId: string;
+  }>("/user-profiles/new", { method: "POST" });
+}
+
+export async function renameActiveUserProfile(
+  name: string,
+): Promise<{ name: string }> {
+  return fetchApi<{ name: string }>("/user-profiles/active", {
+    method: "PATCH",
+    body: JSON.stringify({ name }),
+  });
+}
+
+export async function renameStoredUserProfile(
+  id: string,
+  name: string,
+): Promise<{ id: string; name: string }> {
+  return fetchApi<{ id: string; name: string }>(`/user-profiles/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ name }),
+  });
+}
+
+export async function deleteUserProfile(id: string): Promise<{ id: string }> {
+  return fetchApi<{ id: string }>(`/user-profiles/${id}`, {
+    method: "DELETE",
+  });
 }
 
 export async function deleteJobsByStatus(status: string): Promise<{

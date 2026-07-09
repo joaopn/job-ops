@@ -2,6 +2,9 @@
  * Shared layout components for consistent page structure.
  */
 
+import * as api from "@client/api";
+import { queryKeys } from "@client/lib/queryKeys";
+import { useQuery } from "@tanstack/react-query";
 import { ExternalLink, type LucideIcon, Menu } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
@@ -24,6 +27,8 @@ import { StatusBadgeIndicator } from "./StatusIndicator";
 // ============================================================================
 // Page Header
 // ============================================================================
+
+const ACTIVE_NAME_STALE_MS = 5 * 60_000;
 
 interface PageHeaderProps {
   icon: LucideIcon | React.FC<{ className?: string }>;
@@ -76,6 +81,17 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   const setNavOpen = onNavOpenChange ?? setInternalNavOpen;
   const version = getAppVersion();
 
+  // The active user profile's name, shown in the nav drawer. It only changes
+  // via a rename (which invalidates queryKeys.userProfiles) or a profile
+  // switch (which hard-reloads the page), so the staleTime merely throttles
+  // refetch-on-focus noise. Renders nothing until loaded — the drawer must
+  // never depend on this request.
+  const activeProfileQuery = useQuery({
+    queryKey: queryKeys.userProfiles.active(),
+    queryFn: api.getActiveUserProfile,
+    staleTime: ACTIVE_NAME_STALE_MS,
+  });
+
   const handleNavClick = (to: string, activePaths?: string[]) => {
     if (isNavActive(location.pathname, to, activePaths)) {
       setNavOpen(false);
@@ -107,6 +123,11 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
             <SheetContent side="left" className="w-64 flex flex-col">
               <SheetHeader>
                 <SheetTitle>JobOps</SheetTitle>
+                {activeProfileQuery.data ? (
+                  <p className="text-xs font-normal text-muted-foreground">
+                    Profile: {activeProfileQuery.data.name}
+                  </p>
+                ) : null}
               </SheetHeader>
               <nav className="mt-6 flex flex-col gap-2">
                 {NAV_LINKS.map(({ to, label, icon: NavIcon, activePaths }) => (

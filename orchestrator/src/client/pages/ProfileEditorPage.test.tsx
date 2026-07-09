@@ -11,6 +11,8 @@ vi.mock("@client/api", () => ({
   getProviderInstances: vi.fn(),
   createProfile: vi.fn(),
   updateProfile: vi.fn(),
+  // Consumed by PageHeader's nav-drawer profile line.
+  getActiveUserProfile: vi.fn().mockResolvedValue({ name: "Default" }),
 }));
 
 vi.mock("@client/lib/toast", () => ({

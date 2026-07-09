@@ -1,9 +1,15 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type React from "react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import { OrchestratorHeader } from "./OrchestratorHeader";
+
+// PageHeader's nav drawer fetches the active user-profile name.
+vi.mock("@client/api", () => ({
+  getActiveUserProfile: vi.fn().mockResolvedValue({ name: "Default" }),
+}));
 
 vi.mock("@/components/ui/sheet", () => ({
   Sheet: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -44,12 +50,18 @@ const renderHeader = (
     ...overrides,
   };
 
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+
   return {
     props,
     ...render(
-      <MemoryRouter>
-        <OrchestratorHeader {...props} />
-      </MemoryRouter>,
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <OrchestratorHeader {...props} />
+        </MemoryRouter>
+      </QueryClientProvider>,
     ),
   };
 };
