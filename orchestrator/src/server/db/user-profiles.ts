@@ -267,6 +267,35 @@ export function storeImportedProfile(stagingPath: string): {
   return { id, name };
 }
 
+/**
+ * Pre-create the fresh live DB after a "new profile" stash so the next boot
+ * adopts the user's chosen name: migrations create `settings` with IF NOT
+ * EXISTS and the `userProfileName` seed is absent-only, so a table + name row
+ * that already exist survive untouched. The plain `new Database(path)` is the
+ * ONE deliberate exception to this module's `fileMustExist` rule — creation
+ * is the point, and the caller has just stashed the previous live DB away.
+ */
+export function createFreshLiveDb(name: string): void {
+  const d = new Database(liveDbPath());
+  try {
+    // Mirrored from migrate.ts's settings DDL — keep in lockstep.
+    d.exec(`CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+    const now = new Date().toISOString();
+    d.prepare(
+      `INSERT INTO settings (key, value, created_at, updated_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+    ).run(NAME_SETTING_KEY, name, now, now);
+  } finally {
+    d.close();
+  }
+}
+
 export function deleteStoredProfile(id: string): boolean {
   const path = storedProfilePath(id);
   if (!existsSync(path)) {

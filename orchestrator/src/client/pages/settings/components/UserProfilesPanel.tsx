@@ -133,6 +133,7 @@ export const UserProfilesPanel: React.FC<UserProfilesPanelProps> = ({
   const [pendingDelete, setPendingDelete] =
     useState<StoredUserProfile | null>(null);
   const [confirmNew, setConfirmNew] = useState(false);
+  const [newProfileName, setNewProfileName] = useState("");
   const [isExporting, setIsExporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -485,7 +486,13 @@ export const UserProfilesPanel: React.FC<UserProfilesPanelProps> = ({
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={confirmNew} onOpenChange={setConfirmNew}>
+      <AlertDialog
+        open={confirmNew}
+        onOpenChange={(open) => {
+          setConfirmNew(open);
+          if (!open) setNewProfileName("");
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Start a fresh profile?</AlertDialogTitle>
@@ -496,12 +503,19 @@ export const UserProfilesPanel: React.FC<UserProfilesPanelProps> = ({
               authentication is enabled.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <Input
+            value={newProfileName}
+            onChange={(event) => setNewProfileName(event.target.value)}
+            placeholder="Default"
+            aria-label="Name for the new profile"
+          />
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                startNewProfile();
+                startNewProfile(newProfileName.trim() || undefined);
                 setConfirmNew(false);
+                setNewProfileName("");
               }}
             >
               Start fresh

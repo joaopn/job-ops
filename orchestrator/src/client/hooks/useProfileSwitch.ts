@@ -40,7 +40,7 @@ export function useProfileSwitch() {
   });
 
   const newProfileMutation = useMutation({
-    mutationFn: () => api.newUserProfile(),
+    mutationFn: (name?: string) => api.newUserProfile(name),
     onSuccess: () => {
       void beginSwitch();
     },
@@ -54,7 +54,7 @@ export function useProfileSwitch() {
   return {
     switchState,
     activateProfile: (id: string) => activateMutation.mutate(id),
-    startNewProfile: () => newProfileMutation.mutate(),
+    startNewProfile: (name?: string) => newProfileMutation.mutate(name),
     isPending: activateMutation.isPending || newProfileMutation.isPending,
   };
 }

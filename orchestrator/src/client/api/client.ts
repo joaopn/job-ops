@@ -1800,7 +1800,7 @@ export async function activateUserProfile(id: string): Promise<{
   }>(`/user-profiles/${id}/activate`, { method: "POST" });
 }
 
-export async function newUserProfile(): Promise<{
+export async function newUserProfile(name?: string): Promise<{
   message: string;
   restartRequired: boolean;
   stashedId: string;
@@ -1809,7 +1809,10 @@ export async function newUserProfile(): Promise<{
     message: string;
     restartRequired: boolean;
     stashedId: string;
-  }>("/user-profiles/new", { method: "POST" });
+  }>("/user-profiles/new", {
+    method: "POST",
+    body: JSON.stringify(name ? { name } : {}),
+  });
 }
 
 export async function renameActiveUserProfile(

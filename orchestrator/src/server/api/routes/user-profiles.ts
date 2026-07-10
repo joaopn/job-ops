@@ -12,6 +12,7 @@ import { closeDb } from "@server/db/index";
 import { exportSnapshot, validateSnapshot } from "@server/db/snapshot";
 import {
   activateStoredProfile,
+  createFreshLiveDb,
   deleteStoredProfile,
   importStagingPath,
   listStoredProfiles,
@@ -33,6 +34,9 @@ export const userProfilesRouter = Router();
 
 const idSchema = z.string().uuid();
 const renameSchema = z.object({ name: z.string().trim().min(1).max(200) });
+const newProfileSchema = z.object({
+  name: z.string().trim().min(1).max(200).optional(),
+});
 
 const PIPELINE_RUNNING_MESSAGE =
   "Cannot switch user profiles while a pipeline run is in progress.";
@@ -165,9 +169,10 @@ userProfilesRouter.post("/import", async (req: Request, res: Response) => {
  * POST /api/user-profiles/new - stash the live DB as a stored profile and
  * restart into a fresh install (boot migrations + seeds create it).
  */
-userProfilesRouter.post("/new", async (_req: Request, res: Response) => {
+userProfilesRouter.post("/new", async (req: Request, res: Response) => {
   let swapStarted = false;
   try {
+    const { name } = newProfileSchema.parse(req.body ?? {});
     if (getPipelineStatus().isRunning) {
       return fail(res, conflict(PIPELINE_RUNNING_MESSAGE));
     }
@@ -175,8 +180,14 @@ userProfilesRouter.post("/new", async (_req: Request, res: Response) => {
     swapStarted = true;
     closeDb();
     const { id: stashedId } = stashLiveDb();
+    if (name) {
+      createFreshLiveDb(name);
+    }
 
-    logger.warn("exiting to start a fresh user profile", { stashedId });
+    logger.warn("exiting to start a fresh user profile", {
+      stashedId,
+      ...(name ? { name } : {}),
+    });
     exitAfterResponse(res);
     ok(res, {
       message:

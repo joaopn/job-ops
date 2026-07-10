@@ -238,7 +238,7 @@ describe("UserProfilesPanel", () => {
     );
   });
 
-  it("starts a fresh profile through the confirm dialog", async () => {
+  it("starts a fresh unnamed profile through the confirm dialog", async () => {
     renderPanel();
 
     fireEvent.click(
@@ -248,7 +248,30 @@ describe("UserProfilesPanel", () => {
       await screen.findByRole("button", { name: /start fresh/i }),
     );
 
-    await waitFor(() => expect(api.newUserProfile).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(api.newUserProfile).toHaveBeenCalledWith(undefined),
+    );
     expect(await screen.findByText("Switching profile…")).toBeInTheDocument();
+  });
+
+  it("passes a typed name when starting a fresh profile", async () => {
+    renderPanel();
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: /new profile/i }),
+    );
+    fireEvent.change(
+      await screen.findByRole("textbox", {
+        name: /name for the new profile/i,
+      }),
+      { target: { value: "  Side quest  " } },
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /start fresh/i }),
+    );
+
+    await waitFor(() =>
+      expect(api.newUserProfile).toHaveBeenCalledWith("Side quest"),
+    );
   });
 });

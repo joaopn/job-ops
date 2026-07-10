@@ -257,6 +257,39 @@ describe.sequential("User profiles API routes", () => {
     await vi.waitFor(() => expect(exitSpy).toHaveBeenCalledWith(0));
   });
 
+  it("pre-seeds the chosen name when starting a fresh named profile", async () => {
+    const res = await fetch(`${baseUrl}/api/user-profiles/new`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Job hunt 2027" }),
+    });
+    const body = await res.json();
+
+    expect(body.ok).toBe(true);
+    expect(body.data.restartRequired).toBe(true);
+    expect(readProfileNameRaw(join(tempDir, "jobs.db"))).toBe(
+      "Job hunt 2027",
+    );
+
+    await vi.waitFor(() => expect(exitSpy).toHaveBeenCalledWith(0));
+  });
+
+  it("rejects an empty new-profile name without touching anything", async () => {
+    const res = await fetch(`${baseUrl}/api/user-profiles/new`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "" }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(existsSync(join(tempDir, "jobs.db"))).toBe(true);
+    const stored = readdirSync(storeDir(tempDir)).filter((f) =>
+      f.endsWith(".db"),
+    );
+    expect(stored).toEqual([]);
+    expect(exitSpy).not.toHaveBeenCalled();
+  });
+
   it("renames the active profile", async () => {
     const res = await fetch(`${baseUrl}/api/user-profiles/active`, {
       method: "PATCH",

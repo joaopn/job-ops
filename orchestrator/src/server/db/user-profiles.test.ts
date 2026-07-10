@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { BACKUP_FORMAT_VERSION, validateSnapshot } from "./snapshot";
 import {
   activateStoredProfile,
+  createFreshLiveDb,
   deleteStoredProfile,
   importStagingPath,
   listStoredProfiles,
@@ -300,6 +301,16 @@ describe("listStoredProfiles", () => {
     expect(invalid?.invalid).toBe(true);
     expect(invalid?.invalidReason).toBeTruthy();
     expect(invalid?.stats).toBeNull();
+  });
+});
+
+describe("createFreshLiveDb", () => {
+  it("creates a fresh live DB carrying the chosen name", () => {
+    expect(existsSync(liveDbPath())).toBe(false);
+
+    createFreshLiveDb("Job hunt 2027");
+
+    expect(readProfileName(liveDbPath())).toBe("Job hunt 2027");
   });
 });
 

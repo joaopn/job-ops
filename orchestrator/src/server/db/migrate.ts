@@ -146,6 +146,7 @@ const migrations: string[] = [
     result_summary TEXT
   )`,
 
+  // Mirrored in db/user-profiles.ts#createFreshLiveDb — keep in lockstep.
   `CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL,
