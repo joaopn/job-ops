@@ -1,8 +1,5 @@
 import * as api from "@client/api";
-import {
-  reloadApp,
-  waitForServerRestart,
-} from "@client/pages/settings/components/restart-poll";
+import { reloadApp, waitForServerRestart } from "@client/lib/restart-poll";
 import type {
   StoredUserProfile,
   UserProfilesListResponse,
@@ -28,7 +25,7 @@ vi.mock("@client/lib/toast", () => ({
   toast: { error: vi.fn(), success: vi.fn() },
 }));
 
-vi.mock("@client/pages/settings/components/restart-poll", () => ({
+vi.mock("@client/lib/restart-poll", () => ({
   waitForServerRestart: vi.fn(),
   reloadApp: vi.fn(),
 }));

@@ -1,10 +1,8 @@
 import * as api from "@client/api";
+import { ProfileSwitchOverlay } from "@client/components/ProfileSwitchOverlay";
+import { useProfileSwitch } from "@client/hooks/useProfileSwitch";
 import { queryKeys } from "@client/lib/queryKeys";
 import { toast } from "@client/lib/toast";
-import {
-  reloadApp,
-  waitForServerRestart,
-} from "@client/pages/settings/components/restart-poll";
 import { SettingsSectionFrame } from "@client/pages/settings/components/SettingsSectionFrame";
 import type {
   ActiveUserProfile,
@@ -43,8 +41,6 @@ import { Input } from "@/components/ui/input";
 type UserProfilesPanelProps = {
   layoutMode?: "accordion" | "panel";
 };
-
-type SwitchState = null | "switching" | "timeout";
 
 function formatBytes(bytes: number): string {
   if (bytes >= 1024 * 1024) {
@@ -126,8 +122,9 @@ export const UserProfilesPanel: React.FC<UserProfilesPanelProps> = ({
   layoutMode,
 }) => {
   const queryClient = useQueryClient();
+  const { switchState, activateProfile, startNewProfile, isPending } =
+    useProfileSwitch();
   const [includeSecrets, setIncludeSecrets] = useState(false);
-  const [switchState, setSwitchState] = useState<SwitchState>(null);
   const [pendingImportFile, setPendingImportFile] = useState<File | null>(
     null,
   );
@@ -146,16 +143,6 @@ export const UserProfilesPanel: React.FC<UserProfilesPanelProps> = ({
 
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: queryKeys.userProfiles.all });
-
-  const beginSwitch = async () => {
-    setSwitchState("switching");
-    const result = await waitForServerRestart();
-    if (result === "restarted") {
-      reloadApp();
-      return;
-    }
-    setSwitchState("timeout");
-  };
 
   const renameActiveMutation = useMutation({
     mutationFn: (name: string) => api.renameActiveUserProfile(name),
@@ -182,30 +169,6 @@ export const UserProfilesPanel: React.FC<UserProfilesPanelProps> = ({
     },
   });
 
-  const activateMutation = useMutation({
-    mutationFn: (id: string) => api.activateUserProfile(id),
-    onSuccess: () => {
-      void beginSwitch();
-    },
-    onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : "Activation failed",
-      );
-    },
-  });
-
-  const newProfileMutation = useMutation({
-    mutationFn: () => api.newUserProfile(),
-    onSuccess: () => {
-      void beginSwitch();
-    },
-    onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : "New profile failed",
-      );
-    },
-  });
-
   const importMutation = useMutation({
     mutationFn: (file: File) => api.importUserProfile(file),
     onSuccess: (imported) => {
@@ -229,10 +192,7 @@ export const UserProfilesPanel: React.FC<UserProfilesPanelProps> = ({
     },
   });
 
-  const busy =
-    switchState !== null ||
-    activateMutation.isPending ||
-    newProfileMutation.isPending;
+  const busy = switchState !== null || isPending;
 
   const handleExport = async (id?: string) => {
     setIsExporting(true);
@@ -514,7 +474,7 @@ export const UserProfilesPanel: React.FC<UserProfilesPanelProps> = ({
             <AlertDialogAction
               onClick={() => {
                 if (pendingActivate) {
-                  activateMutation.mutate(pendingActivate.id);
+                  activateProfile(pendingActivate.id);
                 }
                 setPendingActivate(null);
               }}
@@ -540,7 +500,7 @@ export const UserProfilesPanel: React.FC<UserProfilesPanelProps> = ({
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                newProfileMutation.mutate();
+                startNewProfile();
                 setConfirmNew(false);
               }}
             >
@@ -582,34 +542,7 @@ export const UserProfilesPanel: React.FC<UserProfilesPanelProps> = ({
         </AlertDialogContent>
       </AlertDialog>
 
-      {switchState !== null ? (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-background/95 px-6 text-center">
-          {switchState === "switching" ? (
-            <>
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              <div className="text-base font-medium">Switching profile…</div>
-              <p className="max-w-sm text-sm text-muted-foreground">
-                The app is restarting into the selected profile. You may need
-                to log in again.
-              </p>
-            </>
-          ) : (
-            <>
-              <AlertTriangle className="h-8 w-8 text-destructive" />
-              <div className="text-base font-medium">
-                The app didn&apos;t come back
-              </div>
-              <p className="max-w-sm text-sm text-muted-foreground">
-                The profile switch went through, but the server hasn&apos;t
-                restarted on its own. Restart the app manually, then reload.
-              </p>
-              <Button type="button" variant="outline" onClick={reloadApp}>
-                Reload
-              </Button>
-            </>
-          )}
-        </div>
-      ) : null}
+      <ProfileSwitchOverlay state={switchState} />
     </SettingsSectionFrame>
   );
 };
