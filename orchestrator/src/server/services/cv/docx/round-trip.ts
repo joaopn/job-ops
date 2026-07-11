@@ -57,7 +57,8 @@ export function roundTripCheck(
   return { ok: true };
 }
 
-function firstMismatch(
+/** Exported for the gate loop's T1/T0 comparison (docx-upload-pipeline). */
+export function firstMismatch(
   expected: ReadonlyMap<string, string>,
   actual: ReadonlyMap<string, string>,
 ): { ok: false; partName: string; diff: string } | null {

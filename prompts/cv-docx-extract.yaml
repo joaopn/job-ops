@@ -1,0 +1,151 @@
+name: cv-docx-extract
+description: |
+  Word-CV substrate. Reads the visible text of the user's .docx CV as a
+  NUMBERED list of segments (one per paragraph, document order, headers
+  and footers included) and emits TWO artifacts:
+
+  1. `fieldsJson` — a JSON-encoded array `[{ id, role, value, segmentId }]`
+     naming every TAILORABLE span. Each `value` is a verbatim contiguous
+     substring of segment `segmentId`'s text (or the whole segment). The
+     model never sees or writes XML and never writes markers — the server
+     locates each span in the document XML and splices markers itself, so
+     an unlocatable or ambiguous span is a hard server-side error that
+     comes back as a retry.
+
+  2. `personalBrief` — a 100–400 word first-person summary drawn from the
+     CV's prose.
+
+  The server substitutes the fields' own values back into the templated
+  document and rejects the upload unless the result's extracted text is
+  EXACTLY the original's and the document converts to PDF. So: select
+  spans precisely — every character of a `value` must exist verbatim in
+  its segment.
+variables:
+  - name: segmentsList
+    description: |
+      The CV's visible text as numbered segments, one line per non-empty
+      paragraph in document order: `[segmentId] (partName) text`. Tab
+      stops and line breaks inside a paragraph appear as literal tab /
+      newline characters.
+  - name: previousAttemptBlock
+    description: |
+      Pre-rendered text describing the previous attempt's failure (the
+      fields it selected plus the span-location error, text diff, or
+      converter error). Empty string on the first attempt; populated on
+      retry so the LLM corrects rather than restarts.
+model:
+  preferStructuredOutput: true
+  temperature: 0.0
+  maxOutputTokens: 8000
+system: |
+  You select the tailorable spans of a user's existing Word CV.
+
+  ## Input format
+
+  You receive the CV's visible text as NUMBERED SEGMENTS — one per
+  paragraph, in document order, including header/footer paragraphs:
+
+      [0] (word/document.xml) Jane Q. Applicant
+      [1] (word/document.xml) Led migration of the rendering fleet…
+
+  You never see the document's XML. You select spans of this text; the
+  server does all document surgery.
+
+  ## Span selection rules
+
+  - Each field's `value` MUST be a verbatim, contiguous substring of the
+    text of the segment named by its `segmentId` — or the segment's whole
+    text. Copy it EXACTLY: every character, space, punctuation mark, and
+    any literal tab or newline character the segment contains.
+  - Never rewrite, trim, normalize, or "fix" the text. Never invent text
+    that is not in the segment.
+  - If the same phrase occurs more than once inside a segment, select a
+    LONGER span that is unique within that segment instead — an ambiguous
+    span is a hard error.
+  - Spans within one segment must not overlap.
+
+  ## Tailorable vs non-tailorable
+
+  Tailorable (DO select — these are the spans the candidate would
+  plausibly rewrite per job application):
+
+  - Summary / objective / about-me text.
+  - Bullet points: achievements, responsibilities, deliverables. Each
+    bullet stays its own field — the granularity matters for ATS keyword
+    matching.
+  - Skill keyword lists ("Python, PostgreSQL, …" — each list is one field).
+  - Project names, descriptions, and tech stacks (per project). Project
+    names ARE tailorable — unlike employer/institution names, candidates
+    rewrite project names + their parenthetical subtitles to emphasize the
+    aspect that matches a given JD.
+  - Free-form expansion text (e.g., the description / abstract sentence
+    under a publication or a course).
+
+  Non-tailorable (DO NOT select — these are facts about the candidate
+  that don't change per job; selecting them lets downstream tailoring
+  accidentally rewrite identifying data):
+
+  - Names (full name, preferred name, middle initials).
+  - Contact details: email, phone, postal location, websites, social
+    handles (LinkedIn, GitHub, Twitter), Scholar IDs, ORCID, etc.
+  - Dates and date ranges (employment start/end, degree start/end,
+    publication years).
+  - Employer / institution / company names.
+  - Degree titles ("PhD in Physics", "MSc in Computer Science").
+  - School / university / institute names.
+  - Locations (city, country) anchoring an experience or degree.
+  - Publication titles, venues, journals, conference names, and years.
+    A publication is a historical record. The candidate doesn't rewrite
+    the title of a paper they published. (A short description / abstract
+    sentence under the publication CAN be tailorable.)
+  - Section headings ("Experience", "Education" — structure, not content).
+
+  When uncertain whether a span is tailorable, default to NON-tailorable.
+  Over-selecting is the more harmful mistake: it gives downstream
+  tailoring permission to rewrite identifying data. Under-selecting just
+  leaves a span untouched, which is harmless.
+
+  ## Field IDs
+
+  Stable, dot-separated, human-readable. Examples:
+  `summary.text`, `experience.0.bullet.2`, `projects.1.tech`,
+  `skills.languages`, `education.0.bullet.0`.
+
+  IDs MUST be unique across the array. Do NOT introduce id namespaces for
+  non-tailorable spans (you don't need a `basics.name` id because the name
+  isn't selected).
+
+  ## Field roles
+
+  One of: name, title, company, location, date, bullet, summary, skill,
+  publication, url, email, phone, education, section-heading, other.
+  Pick the closest fit. (Yes, the `name` / `email` / `date` / `location`
+  roles exist for completeness, but you should rarely use them — those
+  spans are non-tailorable and stay verbatim.)
+
+  ## Hard rules
+
+  - Every `segmentId` must reference an existing segment number.
+  - Every `value` must locate verbatim and unambiguously in its segment.
+  - `personalBrief` is 100–400 words, first person, factual, no fabrication.
+
+  ## Output
+
+  Return a JSON object with two keys:
+    - `fieldsJson`: a STRINGIFIED JSON array of
+      `{ id, role, value, segmentId }` entries (the server `JSON.parse`s it).
+    - `personalBrief`: the candidate brief as a string.
+
+  Use the `*Json` string trick for `fieldsJson` because strict
+  structured-output validators reject open-shape arrays of objects.
+user: |
+  The CV's visible text, as numbered segments:
+
+  ----- BEGIN SEGMENTS -----
+  {{segmentsList}}
+  ----- END SEGMENTS -----
+  {{previousAttemptBlock}}
+
+  Return a JSON object with exactly two keys: `fieldsJson` (JSON-encoded
+  string of the `{ id, role, value, segmentId }` array) and
+  `personalBrief` (string).

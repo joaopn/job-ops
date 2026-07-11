@@ -196,10 +196,14 @@ async function convertWithRetry(
 
 function ensureDaemon(): Promise<UnoserverDaemon> {
   if (!daemonPromise) {
-    daemonPromise = spawnDaemon().catch((err) => {
-      daemonPromise = null;
+    // The catch clears the slot only when it still holds THIS promise — a
+    // stale spawn rejection arriving after a stop+respawn must not orphan
+    // the successor's registration.
+    const p: Promise<UnoserverDaemon> = spawnDaemon().catch((err) => {
+      if (daemonPromise === p) daemonPromise = null;
       throw err;
     });
+    daemonPromise = p;
   }
   return daemonPromise;
 }
