@@ -475,6 +475,15 @@ export const settingsRegistry = {
     kind: "string" as const,
     schema: z.enum(["enabled", "skipped"]),
   },
+  // Server-managed, IMMUTABLE per User Profile: the CV substrate format,
+  // written once by the onboarding wizard and then frozen by the write-once
+  // guard in services/settings-update/registry.ts (the generic settings
+  // PATCH can otherwise write every registry key). Unset = effective
+  // "latex", which also makes every pre-feature DB correctly LaTeX.
+  cvSourceFormat: {
+    kind: "string" as const,
+    schema: z.enum(["latex", "docx"]),
+  },
   basicAuthUser: {
     kind: "string" as const,
     envKey: "BASIC_AUTH_USER",

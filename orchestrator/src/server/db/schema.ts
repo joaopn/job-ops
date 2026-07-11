@@ -184,7 +184,9 @@ export const jobPdfs = sqliteTable(
   "job_pdfs",
   {
     jobId: text("job_id").notNull(),
-    kind: text("kind", { enum: ["resume", "cover_letter"] }).notNull(),
+    kind: text("kind", {
+      enum: ["resume", "cover_letter", "resume_docx"],
+    }).notNull(),
     data: blob("data", { mode: "buffer" }).notNull(),
     updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
   },

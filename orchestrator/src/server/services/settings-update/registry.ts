@@ -1,3 +1,5 @@
+import { conflict } from "@infra/errors";
+import { hasCvDocuments } from "@server/repositories/cv-documents";
 import type { SettingKey } from "@server/repositories/settings";
 import * as settingsRepo from "@server/repositories/settings";
 import { applyEnvValue, normalizeEnvInput } from "@server/services/envSettings";
@@ -96,3 +98,38 @@ for (const [key, def] of Object.entries(settingsRegistry)) {
     });
   };
 }
+
+// Write-once guard for cvSourceFormat: the CV substrate format is an
+// IMMUTABLE per-User-Profile decision (word-cv design). This guard is the
+// real server-side mechanism behind "server-managed" — the generic settings
+// PATCH can write every registry key. Rejected writes throw during the
+// collect phase, before ANY action of the batch persists.
+//
+// Once a value is stored, EVERY differing write is rejected — including a
+// null clear: clearing a stored "docx" is itself an effective-format flip
+// (back to the "latex" default), and permitting clears would make the
+// write-once rule two-step launderable (clear, then first-write the other
+// value). While unset (effective "latex"), the first write may not change
+// the effective format over existing CV documents: they were all accepted as
+// LaTeX, and re-dispatching them as docx would misinterpret every row.
+const genericCvSourceFormatHandler = settingsUpdateRegistry.cvSourceFormat;
+settingsUpdateRegistry.cvSourceFormat = async ({ key, value, context }) => {
+  const stored = await settingsRepo.getSetting("cvSourceFormat");
+
+  if (stored !== null) {
+    if (value !== stored) {
+      throw conflict(
+        "CV format is fixed per user profile once set; create a new user profile to use a different format.",
+      );
+    }
+  } else if (value === "docx" && (await hasCvDocuments())) {
+    throw conflict(
+      "Cannot set the CV format to Word while CV documents already exist in this profile.",
+    );
+  }
+
+  if (!genericCvSourceFormatHandler) {
+    throw new Error("cvSourceFormat handler missing from settings registry");
+  }
+  return genericCvSourceFormatHandler({ key, value, context });
+};

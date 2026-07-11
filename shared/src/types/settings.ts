@@ -48,6 +48,8 @@ export interface DemoInfoResponse {
   baselineName: string | null;
 }
 
+export type CvSourceFormat = "latex" | "docx";
+
 export type Resolved<T> = { value: T; default: T; override: T | null };
 export type ModelResolved = { value: string; override: string | null };
 
@@ -96,6 +98,7 @@ export interface AppSettings {
   defaultProfileId: string | null;
   userProfileName: string | null;
   onboardingBasicAuthDecision: "enabled" | "skipped" | null;
+  cvSourceFormat: CvSourceFormat | null;
   basicAuthUser: string | null;
   basicAuthPassword: string | null;
 

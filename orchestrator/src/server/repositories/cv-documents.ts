@@ -62,6 +62,14 @@ function mapRowToSummary(
   };
 }
 
+export async function hasCvDocuments(): Promise<boolean> {
+  const rows = await db
+    .select({ id: cvDocuments.id })
+    .from(cvDocuments)
+    .limit(1);
+  return rows.length > 0;
+}
+
 export async function listCvDocuments(): Promise<CvDocumentSummary[]> {
   const rows = await db
     .select({

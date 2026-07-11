@@ -165,6 +165,7 @@ export const createAppSettings = (
   defaultProfileId: null,
   userProfileName: null,
   onboardingBasicAuthDecision: null,
+  cvSourceFormat: null,
   scoringInstructions: {
     value: "",
     default: "",
