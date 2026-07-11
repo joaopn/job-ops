@@ -29,6 +29,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl && \
     rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 
+# LibreOffice Writer (headless, no Java — W1-verified sufficient for
+# docx→pdf) + metric-compatible fonts (Carlito→Calibri, Caladea→Cambria,
+# Liberation→Arial/Times) for Word-CV preview conversion. Lives in
+# runtime-base rather than the production stage so the tools image built
+# from build-sources can exercise the real converter in the test suite —
+# same reasoning as poppler-utils above.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libreoffice-core libreoffice-writer \
+    fonts-crosextra-carlito fonts-crosextra-caladea fonts-liberation \
+    fontconfig python3-uno && \
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
+
+# unoserver wraps the LibreOffice UNO API in a long-lived conversion daemon.
+# Cold `soffice --convert-to` is NOT a viable fallback: real-world CVs can
+# hang it indefinitely while converting fine through the daemon (W1 finding).
+RUN pip3 install --break-system-packages unoserver
+
 # Install Codex CLI for local app-server based inference.
 RUN npm install -g @openai/codex@${CODEX_CLI_VERSION}
 
