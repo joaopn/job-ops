@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { startServer, stopServer } from "./test-utils";
 
 const PDF_BYTES = Buffer.from("%PDF-1.7 fake body", "utf8");
+const DOCX_BYTES = Buffer.from("PK fake docx body", "latin1");
 
 describe.sequential("GET /pdfs/:filename", () => {
   let server: Server;
@@ -54,6 +55,47 @@ describe.sequential("GET /pdfs/:filename", () => {
 
   it("404s on a malformed filename", async () => {
     const res = await fetch(`${baseUrl}/pdfs/evil..%2Fjobs.db`);
+    expect(res.status).toBe(404);
+  });
+
+  it("serves a tailored .docx as an attachment with the Word MIME", async () => {
+    const { upsertJobPdf } = await import("@server/repositories/job-pdfs");
+    await upsertJobPdf({
+      jobId: "job-4",
+      kind: "resume_docx",
+      data: DOCX_BYTES,
+    });
+
+    const res = await fetch(`${baseUrl}/pdfs/resume_job-4.docx?v=cachebust`);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe(
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    );
+    expect(res.headers.get("content-disposition")).toBe(
+      'attachment; filename="resume_job-4.docx"',
+    );
+    const body = Buffer.from(await res.arrayBuffer());
+    expect(body).toEqual(DOCX_BYTES);
+  });
+
+  it("404s a cover-letter .docx (cover letters are LaTeX-only)", async () => {
+    const { upsertJobPdf } = await import("@server/repositories/job-pdfs");
+    await upsertJobPdf({
+      jobId: "job-5",
+      kind: "resume_docx",
+      data: DOCX_BYTES,
+    });
+
+    const res = await fetch(`${baseUrl}/pdfs/cover_letter_job-5.docx`);
+    expect(res.status).toBe(404);
+  });
+
+  it("404s a .docx request when only the PDF exists", async () => {
+    const { upsertJobPdf } = await import("@server/repositories/job-pdfs");
+    await upsertJobPdf({ jobId: "job-6", kind: "resume", data: PDF_BYTES });
+
+    const res = await fetch(`${baseUrl}/pdfs/resume_job-6.docx`);
     expect(res.status).toBe(404);
   });
 

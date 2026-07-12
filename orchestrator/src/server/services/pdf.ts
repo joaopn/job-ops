@@ -1,6 +1,16 @@
 import { logger } from "@infra/logger";
 import * as cvRepo from "@server/repositories/cv-documents";
 import { upsertJobPdf } from "@server/repositories/job-pdfs";
+import { resolveCvSourceFormat } from "@server/services/cv/cv-format";
+import {
+  ConvertDocxError,
+  convertDocxToPdf,
+} from "@server/services/cv/docx/convert-docx-pdf";
+import {
+  RenderDocxError,
+  substituteParts,
+  zipDocxParts,
+} from "@server/services/cv/docx/render-docx";
 import {
   RenderTemplateError,
   renderTemplate,
@@ -9,7 +19,8 @@ import {
   RunTectonicError,
   runTectonic,
 } from "@server/services/cv/run-tectonic";
-import type { CvFieldOverrides } from "@shared/types";
+import { getEffectiveSettings } from "@server/services/settings";
+import type { CvDocument, CvFieldOverrides } from "@shared/types";
 
 export interface GeneratePdfArgs {
   jobId: string;
@@ -35,6 +46,16 @@ export interface PdfResult {
   error?: string;
 }
 
+/**
+ * Render a job's tailored CV and persist it.
+ *
+ * Both substrates share everything except the middle: load the document,
+ * merge defaults + overrides, refuse a no-op tailoring, then render and
+ * persist. On a Word profile the artifact is a tailored `.docx` (persisted
+ * as `resume_docx`) and the PDF is its unoserver-converted view (persisted
+ * as `resume`) — which is why `pdfPath` keeps its `resume_<jobId>.pdf`
+ * shape on both paths and every caller and client surface is untouched.
+ */
 export async function generatePdf(args: GeneratePdfArgs): Promise<PdfResult> {
   const document = await cvRepo.getCvDocumentById(args.cvDocumentId);
   if (!document) {
@@ -62,6 +83,28 @@ export async function generatePdf(args: GeneratePdfArgs): Promise<PdfResult> {
     ...document.defaultFieldValues,
     ...overrides,
   };
+  const overrideCount = Object.keys(overrides).length;
+
+  const settings = await getEffectiveSettings();
+  const format = resolveCvSourceFormat(settings);
+
+  // Canonical relative filename — persisted on the job purely as an
+  // existence flag; the bytes live in job_pdfs and are served from there.
+  // Unchanged on the docx path: the converted PDF is persisted under the
+  // same `resume` kind, so every consumer keeps working.
+  const pdfPath = `resume_${args.jobId}.pdf`;
+
+  if (format === "docx") {
+    return renderDocxJobPdf({
+      args,
+      document,
+      archive,
+      effectiveValues,
+      overrides,
+      overrideCount,
+      pdfPath,
+    });
+  }
 
   let renderedTex: string;
   try {
@@ -76,7 +119,6 @@ export async function generatePdf(args: GeneratePdfArgs): Promise<PdfResult> {
     throw error;
   }
 
-  const overrideCount = Object.keys(overrides).length;
   const baselineRender = renderTemplate(
     document.templatedTex,
     document.defaultFieldValues,
@@ -85,6 +127,7 @@ export async function generatePdf(args: GeneratePdfArgs): Promise<PdfResult> {
   logger.info("CV render result", {
     jobId: args.jobId,
     cvDocumentId: args.cvDocumentId,
+    format,
     overrideCount,
     cvFieldCount: document.fields.length,
     templatedTexLength: document.templatedTex.length,
@@ -92,32 +135,14 @@ export async function generatePdf(args: GeneratePdfArgs): Promise<PdfResult> {
     identicalToBaseline,
   });
 
-  // Hard-fail when overrides were supplied but the rendered output equals
-  // the default-substituted baseline. Either every tailored field was
-  // missing from the CV's extracted fields OR every tailored value was
-  // identical to the original. Shipping a baseline PDF as a "tailored" one
-  // is forbidden.
-  if (overrideCount > 0 && identicalToBaseline && !args.allowBaselineRender) {
-    const overrideIds = Object.keys(overrides);
-    const knownFieldIds = document.fields.slice(0, 5).map((f) => f.id);
-    logger.error(
-      "Tailoring produced no actual change to the CV — failing hard",
-      {
-        jobId: args.jobId,
-        cvDocumentId: args.cvDocumentId,
-        overrideIds: overrideIds.slice(0, 10),
-        knownFieldIds,
-      },
-    );
-    return {
-      success: false,
-      error: `Tailoring produced no actual change to the CV. The ${overrideCount} proposed change(s) either targeted unknown CV fields or matched the original values exactly. Try re-uploading the CV from the CV page.`,
-    };
-  }
-
-  // Canonical relative filename — persisted on the job purely as an
-  // existence flag; the bytes live in job_pdfs and are served from there.
-  const pdfPath = `resume_${args.jobId}.pdf`;
+  const baselineFailure = baselineGuardFailure({
+    args,
+    overrides,
+    overrideCount,
+    identicalToBaseline,
+    knownFieldIds: document.fields.slice(0, 5).map((f) => f.id),
+  });
+  if (baselineFailure) return baselineFailure;
 
   try {
     const result = await runTectonic({
@@ -136,4 +161,147 @@ export async function generatePdf(args: GeneratePdfArgs): Promise<PdfResult> {
     }
     throw error;
   }
+}
+
+interface DocxRenderArgs {
+  args: GeneratePdfArgs;
+  document: CvDocument;
+  archive: Buffer;
+  effectiveValues: CvFieldOverrides;
+  overrides: CvFieldOverrides;
+  overrideCount: number;
+  pdfPath: string;
+}
+
+async function renderDocxJobPdf(input: DocxRenderArgs): Promise<PdfResult> {
+  const { args, document, archive, effectiveValues, pdfPath } = input;
+
+  // A docx row's `templatedTex` is the JSON envelope the gated pipeline
+  // wrote ({"parts": {partName: xml}}). A corrupt envelope throws here by
+  // design — it is an implementation-invariant violation, not a user error
+  // (same posture as the upload pipeline's stage-4d re-parse).
+  const envelope = JSON.parse(document.templatedTex) as {
+    parts: Record<string, string>;
+  };
+  const templatedParts = new Map(Object.entries(envelope.parts));
+
+  let renderedParts: Map<string, string>;
+  let baselineParts: Map<string, string>;
+  try {
+    renderedParts = substituteParts(templatedParts, effectiveValues);
+    baselineParts = substituteParts(
+      templatedParts,
+      document.defaultFieldValues,
+    );
+  } catch (error) {
+    if (error instanceof RenderDocxError) {
+      return {
+        success: false,
+        error: `Could not render the CV template: ${error.message}`,
+      };
+    }
+    throw error;
+  }
+
+  // Compare the substituted XML, never the rebuilt zips: zip bytes carry
+  // timestamps and are not stable across invocations.
+  const identicalToBaseline = [...renderedParts].every(
+    ([partName, xml]) => baselineParts.get(partName) === xml,
+  );
+  logger.info("CV render result", {
+    jobId: args.jobId,
+    cvDocumentId: args.cvDocumentId,
+    format: "docx",
+    overrideCount: input.overrideCount,
+    cvFieldCount: document.fields.length,
+    templatedTexLength: document.templatedTex.length,
+    partCount: renderedParts.size,
+    identicalToBaseline,
+  });
+
+  const baselineFailure = baselineGuardFailure({
+    args,
+    overrides: input.overrides,
+    overrideCount: input.overrideCount,
+    identicalToBaseline,
+    knownFieldIds: document.fields.slice(0, 5).map((f) => f.id),
+  });
+  if (baselineFailure) return baselineFailure;
+
+  let docxBytes: Uint8Array;
+  try {
+    docxBytes = zipDocxParts(new Uint8Array(archive), renderedParts);
+  } catch (error) {
+    if (error instanceof RenderDocxError) {
+      return {
+        success: false,
+        error: `Could not render the CV template: ${error.message}`,
+      };
+    }
+    throw error;
+  }
+
+  // Convert BEFORE persisting anything: a conversion failure must leave no
+  // artifact behind (parity with a tectonic failure on the LaTeX path — no
+  // PDF-less success states, and no stranded .docx blob no surface can see).
+  let pdfBytes: Uint8Array;
+  try {
+    pdfBytes = await convertDocxToPdf({ docx: docxBytes });
+  } catch (error) {
+    if (error instanceof ConvertDocxError) {
+      return {
+        success: false,
+        error: `PDF conversion failed: ${error.message}`,
+      };
+    }
+    throw error;
+  }
+
+  // The .docx first: it is the authoritative artifact, the PDF is its view.
+  // The two upserts are not one transaction — a crash between them leaves a
+  // stale preview, which the next render heals.
+  await upsertJobPdf({
+    jobId: args.jobId,
+    kind: "resume_docx",
+    data: Buffer.from(docxBytes),
+  });
+  await upsertJobPdf({
+    jobId: args.jobId,
+    kind: "resume",
+    data: Buffer.from(pdfBytes),
+  });
+  return { success: true, pdfPath };
+}
+
+/**
+ * Hard-fail when overrides were supplied but the rendered output equals the
+ * default-substituted baseline. Either every tailored field was missing from
+ * the CV's extracted fields OR every tailored value was identical to the
+ * original. Shipping a baseline document as a "tailored" one is forbidden.
+ */
+function baselineGuardFailure(input: {
+  args: GeneratePdfArgs;
+  overrides: CvFieldOverrides;
+  overrideCount: number;
+  identicalToBaseline: boolean;
+  knownFieldIds: string[];
+}): PdfResult | null {
+  const { args, overrideCount, identicalToBaseline } = input;
+  if (
+    overrideCount === 0 ||
+    !identicalToBaseline ||
+    args.allowBaselineRender === true
+  ) {
+    return null;
+  }
+  logger.error("Tailoring produced no actual change to the CV — failing hard", {
+    jobId: args.jobId,
+    cvDocumentId: args.cvDocumentId,
+    overrideIds: Object.keys(input.overrides).slice(0, 10),
+    knownFieldIds: input.knownFieldIds,
+  });
+  return {
+    success: false,
+    error: `Tailoring produced no actual change to the CV. The ${overrideCount} proposed change(s) either targeted unknown CV fields or matched the original values exactly. Try re-uploading the CV from the CV page.`,
+  };
 }

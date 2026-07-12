@@ -43,18 +43,31 @@ export interface RenderDocxArgs {
 }
 
 export function renderDocx(args: RenderDocxArgs): Uint8Array {
-  const ids = Object.keys(args.effectiveValues).sort(
-    (a, b) => b.length - a.length,
+  return zipDocxParts(
+    args.originalArchive,
+    substituteParts(args.templatedParts, args.effectiveValues),
   );
+}
+
+/**
+ * The pure substitution half of renderDocx: markers → values, per part.
+ *
+ * Exported because the per-job render path (services/pdf.ts) needs to
+ * compare a tailored render against the defaults-only baseline, and that
+ * comparison must happen on the substituted XML — NOT on the rebuilt zips,
+ * whose bytes carry timestamps and are not stable across invocations.
+ */
+export function substituteParts(
+  templatedParts: ReadonlyMap<string, string>,
+  effectiveValues: Readonly<Record<string, string>>,
+): Map<string, string> {
+  const ids = Object.keys(effectiveValues).sort((a, b) => b.length - a.length);
 
   const rendered = new Map<string, string>();
-  for (const [partName, templatedXml] of args.templatedParts) {
+  for (const [partName, templatedXml] of templatedParts) {
     let xml = templatedXml;
     for (const id of ids) {
-      xml = xml.replaceAll(
-        markerFor(id),
-        prepareValue(args.effectiveValues[id]),
-      );
+      xml = xml.replaceAll(markerFor(id), prepareValue(effectiveValues[id]));
     }
     const leftover = findLeftoverMarker(xml);
     if (leftover !== null) {
@@ -65,17 +78,24 @@ export function renderDocx(args: RenderDocxArgs): Uint8Array {
     }
     rendered.set(partName, xml);
   }
+  return rendered;
+}
 
+/** The zip-rebuild half of renderDocx: substituted parts → .docx bytes. */
+export function zipDocxParts(
+  originalArchive: Uint8Array,
+  renderedParts: ReadonlyMap<string, string>,
+): Uint8Array {
   let entries: Record<string, Uint8Array>;
   try {
-    entries = unzipSync(new Uint8Array(args.originalArchive));
+    entries = unzipSync(new Uint8Array(originalArchive));
   } catch (error) {
     throw new RenderDocxError(
       `Original archive is unreadable: ${error instanceof Error ? error.message : String(error)}`,
       "ARCHIVE_UNREADABLE",
     );
   }
-  for (const [partName, xml] of rendered) {
+  for (const [partName, xml] of renderedParts) {
     if (!(partName in entries)) {
       throw new RenderDocxError(
         `Original archive has no entry "${partName}" to replace.`,

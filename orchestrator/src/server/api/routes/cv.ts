@@ -8,6 +8,7 @@ import {
 import { fail, ok } from "@infra/http";
 import { logger } from "@infra/logger";
 import * as cvRepo from "@server/repositories/cv-documents";
+import { resolveCvSourceFormat } from "@server/services/cv/cv-format";
 import {
   ConvertDocxError,
   convertDocxToPdf,
@@ -43,11 +44,7 @@ import {
 import { getExtractionPromptDefault } from "@server/services/cv/llm-template-extract";
 import { runUploadPipeline } from "@server/services/cv/upload-pipeline";
 import { getEffectiveSettings } from "@server/services/settings";
-import type {
-  AppSettings,
-  CvSourceFormat,
-  CvUploadPipelineAttempt,
-} from "@shared/types";
+import type { CvSourceFormat, CvUploadPipelineAttempt } from "@shared/types";
 import busboy from "busboy";
 import type { Request, Response } from "express";
 import { Router } from "express";
@@ -87,10 +84,6 @@ interface ParsedUpload {
   filename: string;
   bytes: Uint8Array;
   fields: Record<string, string>;
-}
-
-function resolveFormat(settings: AppSettings): CvSourceFormat {
-  return settings.cvSourceFormat ?? "latex";
 }
 
 function formatMismatch(format: CvSourceFormat): AppError {
@@ -142,7 +135,7 @@ cvRouter.post("/", async (req: Request, res: Response) => {
     const settings = await getEffectiveSettings();
     // Legacy ungated path is LaTeX-only: a row it inserted into a docx
     // profile would be misinterpreted as docx by every dispatch site.
-    if (resolveFormat(settings) === "docx") {
+    if (resolveCvSourceFormat(settings) === "docx") {
       return fail(
         res,
         unprocessableEntity(
@@ -223,7 +216,7 @@ cvRouter.post("/upload-template", async (req: Request, res: Response) => {
 
     // F5 hard gate: the sniff only enforces format-vs-setting agreement;
     // it never selects a pipeline — dispatch is by the setting.
-    const format = resolveFormat(settings);
+    const format = resolveCvSourceFormat(settings);
     if (looksLikeDocx(upload.bytes) !== (format === "docx")) {
       return fail(res, formatMismatch(format));
     }
@@ -315,7 +308,7 @@ cvRouter.get(
     try {
       const settings = await getEffectiveSettings();
       const prompt =
-        resolveFormat(settings) === "docx"
+        resolveCvSourceFormat(settings) === "docx"
           ? await getDocxExtractionPromptDefault()
           : await getExtractionPromptDefault();
       ok(res, { prompt });
@@ -377,7 +370,7 @@ cvRouter.post("/:id/re-extract", async (req: Request, res: Response) => {
     const settings = await getEffectiveSettings();
     // The 5d cursor-walk extractor is LaTeX-only; on a docx profile it
     // would silently misroute the stored .docx bytes into flattenInput.
-    if (resolveFormat(settings) === "docx") {
+    if (resolveCvSourceFormat(settings) === "docx") {
       return fail(
         res,
         unprocessableEntity(
@@ -428,7 +421,7 @@ cvRouter.get("/:id/render-preview", async (req: Request, res: Response) => {
     }
 
     let pdf: Uint8Array;
-    if (resolveFormat(settings) === "docx") {
+    if (resolveCvSourceFormat(settings) === "docx") {
       // Defensive: docx rows only exist via the gated path, which always
       // persists a template envelope. A corrupt envelope (JSON.parse
       // throw) falls through to a 500 — invariant violation, same
@@ -490,7 +483,7 @@ cvRouter.get(
       }
 
       let pdf: Uint8Array;
-      if (resolveFormat(settings) === "docx") {
+      if (resolveCvSourceFormat(settings) === "docx") {
         pdf = await convertDocxToPdf({ docx: new Uint8Array(archive) });
       } else {
         const result = await runTectonic({
@@ -559,7 +552,7 @@ cvRouter.post(
       // No sniff here: the stored archive passed the F5 gate at upload,
       // so the setting alone dispatches.
       const result =
-        resolveFormat(settings) === "docx"
+        resolveCvSourceFormat(settings) === "docx"
           ? await runDocxUploadPipeline({
               archive: new Uint8Array(archive),
               maxRetries,
