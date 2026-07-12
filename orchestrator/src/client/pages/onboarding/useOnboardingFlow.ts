@@ -27,11 +27,44 @@ import { EMPTY_VALIDATION_STATE, STEP_COPY } from "./content";
 import type {
   BasicAuthChoice,
   CvChoice,
+  CvFormatChoice,
   OnboardingFormData,
   OnboardingStep,
   StepId,
   ValidationState,
 } from "./types";
+
+function resolvePrimaryLabel(args: {
+  basicAuthChoice: BasicAuthChoice;
+  currentStep: StepId | null;
+  cvChoice: CvChoice;
+  cvFormatChoice: CvFormatChoice;
+  cvFormatComplete: boolean;
+  hasCvDocument: boolean;
+  hasSavedSearchTermsInSession: boolean;
+  llmValidated: boolean;
+}): string {
+  if (args.currentStep === "llm") {
+    return args.llmValidated ? "Revalidate connection" : "Save connection";
+  }
+  if (args.currentStep === "cvformat") {
+    if (args.cvFormatComplete) return "Continue";
+    return args.cvFormatChoice === null ? "Choose a format" : "Save CV format";
+  }
+  if (args.currentStep === "cv") {
+    if (args.cvChoice === "skip") return "Finish step";
+    return args.hasCvDocument ? "Save brief" : "Upload to continue";
+  }
+  if (args.currentStep === "searchterms") {
+    return args.hasSavedSearchTermsInSession
+      ? "Update search terms"
+      : "Save search terms";
+  }
+  if (args.basicAuthChoice === "enable") return "Enable authentication";
+  return args.basicAuthChoice === "skip"
+    ? "Finish onboarding"
+    : "Choose an option";
+}
 
 export function useOnboardingFlow() {
   const queryClient = useQueryClient();
@@ -45,6 +78,7 @@ export function useOnboardingFlow() {
   );
   const [basicAuthChoice, setBasicAuthChoice] =
     useState<BasicAuthChoice>("enable");
+  const [cvFormatChoice, setCvFormatChoice] = useState<CvFormatChoice>(null);
   const [cvChoice, setCvChoice] = useState<CvChoice>(null);
   const [cvDocument, setCvDocument] = useState<CvDocument | null>(null);
   const cvHydratedRef = useRef(false);
@@ -113,6 +147,10 @@ export function useOnboardingFlow() {
           ? "skip"
           : "enable",
     );
+    // Deliberately left unselected when unset: the write is permanent for
+    // this user profile, so the user has to pick rather than blow past a
+    // pre-selected default.
+    setCvFormatChoice(settings.cvSourceFormat);
   }, [getValues, reset, settings]);
 
   // Seed the search-terms field + completion flags from the default Profile.
@@ -190,6 +228,9 @@ export function useOnboardingFlow() {
   ]);
 
   const cvComplete = Boolean(cvDocument) || cvChoice === "skip";
+  const storedCvSourceFormat = settings?.cvSourceFormat ?? null;
+  const cvFormatComplete = storedCvSourceFormat !== null;
+  const hasExistingCv = Boolean(activeCvId);
 
   const toValidationState = useCallback(
     (
@@ -270,6 +311,13 @@ export function useOnboardingFlow() {
         disabled: false,
       },
       {
+        id: "cvformat",
+        label: "CV format",
+        subtitle: "LaTeX or Word",
+        complete: cvFormatComplete,
+        disabled: false,
+      },
+      {
         id: "cv",
         label: "CV",
         subtitle: "Upload your CV or skip",
@@ -291,7 +339,13 @@ export function useOnboardingFlow() {
         disabled: false,
       },
     ],
-    [basicAuthComplete, cvComplete, llmValidated, searchTermsComplete],
+    [
+      basicAuthComplete,
+      cvComplete,
+      cvFormatComplete,
+      llmValidated,
+      searchTermsComplete,
+    ],
   );
 
   useEffect(() => {
@@ -466,6 +520,44 @@ export function useOnboardingFlow() {
     }
   }, [defaultProfileId, getValues, queryClient, setValue]);
 
+  const handleSaveCvFormat = useCallback(async () => {
+    if (cvFormatChoice === null) {
+      toast.info("Choose the format your CV is written in to continue");
+      return false;
+    }
+    // The format is write-once server-side: an equal re-write is a no-op and
+    // a differing one 409s. Revisiting a settled step must never do either.
+    if (storedCvSourceFormat !== null) {
+      if (storedCvSourceFormat !== cvFormatChoice) {
+        toast.info(
+          "The CV format is fixed for this user profile. Create a new user profile to work in the other format.",
+        );
+      }
+      return true;
+    }
+
+    try {
+      setIsSaving(true);
+      const nextSettings = await api.updateSettings({
+        cvSourceFormat: cvFormatChoice,
+      });
+      syncSettingsCache(nextSettings);
+      toast.success(
+        cvFormatChoice === "docx"
+          ? "CV format set to Word"
+          : "CV format set to LaTeX",
+      );
+      return true;
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to save the CV format",
+      );
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
+  }, [cvFormatChoice, storedCvSourceFormat, syncSettingsCache]);
+
   const handleCompleteCv = useCallback(async () => {
     if (cvChoice === null) {
       toast.info("Upload your CV or pick 'Skip for now' to continue");
@@ -585,6 +677,10 @@ export function useOnboardingFlow() {
       await handleSaveLlm();
       return;
     }
+    if (currentStep === "cvformat") {
+      await handleSaveCvFormat();
+      return;
+    }
     if (currentStep === "cv") {
       await handleCompleteCv();
       return;
@@ -598,6 +694,7 @@ export function useOnboardingFlow() {
     currentStep,
     handleCompleteBasicAuth,
     handleCompleteCv,
+    handleSaveCvFormat,
     handleSaveLlm,
     handleSaveSearchTerms,
   ]);
@@ -615,26 +712,16 @@ export function useOnboardingFlow() {
 
   const currentCopy = currentStep ? STEP_COPY[currentStep] : STEP_COPY.llm;
 
-  const primaryLabel =
-    currentStep === "llm"
-      ? llmValidated
-        ? "Revalidate connection"
-        : "Save connection"
-      : currentStep === "cv"
-        ? cvChoice === "skip"
-          ? "Finish step"
-          : cvDocument
-            ? "Save brief"
-            : "Upload to continue"
-        : currentStep === "searchterms"
-          ? hasSavedSearchTermsInSession
-            ? "Update search terms"
-            : "Save search terms"
-          : basicAuthChoice === "enable"
-            ? "Enable authentication"
-            : basicAuthChoice === "skip"
-              ? "Finish onboarding"
-              : "Choose an option";
+  const primaryLabel = resolvePrimaryLabel({
+    basicAuthChoice,
+    currentStep,
+    cvChoice,
+    cvFormatChoice,
+    cvFormatComplete,
+    hasCvDocument: Boolean(cvDocument),
+    hasSavedSearchTermsInSession,
+    llmValidated,
+  });
 
   return {
     basicAuthChoice,
@@ -645,6 +732,8 @@ export function useOnboardingFlow() {
     currentStep,
     cvChoice,
     cvDocument,
+    cvFormatChoice,
+    hasExistingCv,
     isBusy,
     isGeneratingSearchTerms,
     hasSavedSearchTermsInSession,
@@ -658,10 +747,12 @@ export function useOnboardingFlow() {
     settings,
     settingsLoading,
     steps,
+    storedCvSourceFormat,
     watch,
     setCurrentStep,
     setBasicAuthChoice,
     setCvChoice,
+    setCvFormatChoice,
     setCvDocument,
     setValue,
     handleRegenerateSearchTerms: async () => {

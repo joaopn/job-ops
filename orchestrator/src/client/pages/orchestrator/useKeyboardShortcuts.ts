@@ -5,6 +5,7 @@ import {
 } from "@client/hooks/queries/useJobMutations";
 import { useHotkeys } from "@client/hooks/useHotkeys";
 import { useActiveCv } from "@client/hooks/useActiveCv";
+import { useSettings } from "@client/hooks/useSettings";
 import { SHORTCUTS, isShortcutInScope } from "@client/lib/shortcut-map";
 import type { JobAction, JobListItem } from "@shared/types.js";
 import { useCallback, useRef } from "react";
@@ -62,6 +63,7 @@ export function useKeyboardShortcuts(args: UseKeyboardShortcutsArgs): void {
   const markAsAppliedMutation = useMarkAsAppliedMutation();
   const skipJobMutation = useSkipJobMutation();
   const { personName } = useActiveCv();
+  const { cvSourceFormat } = useSettings();
 
   const navigateJobList = useCallback(
     (direction: 1 | -1) => {
@@ -278,10 +280,13 @@ export function useKeyboardShortcuts(args: UseKeyboardShortcutsArgs): void {
       [SHORTCUTS.downloadPdf.key]: () => {
         if (!selectedJob) return;
         if (selectedJob.status !== "ready") return;
-        const href = `/pdfs/resume_${selectedJob.id}.pdf?v=${encodeURIComponent(selectedJob.updatedAt)}`;
+        // Must track the Download button in ReadyPanel: on a Word profile the
+        // editable .docx is the artifact, and the PDF stays a view (`p`).
+        const ext = cvSourceFormat === "docx" ? "docx" : "pdf";
+        const href = `/pdfs/resume_${selectedJob.id}.${ext}?v=${encodeURIComponent(selectedJob.updatedAt)}`;
         const a = document.createElement("a");
         a.href = href;
-        a.download = `${safeFilenamePart(personName || "Unknown")}_${safeFilenamePart(selectedJob.employer)}.pdf`;
+        a.download = `${safeFilenamePart(personName || "Unknown")}_${safeFilenamePart(selectedJob.employer)}.${ext}`;
         a.click();
       },
 

@@ -16,9 +16,10 @@ export type OnboardingFormData = {
   basicAuthPassword: string;
 };
 
-export type StepId = "llm" | "cv" | "searchterms" | "basicauth";
+export type StepId = "llm" | "cvformat" | "cv" | "searchterms" | "basicauth";
 export type BasicAuthChoice = "enable" | "skip" | null;
 export type CvChoice = "upload" | "skip" | null;
+export type CvFormatChoice = "latex" | "docx" | null;
 
 export type OnboardingStep = {
   id: StepId;

@@ -4,6 +4,8 @@ import {
   AttemptLogViewer,
   CompileLogViewer,
 } from "@client/components/cv/CompileLogViewer";
+import { useSettings } from "@client/hooks/useSettings";
+import { getCvFormatCopy } from "@client/lib/cv-format-copy";
 import { queryKeys } from "@client/lib/queryKeys";
 import type {
   CvDocument,
@@ -26,8 +28,6 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { CvChoice } from "../types";
-
-const ACCEPTED_EXTENSIONS = [".tex", ".zip"];
 
 type UploadFailureDetails = {
   stage: "flatten" | "compile-original" | "extract-loop";
@@ -155,6 +155,9 @@ interface CvUploadCardProps {
 }
 
 const CvUploadCard: React.FC<CvUploadCardProps> = ({ onUploaded, isBusy }) => {
+  const { cvSourceFormat } = useSettings();
+  const copy = getCvFormatCopy(cvSourceFormat);
+  const acceptedExtensions = copy.acceptedExtensions;
   const [pending, setPending] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [errorDetails, setErrorDetails] =
@@ -211,8 +214,8 @@ const CvUploadCard: React.FC<CvUploadCardProps> = ({ onUploaded, isBusy }) => {
       setErrorDetails(null);
       setLatestAttempts(null);
       const ext = `.${file.name.split(".").pop()?.toLowerCase() ?? ""}`;
-      if (!ACCEPTED_EXTENSIONS.includes(ext)) {
-        const message = `Only ${ACCEPTED_EXTENSIONS.join(" or ")} files are accepted.`;
+      if (!acceptedExtensions.includes(ext)) {
+        const message = `Only ${acceptedExtensions.join(" or ")} files are accepted.`;
         setErrorMessage(message);
         toast.error(message);
         return;
@@ -224,7 +227,7 @@ const CvUploadCard: React.FC<CvUploadCardProps> = ({ onUploaded, isBusy }) => {
         setPending(false);
       }
     },
-    [uploadMutation],
+    [acceptedExtensions, uploadMutation],
   );
 
   const disabled = pending || isBusy;
@@ -260,17 +263,17 @@ const CvUploadCard: React.FC<CvUploadCardProps> = ({ onUploaded, isBusy }) => {
         <div className="text-center">
           <div className="font-medium">
             {pending
-              ? "Uploading, compiling, and extracting…"
+              ? copy.uploadingLabel
               : "Click to upload or drag a file here"}
           </div>
           <div className="text-xs text-muted-foreground">
-            .tex or .zip (max 10 MB). Up to 3 LLM retries on extraction.
+            {copy.dropHint}. Up to 3 LLM retries on extraction.
           </div>
         </div>
         <input
           ref={inputRef}
           type="file"
-          accept={ACCEPTED_EXTENSIONS.join(",")}
+          accept={acceptedExtensions.join(",")}
           className="hidden"
           onChange={(event) => {
             const file = event.target.files?.[0];
@@ -325,7 +328,7 @@ const CvUploadCard: React.FC<CvUploadCardProps> = ({ onUploaded, isBusy }) => {
               errorDetails.originalCompileStderr ? (
                 <CompileLogViewer
                   stderr={errorDetails.originalCompileStderr}
-                  label="Tectonic stderr (your CV's source)"
+                  label={copy.sourceStderrLabel}
                   defaultOpen
                   variant="warning"
                 />

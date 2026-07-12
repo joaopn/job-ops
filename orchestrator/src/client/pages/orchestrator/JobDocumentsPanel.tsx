@@ -1,3 +1,4 @@
+import { useSettings } from "@client/hooks/useSettings";
 import type { Job } from "@shared/types";
 import { Download, ExternalLink, FileText } from "lucide-react";
 import type React from "react";
@@ -22,6 +23,7 @@ export const JobDocumentsPanel: React.FC<JobDocumentsPanelProps> = ({
   job,
   personName,
 }) => {
+  const { cvSourceFormat } = useSettings();
   const hasCv = Boolean(job.pdfPath);
   const hasCover = Boolean(job.coverLetterPdfPath);
   const [doc, setDoc] = useState<DocKind>(hasCv ? "cv" : "cover");
@@ -52,8 +54,16 @@ export const JobDocumentsPanel: React.FC<JobDocumentsPanelProps> = ({
     : `/pdfs/cover_letter_${job.id}.pdf?v=${encodeURIComponent(job.updatedAt)}`;
   const person = safeFilenamePart(personName || "Unknown");
   const employer = safeFilenamePart(job.employer || "Unknown");
+
+  // Download hands over the editable artifact — the .docx on a Word profile.
+  // Open and the iframe below keep the PDF: it's the view, and a .docx can't
+  // render in a frame. Cover letters are LaTeX-only, so they stay PDF.
+  const isDocxCv = isCv && cvSourceFormat === "docx";
+  const downloadHref = isDocxCv
+    ? `/pdfs/resume_${job.id}.docx?v=${encodeURIComponent(job.updatedAt)}`
+    : href;
   const downloadName = isCv
-    ? `${person}_${employer}.pdf`
+    ? `${person}_${employer}.${isDocxCv ? "docx" : "pdf"}`
     : `${person}_${employer}_Cover.pdf`;
 
   return (
@@ -96,9 +106,9 @@ export const JobDocumentsPanel: React.FC<JobDocumentsPanelProps> = ({
           size="sm"
           className="h-7 gap-1 px-2 text-xs"
         >
-          <a href={href} download={downloadName}>
+          <a href={downloadHref} download={downloadName}>
             <Download className="h-3 w-3" />
-            Download
+            {isDocxCv ? "Download .docx" : "Download"}
           </a>
         </Button>
       </div>

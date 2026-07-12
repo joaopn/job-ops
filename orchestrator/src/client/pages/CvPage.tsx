@@ -4,6 +4,8 @@ import { CompileLogViewer, AttemptLogViewer } from "@client/components/cv/Compil
 import { PageHeader } from "@client/components/layout";
 import { ActivityLogButton } from "@client/components/ActivityLogButton";
 import { LlmStatusButton } from "@client/components/LlmStatusButton";
+import { useSettings } from "@client/hooks/useSettings";
+import { getCvFormatCopy } from "@client/lib/cv-format-copy";
 import { queryKeys } from "@client/lib/queryKeys";
 import type {
   CvDocument,
@@ -55,8 +57,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
-const ACCEPTED_EXTENSIONS = [".tex", ".zip"];
-
 /**
  * Stable mutation keys so the gated upload + re-extract mutations are
  * discoverable globally via `useMutationState`. The CvPage and its
@@ -80,6 +80,8 @@ type UploadFailureDetails = {
 
 export function CvPage() {
   const queryClient = useQueryClient();
+  const { cvSourceFormat } = useSettings();
+  const copy = getCvFormatCopy(cvSourceFormat);
 
   const summariesQuery = useQuery<CvDocumentSummary[]>({
     queryKey: queryKeys.cvDocuments.list(),
@@ -105,7 +107,7 @@ export function CvPage() {
       <PageHeader
         icon={FileText}
         title="My CV"
-        subtitle="Upload your LaTeX CV; the server flattens, extracts, and renders it for per-job tailoring."
+        subtitle={copy.uploadSubtitle}
         actions={
           <div className="flex items-center gap-2">
             <ActivityLogButton />
@@ -162,6 +164,9 @@ function extractFailureDetails(error: unknown): UploadFailureDetails | null {
 }
 
 function UploadCard({ onUploaded }: { onUploaded: () => Promise<void> }) {
+  const { cvSourceFormat } = useSettings();
+  const copy = getCvFormatCopy(cvSourceFormat);
+  const acceptedExtensions = copy.acceptedExtensions;
   const [pending, setPending] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [errorDetails, setErrorDetails] =
@@ -238,8 +243,8 @@ function UploadCard({ onUploaded }: { onUploaded: () => Promise<void> }) {
       setErrorDetails(null);
       setLatestAttempts(null);
       const ext = `.${file.name.split(".").pop()?.toLowerCase() ?? ""}`;
-      if (!ACCEPTED_EXTENSIONS.includes(ext)) {
-        const message = `Only ${ACCEPTED_EXTENSIONS.join(" or ")} files are accepted.`;
+      if (!acceptedExtensions.includes(ext)) {
+        const message = `Only ${acceptedExtensions.join(" or ")} files are accepted.`;
         setErrorMessage(message);
         toast.error(message);
         return;
@@ -251,22 +256,14 @@ function UploadCard({ onUploaded }: { onUploaded: () => Promise<void> }) {
         setPending(false);
       }
     },
-    [uploadMutation],
+    [acceptedExtensions, uploadMutation],
   );
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Upload your CV</CardTitle>
-        <CardDescription>
-          Drop a .tex file or a .zip archive containing main.tex plus any
-          included files, fonts, and images. The server flattens it,
-          compiles it, then asks the LLM to produce a templated version.
-          The upload is only accepted if (a) your CV's source compiles, (b)
-          the templated version compiles, and (c) the substituted PDF's
-          text matches the original. Up to 3 LLM retries — beyond that the
-          upload is rejected with the per-attempt log.
-        </CardDescription>
+        <CardDescription>{copy.uploadDescription}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <button
@@ -298,17 +295,15 @@ function UploadCard({ onUploaded }: { onUploaded: () => Promise<void> }) {
           <div className="text-center">
             <div className="font-medium">
               {inFlight
-                ? "Uploading, compiling, and extracting…"
+                ? copy.uploadingLabel
                 : "Click to upload or drag a file here"}
             </div>
-            <div className="text-xs text-muted-foreground">
-              .tex or .zip (max 10 MB)
-            </div>
+            <div className="text-xs text-muted-foreground">{copy.dropHint}</div>
           </div>
           <input
             ref={inputRef}
             type="file"
-            accept={ACCEPTED_EXTENSIONS.join(",")}
+            accept={acceptedExtensions.join(",")}
             className="hidden"
             onChange={(event) => {
               const file = event.target.files?.[0];
@@ -367,7 +362,7 @@ function UploadCard({ onUploaded }: { onUploaded: () => Promise<void> }) {
                 errorDetails.originalCompileStderr ? (
                   <CompileLogViewer
                     stderr={errorDetails.originalCompileStderr}
-                    label="Tectonic stderr (your CV's source)"
+                    label={copy.sourceStderrLabel}
                     defaultOpen
                     variant="warning"
                   />
@@ -401,6 +396,8 @@ function UploadCard({ onUploaded }: { onUploaded: () => Promise<void> }) {
 
 function CvEditor({ cv }: { cv: CvDocument }) {
   const queryClient = useQueryClient();
+  const { cvSourceFormat } = useSettings();
+  const copy = getCvFormatCopy(cvSourceFormat);
   const [name, setName] = useState(cv.name);
   const [personalBrief, setPersonalBrief] = useState(cv.personalBrief);
   const [reExtractAttempts, setReExtractAttempts] =
@@ -660,7 +657,7 @@ function CvEditor({ cv }: { cv: CvDocument }) {
               reExtractDetails.originalCompileStderr ? (
                 <CompileLogViewer
                   stderr={reExtractDetails.originalCompileStderr}
-                  label="Tectonic stderr (source)"
+                  label={copy.sourceStderrLabel}
                   defaultOpen
                   variant="warning"
                 />
@@ -844,12 +841,7 @@ function CvEditor({ cv }: { cv: CvDocument }) {
       <Card>
         <CardHeader>
           <CardTitle>Extracted fields ({cv.fields.length})</CardTitle>
-          <CardDescription>
-            Spans of the source LaTeX that per-job tailoring can override.
-            Everything else in the templated tex is preserved byte-for-byte.
-            Spot-check the role tags here — if the LLM mislabeled one (e.g.
-            tagged your email as `bullet`), click "Re-extract" above.
-          </CardDescription>
+          <CardDescription>{copy.fieldsDescription}</CardDescription>
         </CardHeader>
         <CardContent>
           {cv.fields.length === 0 ? (
@@ -886,12 +878,8 @@ function CvEditor({ cv }: { cv: CvDocument }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Compile log</CardTitle>
-          <CardDescription>
-            Tectonic stderr from the most recent successful template
-            compile. Empty when this CV was uploaded in the older format
-            (re-extract to populate).
-          </CardDescription>
+          <CardTitle>{copy.compileLogTitle}</CardTitle>
+          <CardDescription>{copy.compileLogDescription}</CardDescription>
         </CardHeader>
         <CardContent>
           <CompileLogViewer

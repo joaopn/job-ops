@@ -103,7 +103,7 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
   );
 
   const { personName } = useActiveCv();
-  const { renderMarkdownInJobDescriptions } = useSettings();
+  const { cvSourceFormat, renderMarkdownInJobDescriptions } = useSettings();
   const openEditDetails = useCallback(() => {
     window.setTimeout(() => setIsEditDetailsOpen(true), 0);
   }, []);
@@ -353,6 +353,16 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
   const selectedCoverHref = selectedJob
     ? `/pdfs/cover_letter_${selectedJob.id}.pdf?v=${encodeURIComponent(selectedJob.updatedAt)}`
     : "#";
+
+  // Download hands over the editable artifact — the .docx on a Word profile.
+  // selectedPdfHref stays the PDF: it feeds the views ("PDF" button, "View
+  // PDF"). Cover letters are LaTeX-only.
+  const isDocxCv = cvSourceFormat === "docx";
+  const selectedCvDownloadHref = !selectedJob
+    ? "#"
+    : isDocxCv
+      ? `/pdfs/resume_${selectedJob.id}.docx?v=${encodeURIComponent(selectedJob.updatedAt)}`
+      : selectedPdfHref;
   const canApply = selectedJob?.status === "ready";
   const canMoveToInProgress = selectedJob?.status === "applied";
   const canMarkClosed =
@@ -652,11 +662,11 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
                 )}
                 <DropdownMenuItem asChild>
                   <a
-                    href={selectedPdfHref}
-                    download={`${safeFilenamePart(personName || "Unknown")}_${safeFilenamePart(selectedJob.employer || "Unknown")}.pdf`}
+                    href={selectedCvDownloadHref}
+                    download={`${safeFilenamePart(personName || "Unknown")}_${safeFilenamePart(selectedJob.employer || "Unknown")}.${isDocxCv ? "docx" : "pdf"}`}
                   >
                     <FileText className="mr-2 h-4 w-4" />
-                    Download CV
+                    {isDocxCv ? "Download .docx" : "Download CV"}
                   </a>
                 </DropdownMenuItem>
               </>

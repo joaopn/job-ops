@@ -101,7 +101,7 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
   const [isMovingBackToInbox, setIsMovingBackToInbox] = useState(false);
   const [showDescription, setShowDescription] = useState(false);
   const { isRescoring, rescoreJob } = useRescoreJob(onJobUpdated);
-  const { renderMarkdownInJobDescriptions } = useSettings();
+  const { cvSourceFormat, renderMarkdownInJobDescriptions } = useSettings();
   const { pushUndo, undo } = useUndo();
   const previousJobIdRef = useRef<string | null>(null);
   const markAsAppliedMutation = useMarkAsAppliedMutation();
@@ -151,6 +151,16 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
   const coverPdfHref = job
     ? `/pdfs/cover_letter_${job.id}.pdf?v=${encodeURIComponent(job.updatedAt)}`
     : "#";
+
+  // On a Word profile the tailored .docx is the artifact you download; the PDF
+  // stays a view (the preview iframe and "View PDF"). Cover letters are
+  // LaTeX-only, so coverPdfHref is unconditional.
+  const isDocxCv = cvSourceFormat === "docx";
+  const cvDownloadHref = !job
+    ? "#"
+    : isDocxCv
+      ? `/pdfs/resume_${job.id}.docx?v=${encodeURIComponent(job.updatedAt)}`
+      : pdfHref;
 
   const hasCoverPdf = Boolean(job?.coverLetterPdfPath);
 
@@ -373,11 +383,11 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
               className="h-9 gap-1 px-2 text-xs"
             >
               <a
-                href={pdfHref}
-                download={`${safeFilenamePart(personName || "Unknown")}_${safeFilenamePart(job.employer || "Unknown")}.pdf`}
+                href={cvDownloadHref}
+                download={`${safeFilenamePart(personName || "Unknown")}_${safeFilenamePart(job.employer || "Unknown")}.${isDocxCv ? "docx" : "pdf"}`}
               >
                 <Download className="h-3.5 w-3.5 shrink-0" />
-                <span>Download CV</span>
+                <span>{isDocxCv ? "Download .docx" : "Download CV"}</span>
                 <KbdHint shortcut="d" className="ml-1" />
               </a>
             </Button>

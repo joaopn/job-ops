@@ -1,6 +1,7 @@
 import type { LlmProviderId } from "@client/pages/settings/utils";
 import type {
   CvDocument,
+  CvSourceFormat,
   SearchTermsSuggestionResponse,
 } from "@shared/types.js";
 import type React from "react";
@@ -8,11 +9,13 @@ import type { Control } from "react-hook-form";
 import type {
   BasicAuthChoice,
   CvChoice,
+  CvFormatChoice,
   OnboardingFormData,
   StepId,
   ValidationState,
 } from "../types";
 import { BasicAuthStep } from "./BasicAuthStep";
+import { CvFormatStep } from "./CvFormatStep";
 import { CvUploadStep } from "./CvUploadStep";
 import { LlmConnectionStep } from "./LlmConnectionStep";
 import { SearchTermsStep } from "./SearchTermsStep";
@@ -25,6 +28,9 @@ export const OnboardingStepContent: React.FC<{
   currentStep: StepId;
   cvChoice: CvChoice;
   cvDocument: CvDocument | null;
+  cvFormatChoice: CvFormatChoice;
+  hasExistingCv: boolean;
+  storedCvSourceFormat: CvSourceFormat | null;
   isBusy: boolean;
   isGeneratingSearchTerms: boolean;
   hasSavedSearchTermsInSession: boolean;
@@ -41,6 +47,7 @@ export const OnboardingStepContent: React.FC<{
   onBasicAuthUserChange: (value: string) => void;
   onCvChoiceChange: (choice: CvChoice) => void;
   onCvDocumentChange: (cv: CvDocument) => void;
+  onCvFormatChoiceChange: (choice: CvFormatChoice) => void;
   onPersonalBriefChange: (value: string) => void;
   onRegenerateSearchTerms: () => Promise<void>;
   onSearchTermDraftChange: (value: string) => void;
@@ -54,6 +61,18 @@ export const OnboardingStepContent: React.FC<{
         llmKeyHint={props.llmKeyHint}
         selectedProvider={props.selectedProvider}
         validation={props.llmValidation}
+      />
+    );
+  }
+
+  if (props.currentStep === "cvformat") {
+    return (
+      <CvFormatStep
+        choice={props.cvFormatChoice}
+        hasExistingCv={props.hasExistingCv}
+        isBusy={props.isBusy}
+        onChoiceChange={props.onCvFormatChoiceChange}
+        storedFormat={props.storedCvSourceFormat}
       />
     );
   }

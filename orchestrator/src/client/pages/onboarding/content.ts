@@ -21,20 +21,26 @@ export const STEP_COPY: Record<
     description:
       "Pick the provider, confirm the endpoint, and validate the credentials this workspace will use for scoring and tailoring.",
   },
-  cv: {
+  cvformat: {
     eyebrow: "Step 2",
+    title: "Pick the format your CV is written in.",
+    description:
+      "Job Ops tailors your CV in the format you already work in — LaTeX or Word. This choice is fixed for this user profile: everything downstream (uploads, tailoring, the files you download) follows it. To work in the other format later, create a new user profile.",
+  },
+  cv: {
+    eyebrow: "Step 3",
     title: "Upload your CV.",
     description:
-      "Drop your LaTeX CV — the server flattens, compiles, and extracts it. The personal brief drafted from your CV is what powers per-job tailoring; you can paste in extra context (side projects, tools you've used in passing) before continuing.",
+      "Drop your CV — the server checks it, then extracts the spans that per-job tailoring can rewrite. The personal brief drafted from your CV is what powers per-job tailoring; you can paste in extra context (side projects, tools you've used in passing) before continuing.",
   },
   searchterms: {
-    eyebrow: "Step 3",
+    eyebrow: "Step 4",
     title: "Choose the job titles to search for.",
     description:
       "Edit the list so Job Ops searches for the roles you actually want next.",
   },
   basicauth: {
-    eyebrow: "Step 4",
+    eyebrow: "Step 5",
     title: "Secure your workspace",
     description:
       "Add a username and password so only signed-in users can access protected parts of Job Ops. You can always set this up later in Settings.",

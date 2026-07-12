@@ -98,6 +98,9 @@ export const OnboardingPage: React.FC = () => {
                     currentStep={flow.currentStep}
                     cvChoice={flow.cvChoice}
                     cvDocument={flow.cvDocument}
+                    cvFormatChoice={flow.cvFormatChoice}
+                    hasExistingCv={flow.hasExistingCv}
+                    storedCvSourceFormat={flow.storedCvSourceFormat}
                     hasSavedSearchTermsInSession={
                       flow.hasSavedSearchTermsInSession
                     }
@@ -120,6 +123,7 @@ export const OnboardingPage: React.FC = () => {
                     }
                     onCvChoiceChange={flow.setCvChoice}
                     onCvDocumentChange={flow.setCvDocument}
+                    onCvFormatChoiceChange={flow.setCvFormatChoice}
                     onPersonalBriefChange={(value) =>
                       flow.setValue("personalBrief", value, {
                         shouldDirty: true,
