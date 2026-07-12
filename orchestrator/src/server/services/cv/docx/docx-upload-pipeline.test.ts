@@ -246,6 +246,18 @@ describe("runDocxUploadPipeline", () => {
     });
   });
 
+  it("clamps degenerate maxRetries to one attempt (LaTeX parity)", async () => {
+    mocks.llmExtract.mockRejectedValue(new Error("llm down"));
+
+    const result = await runDocxUploadPipeline({
+      archive: simpleDoc(),
+      maxRetries: 0,
+    });
+    expect(result).toMatchObject({ ok: false, stage: "extract-loop" });
+    if (result.ok) throw new Error("expected failure");
+    expect(result.attempts).toHaveLength(1);
+  });
+
   it("exhausts llm failures and returns the attempt log", async () => {
     mocks.llmExtract.mockRejectedValue(new Error("llm down"));
 

@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { ParseDocxError, parseDocx } from "./parse-docx";
+import { looksLikeDocx, ParseDocxError, parseDocx } from "./parse-docx";
 import {
   buildDocx,
   cfbBytes,
@@ -126,5 +126,36 @@ describe("parseDocx", () => {
 
   it("rejects malformed XML as PART_UNPARSEABLE", () => {
     expect(codeOf(() => parseDocx(malformedXmlDoc()))).toBe("PART_UNPARSEABLE");
+  });
+});
+
+describe("looksLikeDocx", () => {
+  it("accepts a well-formed docx", () => {
+    expect(looksLikeDocx(simpleDoc())).toBe(true);
+  });
+
+  it("rejects a zip without the docx entries", () => {
+    const texZip = buildDocx({
+      "main.tex": "\\documentclass{article}",
+      "style.cls": "% class",
+    });
+    expect(looksLikeDocx(texZip)).toBe(false);
+  });
+
+  it("rejects a zip with content types but no main document part", () => {
+    const partial = buildDocx({ "[Content_Types].xml": contentTypes() });
+    expect(looksLikeDocx(partial)).toBe(false);
+  });
+
+  it("rejects plain text bytes", () => {
+    expect(looksLikeDocx(notAZip())).toBe(false);
+  });
+
+  it("rejects OLE compound files", () => {
+    expect(looksLikeDocx(cfbBytes())).toBe(false);
+  });
+
+  it("rejects a truncated zip without throwing", () => {
+    expect(looksLikeDocx(simpleDoc().slice(0, 40))).toBe(false);
   });
 });

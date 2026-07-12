@@ -7,9 +7,9 @@ import { ConvertDocxError, convertDocxToPdf } from "./convert-docx-pdf";
 import { type DocxSegment, extractSegments } from "./extract-segments";
 import { extractStoryText } from "./extract-text";
 import {
+  DocxExtractError,
   type DocxExtractField,
   type DocxExtractPreviousAttempt,
-  DocxExtractError,
   llmDocxExtract,
 } from "./llm-docx-extract";
 import { normalizeStoryPart } from "./normalize-runs";
@@ -81,7 +81,7 @@ export type DocxUploadPipelineResult =
 export async function runDocxUploadPipeline(
   args: DocxUploadPipelineArgs,
 ): Promise<DocxUploadPipelineResult> {
-  const maxRetries = clampRetries(args.maxRetries);
+  const maxRetries = clampRetries(args.maxRetries ?? DEFAULT_MAX_RETRIES);
   const parseOpts = args.maxExpandedBytes
     ? { maxExpandedBytes: args.maxExpandedBytes }
     : undefined;
@@ -414,7 +414,10 @@ function fieldsToOverrides(fields: CvField[]): CvFieldOverrides {
   return out;
 }
 
-function clampRetries(value: number | undefined): number {
-  if (!value || Number.isNaN(value)) return DEFAULT_MAX_RETRIES;
-  return Math.max(1, Math.min(10, Math.floor(value)));
+// Byte-identical to upload-pipeline.ts's namesake so both pipelines treat
+// degenerate maxRetries inputs the same (0 / Infinity / NaN → 1).
+function clampRetries(value: number): number {
+  if (!Number.isFinite(value) || value < 1) return 1;
+  if (value > 10) return 10;
+  return Math.floor(value);
 }

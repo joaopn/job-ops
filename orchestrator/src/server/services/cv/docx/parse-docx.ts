@@ -90,6 +90,32 @@ const TRACKED_CHANGE_ELEMENTS = ["ins", "del", "moveFrom", "moveTo"] as const;
 const EXTERNAL_FIELD_PATTERN =
   /\b(INCLUDETEXT|INCLUDEPICTURE|DDEAUTO|DDE|IMPORT|LINK)\b/i;
 
+/**
+ * F5 sniff for the upload route: is this upload a .docx at all? Checks
+ * only the zip magic + the two §3-pinned entry names, decompressing
+ * nothing. It gates format-vs-setting mismatches (422) and NEVER selects
+ * a pipeline — dispatch is by the profile's cvSourceFormat setting; full
+ * validation stays in parseDocx.
+ */
+export function looksLikeDocx(bytes: Uint8Array): boolean {
+  const buf = Buffer.from(bytes);
+  if (looksLikeCfb(buf) || !looksLikeZip(buf)) return false;
+  const entryNames = new Set<string>();
+  try {
+    unzipSync(buf, {
+      filter: (file) => {
+        entryNames.add(file.name);
+        return false;
+      },
+    });
+  } catch {
+    return false;
+  }
+  return (
+    entryNames.has("[Content_Types].xml") && entryNames.has("word/document.xml")
+  );
+}
+
 export function parseDocx(
   archive: Uint8Array,
   opts?: ParseDocxOptions,

@@ -48,7 +48,7 @@ function llmReturns(fields: unknown, personalBrief: unknown = "brief"): void {
 
 const VALID_FIELD = {
   id: "experience.0.bullet.0",
-  role: "bullet",
+  role: "bullet" as const,
   value: "Led migration of the rendering fleet.",
   segmentId: 1,
 };
