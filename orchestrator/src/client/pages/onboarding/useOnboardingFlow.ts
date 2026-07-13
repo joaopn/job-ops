@@ -7,6 +7,13 @@ import {
 import { queryKeys } from "@client/lib/queryKeys";
 import { toast } from "@client/lib/toast";
 import {
+  buildConfig,
+  type EditorForm,
+  enabledExtractorIdsOf,
+  formFromConfig,
+  nextPinSet,
+} from "@client/pages/profiles/ProfileConfigFields";
+import {
   getLlmProviderConfig,
   normalizeLlmProvider,
 } from "@client/pages/settings/utils";
@@ -41,6 +48,7 @@ function resolvePrimaryLabel(args: {
   cvFormatChoice: CvFormatChoice;
   cvFormatComplete: boolean;
   hasCvDocument: boolean;
+  hasEnabledSource: boolean;
   hasSavedSearchTermsInSession: boolean;
   llmValidated: boolean;
 }): string {
@@ -55,10 +63,13 @@ function resolvePrimaryLabel(args: {
     if (args.cvChoice === "skip") return "Finish step";
     return args.hasCvDocument ? "Save brief" : "Upload to continue";
   }
-  if (args.currentStep === "searchterms") {
+  if (args.currentStep === "searchprofile") {
     return args.hasSavedSearchTermsInSession
-      ? "Update search terms"
-      : "Save search terms";
+      ? "Update search profile"
+      : "Save search profile";
+  }
+  if (args.currentStep === "sources") {
+    return args.hasEnabledSource ? "Save sources" : "Pick at least one source";
   }
   if (args.basicAuthChoice === "enable") return "Enable authentication";
   return args.basicAuthChoice === "skip"
@@ -76,8 +87,11 @@ export function useOnboardingFlow() {
   const [llmValidation, setLlmValidation] = useState<ValidationState>(
     EMPTY_VALIDATION_STATE,
   );
+  // Defaults to "skip": the PI's call. The settings-reset effect below re-seeds
+  // this on the first settings load, so BOTH sites must say "skip" or one
+  // silently overwrites the other.
   const [basicAuthChoice, setBasicAuthChoice] =
-    useState<BasicAuthChoice>("enable");
+    useState<BasicAuthChoice>("skip");
   const [cvFormatChoice, setCvFormatChoice] = useState<CvFormatChoice>(null);
   const [cvChoice, setCvChoice] = useState<CvChoice>(null);
   const [cvDocument, setCvDocument] = useState<CvDocument | null>(null);
@@ -91,6 +105,13 @@ export function useOnboardingFlow() {
   const [searchTermsStale, setSearchTermsStale] = useState(false);
   const [currentStep, setCurrentStep] = useState<StepId | null>(null);
   const profileTermsKeyRef = useRef<string | null>(null);
+  const [profileForm, setProfileForm] = useState<EditorForm | null>(null);
+  const profileHydratedRef = useRef(false);
+  const [sourceEnabledIds, setSourceEnabledIds] = useState<string[] | null>(
+    null,
+  );
+  const sourcesHydratedRef = useRef(false);
+  const autoSuggestedRef = useRef(false);
 
   const { control, getValues, reset, setValue, watch } =
     useForm<OnboardingFormData>({
@@ -117,14 +138,29 @@ export function useOnboardingFlow() {
     queryKey: queryKeys.profiles.list(),
     queryFn: api.getProfiles,
   });
+  const sourcesQuery = useQuery({
+    queryKey: queryKeys.sourceConfigs.list(),
+    queryFn: api.getSourceConfigs,
+  });
+  const instancesQuery = useQuery({
+    queryKey: queryKeys.providerInstances.list(),
+    queryFn: api.getProviderInstances,
+  });
+
   const defaultProfileId =
     profilesQuery.data?.defaultProfileId ??
     profilesQuery.data?.profiles[0]?.id ??
     null;
-  const defaultProfileTerms =
+  const defaultProfile =
     profilesQuery.data?.profiles.find(
       (profile) => profile.id === defaultProfileId,
-    )?.config.searchTerms ?? [];
+    ) ?? null;
+  const defaultProfileTerms = defaultProfile?.config.searchTerms ?? [];
+
+  const extractors = sourcesQuery.data?.extractors ?? [];
+  const instances =
+    instancesQuery.data?.providers.flatMap((provider) => provider.instances) ??
+    [];
 
   useEffect(() => {
     if (!settings) return;
@@ -140,13 +176,10 @@ export function useOnboardingFlow() {
       basicAuthUser: settings.basicAuthUser ?? "",
       basicAuthPassword: "",
     });
-    setBasicAuthChoice(
-      settings.basicAuthActive
-        ? "enable"
-        : settings.onboardingBasicAuthDecision === "skipped"
-          ? "skip"
-          : "enable",
-    );
+    // Auth already on → "enable". Everything else (an explicit earlier skip, or
+    // an untouched install) defaults to "skip" — the PI's call. Must match the
+    // useState initializer above, which this overwrites on the first load.
+    setBasicAuthChoice(settings.basicAuthActive ? "enable" : "skip");
     // Deliberately left unselected when unset: the write is permanent for
     // this user profile, so the user has to pick rather than blow past a
     // pre-selected default.
@@ -169,6 +202,27 @@ export function useOnboardingFlow() {
     setSearchTermsSource(null);
     setSearchTermsStale(false);
   }, [defaultProfileTerms, profilesQuery.data, setValue]);
+
+  // The rest of the default Profile's config (location, budget, sources…).
+  // Hydrated once so unsaved mid-step edits survive a background refetch;
+  // `searchTerms` deliberately does NOT live here — it stays in react-hook-form
+  // (OnboardingPage watches it, and the completion flag reads it).
+  useEffect(() => {
+    if (profileHydratedRef.current) return;
+    if (!defaultProfile) return;
+    profileHydratedRef.current = true;
+    setProfileForm(formFromConfig(defaultProfile.name, defaultProfile.config));
+  }, [defaultProfile]);
+
+  // Which sources this installation may scrape at all (`source_configs.enabled`).
+  // Hydrated once from the server's current state — migrate enables every
+  // extractor, so a fresh install arrives with all of them ticked.
+  useEffect(() => {
+    if (sourcesHydratedRef.current) return;
+    if (!sourcesQuery.data) return;
+    sourcesHydratedRef.current = true;
+    setSourceEnabledIds(enabledExtractorIdsOf(sourcesQuery.data.extractors));
+  }, [sourcesQuery.data]);
 
   const llmProvider = watch("llmProvider");
   const selectedProvider = normalizeLlmProvider(
@@ -231,6 +285,10 @@ export function useOnboardingFlow() {
   const storedCvSourceFormat = settings?.cvSourceFormat ?? null;
   const cvFormatComplete = storedCvSourceFormat !== null;
   const hasExistingCv = Boolean(activeCvId);
+  // The step is complete when the installation actually has a source enabled —
+  // which a fresh install does, since migrate enables every extractor.
+  const sourcesComplete = extractors.some((extractor) => extractor.row.enabled);
+  const hasEnabledSource = (sourceEnabledIds?.length ?? 0) > 0;
 
   const toValidationState = useCallback(
     (
@@ -325,10 +383,17 @@ export function useOnboardingFlow() {
         disabled: false,
       },
       {
-        id: "searchterms",
-        label: "Search terms",
-        subtitle: "Titles to search for",
+        id: "searchprofile",
+        label: "Search profile",
+        subtitle: "Titles and location",
         complete: searchTermsComplete,
+        disabled: false,
+      },
+      {
+        id: "sources",
+        label: "Sources",
+        subtitle: "Job boards to scrape",
+        complete: sourcesComplete,
         disabled: false,
       },
       {
@@ -343,6 +408,7 @@ export function useOnboardingFlow() {
       basicAuthComplete,
       cvComplete,
       cvFormatComplete,
+      sourcesComplete,
       llmValidated,
       searchTermsComplete,
     ],
@@ -473,7 +539,49 @@ export function useOnboardingFlow() {
     [setValue],
   );
 
-  const handleSaveSearchTerms = useCallback(async () => {
+  // Auto-fill the titles from the CV the first time the user reaches the step.
+  // FOUR guards, and the first is load-bearing: `defaultProfileTerms` falls back
+  // to `[]` while the profiles query is in flight, so "no saved terms" is a
+  // FALSE POSITIVE on pending data — the suggestion would land and then be
+  // wiped by the profile-seed effect's first-arrival run (which also nulls
+  // `searchTermsSource`, hiding the "from your resume" alert). Never treat "no
+  // data yet" as "no terms".
+  useEffect(() => {
+    if (autoSuggestedRef.current) return;
+    if (currentStep !== "searchprofile") return;
+    if (!profilesQuery.data) return;
+    if (defaultProfileTerms.length > 0) return;
+    if (!cvDocument) return;
+    autoSuggestedRef.current = true;
+    void handleGenerateSearchTerms();
+  }, [
+    currentStep,
+    profilesQuery.data,
+    defaultProfileTerms,
+    cvDocument,
+    handleGenerateSearchTerms,
+  ]);
+
+  // Search terms live in react-hook-form; the rest of the profile config lives
+  // in `profileForm`. This adapter lets the shared ProfileConfigFields treat
+  // them as one object.
+  const handleProfileFormChange = useCallback(
+    (patch: Partial<EditorForm>) => {
+      if (patch.searchTerms !== undefined) {
+        setValue("searchTerms", patch.searchTerms, { shouldDirty: true });
+      }
+      if (patch.searchTermsDraft !== undefined) {
+        setValue("searchTermDraft", patch.searchTermsDraft);
+      }
+      const { searchTerms, searchTermsDraft, ...rest } = patch;
+      if (Object.keys(rest).length > 0) {
+        setProfileForm((prev) => (prev ? { ...prev, ...rest } : prev));
+      }
+    },
+    [setValue],
+  );
+
+  const handleSaveSearchProfile = useCallback(async () => {
     const nextTerms = normalizeSearchTerms(getValues().searchTerms);
 
     if (nextTerms.length === 0) {
@@ -481,15 +589,18 @@ export function useOnboardingFlow() {
       return false;
     }
 
-    if (!defaultProfileId) {
-      toast.error("No profile is available to save search terms to");
+    if (!defaultProfileId || !profileForm) {
+      toast.error("No profile is available to save the search profile to");
       return false;
     }
 
     try {
       setIsSaving(true);
       const updated = await api.updateProfile(defaultProfileId, {
-        config: { searchTerms: nextTerms },
+        config: buildConfig(
+          { ...profileForm, searchTerms: nextTerms, searchTermsDraft: "" },
+          defaultProfile?.config,
+        ),
       });
       queryClient.setQueryData<api.ProfilesResponse>(
         queryKeys.profiles.list(),
@@ -508,17 +619,76 @@ export function useOnboardingFlow() {
       setSearchTermsSaved(true);
       setHasSavedSearchTermsInSession(true);
       setSearchTermsStale(false);
-      toast.success("Search terms saved");
+      toast.success("Search profile saved");
       return true;
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Failed to save search terms",
+        error instanceof Error
+          ? error.message
+          : "Failed to save the search profile",
       );
       return false;
     } finally {
       setIsSaving(false);
     }
-  }, [defaultProfileId, getValues, queryClient, setValue]);
+  }, [
+    defaultProfile,
+    defaultProfileId,
+    getValues,
+    profileForm,
+    queryClient,
+    setValue,
+  ]);
+
+  const handleToggleSource = useCallback(
+    (extractorId: string, enabled: boolean) => {
+      setSourceEnabledIds((prev) =>
+        nextPinSet(prev ?? [], extractorId, enabled),
+      );
+    },
+    [],
+  );
+
+  const handleSaveSources = useCallback(async () => {
+    if (!sourceEnabledIds || sourceEnabledIds.length === 0) {
+      toast.info("Pick at least one source to continue");
+      return false;
+    }
+
+    // Only write the ones that actually changed. `upsertSourceConfig` preserves
+    // `config`/`mappings` when the patch omits them, so an enabled-only write
+    // cannot clobber an extractor's settings.
+    const changed = extractors.filter(
+      (extractor) =>
+        extractor.row.enabled !==
+        sourceEnabledIds.includes(extractor.extractorId),
+    );
+
+    if (changed.length === 0) return true;
+
+    try {
+      setIsSaving(true);
+      await Promise.all(
+        changed.map((extractor) =>
+          api.upsertSourceConfig(extractor.extractorId, {
+            enabled: sourceEnabledIds.includes(extractor.extractorId),
+          }),
+        ),
+      );
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.sourceConfigs.all,
+      });
+      toast.success("Sources saved");
+      return true;
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to save sources",
+      );
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
+  }, [extractors, queryClient, sourceEnabledIds]);
 
   const handleSaveCvFormat = useCallback(async () => {
     if (cvFormatChoice === null) {
@@ -685,8 +855,12 @@ export function useOnboardingFlow() {
       await handleCompleteCv();
       return;
     }
-    if (currentStep === "searchterms") {
-      await handleSaveSearchTerms();
+    if (currentStep === "searchprofile") {
+      await handleSaveSearchProfile();
+      return;
+    }
+    if (currentStep === "sources") {
+      await handleSaveSources();
       return;
     }
     await handleCompleteBasicAuth();
@@ -696,7 +870,8 @@ export function useOnboardingFlow() {
     handleCompleteCv,
     handleSaveCvFormat,
     handleSaveLlm,
-    handleSaveSearchTerms,
+    handleSaveSearchProfile,
+    handleSaveSources,
   ]);
 
   const stepIndex = currentStep
@@ -712,6 +887,24 @@ export function useOnboardingFlow() {
 
   const currentCopy = currentStep ? STEP_COPY[currentStep] : STEP_COPY.llm;
 
+  // The shared field component wants ONE form object, but `searchTerms` lives in
+  // react-hook-form (OnboardingPage watches it; the completion flag reads it).
+  // Project the two together on the way out; `handleProfileFormChange` splits
+  // them again on the way back in.
+  //
+  // TRAP: `profileForm.searchTerms` is DEAD — it holds whatever was seeded at
+  // hydration and is never updated, because RHF owns the terms. It is harmless
+  // only because it is always overridden here and spliced explicitly at save.
+  // Never call `buildConfig(profileForm)` without splicing RHF's terms in: it
+  // would save stale terms, silently, with no type error.
+  const searchProfileForm: EditorForm | null = profileForm
+    ? {
+        ...profileForm,
+        searchTerms: watch("searchTerms"),
+        searchTermsDraft: watch("searchTermDraft"),
+      }
+    : null;
+
   const primaryLabel = resolvePrimaryLabel({
     basicAuthChoice,
     currentStep,
@@ -719,6 +912,7 @@ export function useOnboardingFlow() {
     cvFormatChoice,
     cvFormatComplete,
     hasCvDocument: Boolean(cvDocument),
+    hasEnabledSource,
     hasSavedSearchTermsInSession,
     llmValidated,
   });
@@ -733,7 +927,9 @@ export function useOnboardingFlow() {
     cvChoice,
     cvDocument,
     cvFormatChoice,
+    extractors,
     hasExistingCv,
+    instances,
     isBusy,
     isGeneratingSearchTerms,
     hasSavedSearchTermsInSession,
@@ -741,11 +937,13 @@ export function useOnboardingFlow() {
     llmValidation,
     primaryLabel,
     progressValue,
+    searchProfileForm,
     searchTermsSource,
     searchTermsStale,
     selectedProvider,
     settings,
     settingsLoading,
+    sourceEnabledIds: sourceEnabledIds ?? [],
     steps,
     storedCvSourceFormat,
     watch,
@@ -755,6 +953,8 @@ export function useOnboardingFlow() {
     setCvFormatChoice,
     setCvDocument,
     setValue,
+    handleProfileFormChange,
+    handleToggleSource,
     handleRegenerateSearchTerms: async () => {
       await handleGenerateSearchTerms({ showToast: true });
     },

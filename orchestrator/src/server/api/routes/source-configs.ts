@@ -60,6 +60,7 @@ sourceConfigsRouter.get("/", async (_req: Request, res: Response) => {
     type ExtractorEntry = {
       extractorId: string;
       displayName: string;
+      description?: string;
       providesSources: readonly string[];
       row: SourceConfigRow;
       schema: SourceConfigSchema | null;
@@ -81,6 +82,7 @@ sourceConfigsRouter.get("/", async (_req: Request, res: Response) => {
       extractors.push({
         extractorId: manifest.id,
         displayName: manifest.displayName,
+        description: manifest.description,
         providesSources: manifest.providesSources,
         row,
         schema,

@@ -33,14 +33,20 @@ export const STEP_COPY: Record<
     description:
       "Drop your CV — the server checks it, then extracts the spans that per-job tailoring can rewrite. The personal brief drafted from your CV is what powers per-job tailoring; you can paste in extra context (side projects, tools you've used in passing) before continuing.",
   },
-  searchterms: {
+  searchprofile: {
     eyebrow: "Step 4",
-    title: "Choose the job titles to search for.",
+    title: "Set up what Job Ops searches for.",
     description:
-      "Edit the list so Job Ops searches for the roles you actually want next.",
+      "The job titles to search for, and where. Titles are drafted from your CV — edit them until they describe the roles you actually want next.",
+  },
+  sources: {
+    eyebrow: "Step 5",
+    title: "Choose the job boards to search.",
+    description:
+      "These are the free sources Job Ops can scrape. All of them are on by default; turn off any you don't want. You can change this later on the Sources page.",
   },
   basicauth: {
-    eyebrow: "Step 5",
+    eyebrow: "Step 6",
     title: "Secure your workspace",
     description:
       "Add a username and password so only signed-in users can access protected parts of Job Ops. You can always set this up later in Settings.",

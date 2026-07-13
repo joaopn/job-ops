@@ -86,6 +86,8 @@ function toProgress(event: {
 export const manifest: ExtractorManifest = {
   id: "startupjobs",
   displayName: "startup.jobs",
+  description:
+    "Startup-focused board. Lower volume, but a high share of early-stage roles.",
   providesSources: ["startupjobs"],
   configSchema: startupjobsConfigSchema,
   async run(context) {

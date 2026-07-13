@@ -114,6 +114,8 @@ function toProgress(event: {
 export const manifest: ExtractorManifest = {
   id: "hiringcafe",
   displayName: "Hiring Cafe",
+  description:
+    "Aggregator with strong startup and remote coverage. Good signal, and fewer duplicates than the big boards.",
   providesSources: ["hiringcafe"],
   capabilities: { locationEvidence: true },
   configSchema: hiringcafeConfigSchema,

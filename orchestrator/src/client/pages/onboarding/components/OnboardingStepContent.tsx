@@ -1,7 +1,10 @@
+import type { SourceConfigsExtractorEntry } from "@client/api";
+import type { EditorForm } from "@client/pages/profiles/ProfileConfigFields";
 import type { LlmProviderId } from "@client/pages/settings/utils";
 import type {
   CvDocument,
   CvSourceFormat,
+  ProviderInstanceRow,
   SearchTermsSuggestionResponse,
 } from "@shared/types.js";
 import type React from "react";
@@ -18,7 +21,8 @@ import { BasicAuthStep } from "./BasicAuthStep";
 import { CvFormatStep } from "./CvFormatStep";
 import { CvUploadStep } from "./CvUploadStep";
 import { LlmConnectionStep } from "./LlmConnectionStep";
-import { SearchTermsStep } from "./SearchTermsStep";
+import { SearchProfileStep } from "./SearchProfileStep";
+import { SourcesStep } from "./SourcesStep";
 
 export const OnboardingStepContent: React.FC<{
   basicAuthChoice: BasicAuthChoice;
@@ -29,7 +33,11 @@ export const OnboardingStepContent: React.FC<{
   cvChoice: CvChoice;
   cvDocument: CvDocument | null;
   cvFormatChoice: CvFormatChoice;
+  extractors: SourceConfigsExtractorEntry[];
   hasExistingCv: boolean;
+  instances: ProviderInstanceRow[];
+  searchProfileForm: EditorForm | null;
+  sourceEnabledIds: string[];
   storedCvSourceFormat: CvSourceFormat | null;
   isBusy: boolean;
   isGeneratingSearchTerms: boolean;
@@ -37,8 +45,6 @@ export const OnboardingStepContent: React.FC<{
   llmKeyHint: string | null;
   llmValidation: ValidationState;
   personalBrief: string;
-  searchTermDraft: string;
-  searchTerms: string[];
   searchTermsSource: SearchTermsSuggestionResponse["source"] | null;
   searchTermsStale: boolean;
   selectedProvider: LlmProviderId;
@@ -49,9 +55,9 @@ export const OnboardingStepContent: React.FC<{
   onCvDocumentChange: (cv: CvDocument) => void;
   onCvFormatChoiceChange: (choice: CvFormatChoice) => void;
   onPersonalBriefChange: (value: string) => void;
+  onProfileFormChange: (patch: Partial<EditorForm>) => void;
   onRegenerateSearchTerms: () => Promise<void>;
-  onSearchTermDraftChange: (value: string) => void;
-  onSearchTermsChange: (values: string[]) => void;
+  onToggleSource: (extractorId: string, enabled: boolean) => void;
 }> = (props) => {
   if (props.currentStep === "llm") {
     return (
@@ -91,19 +97,29 @@ export const OnboardingStepContent: React.FC<{
     );
   }
 
-  if (props.currentStep === "searchterms") {
+  if (props.currentStep === "searchprofile") {
     return (
-      <SearchTermsStep
-        hasSavedSearchTermsInSession={props.hasSavedSearchTermsInSession}
+      <SearchProfileStep
+        extractors={props.extractors}
+        form={props.searchProfileForm}
+        instances={props.instances}
         isBusy={props.isBusy}
         isGeneratingSearchTerms={props.isGeneratingSearchTerms}
-        searchTermDraft={props.searchTermDraft}
-        searchTerms={props.searchTerms}
         searchTermsSource={props.searchTermsSource}
         searchTermsStale={props.searchTermsStale}
+        onFormChange={props.onProfileFormChange}
         onRegenerate={props.onRegenerateSearchTerms}
-        onSearchTermDraftChange={props.onSearchTermDraftChange}
-        onSearchTermsChange={props.onSearchTermsChange}
+      />
+    );
+  }
+
+  if (props.currentStep === "sources") {
+    return (
+      <SourcesStep
+        extractors={props.extractors}
+        enabledIds={props.sourceEnabledIds}
+        isBusy={props.isBusy}
+        onToggle={props.onToggleSource}
       />
     );
   }

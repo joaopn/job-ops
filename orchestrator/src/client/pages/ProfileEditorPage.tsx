@@ -2,112 +2,24 @@ import * as api from "@client/api";
 import { PageHeader, PageMain } from "@client/components/layout";
 import { queryKeys } from "@client/lib/queryKeys";
 import { toast } from "@client/lib/toast";
-import type {
-  LocationMatchStrictness,
-  LocationSearchScope,
-} from "@shared/location-preferences.js";
-import {
-  defaultProfileConfig,
-  type ProfileConfig,
-  type SuitabilityCategory,
-} from "@shared/types";
+import { defaultProfileConfig } from "@shared/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Save, Target } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { cn } from "@/lib/utils";
 import {
-  normalizeWorkplaceTypes,
-  parseCityLocationsInput,
-  parseCityLocationsSetting,
-  parseSearchTermsInput,
-  serializeCityLocationsSetting,
-  type WorkplaceType,
-} from "./orchestrator/automatic-run";
-import {
-  CountryField,
-  LocationScopeField,
-  MatchStrictnessField,
-  MinFitField,
-  NumberField,
-  TokenizedField,
-  WorkplaceTypesField,
-} from "./orchestrator/run-fields";
-
-interface EditorForm {
-  name: string;
-  searchTerms: string[];
-  searchTermsDraft: string;
-  country: string;
-  cityValues: string[];
-  cityDraft: string;
-  workplaceTypes: WorkplaceType[];
-  searchScope: LocationSearchScope;
-  matchStrictness: LocationMatchStrictness;
-  scrapeMaxAgeDays: string;
-  blockedKeywords: string[];
-  blockedDraft: string;
-  runBudget: string;
-  topN: string;
-  minSuitabilityCategory: SuitabilityCategory;
-  enabledSourceIds: string[];
-  providerInstanceIds: string[];
-}
-
-function formFromConfig(name: string, config: ProfileConfig): EditorForm {
-  return {
-    name,
-    searchTerms: config.searchTerms,
-    searchTermsDraft: "",
-    country: config.searchCountry,
-    cityValues: parseCityLocationsSetting(config.searchCities),
-    cityDraft: "",
-    workplaceTypes: config.workplaceTypes,
-    searchScope: config.locationSearchScope,
-    matchStrictness: config.locationMatchStrictness,
-    scrapeMaxAgeDays:
-      config.scrapeMaxAgeDays === null ? "" : String(config.scrapeMaxAgeDays),
-    blockedKeywords: config.blockedCompanyKeywords,
-    blockedDraft: "",
-    runBudget: String(config.runBudget),
-    topN: String(config.topN),
-    minSuitabilityCategory: config.minSuitabilityCategory,
-    enabledSourceIds: config.enabledSourceIds,
-    providerInstanceIds: config.providerInstanceIds,
-  };
-}
-
-function clampInt(
-  value: string,
-  min: number,
-  max: number,
-  fallback: number,
-): number {
-  const parsed = Number.parseInt(value, 10);
-  if (Number.isNaN(parsed)) return fallback;
-  return Math.min(max, Math.max(min, parsed));
-}
-
-function parseMaxAge(value: string): number | null {
-  const parsed = Number.parseInt(value.trim(), 10);
-  if (Number.isNaN(parsed) || parsed < 1) return null;
-  return Math.min(365, parsed);
-}
-
-function nextPinSet(
-  current: string[],
-  value: string,
-  checked: boolean,
-): string[] {
-  return checked
-    ? Array.from(new Set([...current, value]))
-    : current.filter((item) => item !== value);
-}
+  buildConfig,
+  type EditorForm,
+  enabledExtractorIdsOf,
+  enabledInstanceIdsOf,
+  formFromConfig,
+  hasEffectiveSourceSelection,
+  ProfileConfigFields,
+} from "./profiles/ProfileConfigFields";
 
 export function ProfileEditorPage() {
   const { id } = useParams();
@@ -148,53 +60,10 @@ export function ProfileEditorPage() {
   const update = (patch: Partial<EditorForm>) =>
     setForm((prev) => (prev ? { ...prev, ...patch } : prev));
 
-  const toggleWorkplace = (workplaceType: WorkplaceType, checked: boolean) => {
-    if (!form) return;
-    const next = checked
-      ? normalizeWorkplaceTypes([...form.workplaceTypes, workplaceType])
-      : form.workplaceTypes.filter((type) => type !== workplaceType);
-    update({ workplaceTypes: next });
-  };
-
-  const toggleExtractor = (extractorId: string, checked: boolean) => {
-    if (!form) return;
-    update({
-      enabledSourceIds: nextPinSet(form.enabledSourceIds, extractorId, checked),
-    });
-  };
-
-  const toggleInstance = (instanceId: string, checked: boolean) => {
-    if (!form) return;
-    update({
-      providerInstanceIds: nextPinSet(
-        form.providerInstanceIds,
-        instanceId,
-        checked,
-      ),
-    });
-  };
-
-  const buildConfig = (f: EditorForm): ProfileConfig => ({
-    ...(existing?.config ?? defaultProfileConfig()),
-    searchTerms: f.searchTerms,
-    searchCountry: f.country,
-    searchCities: serializeCityLocationsSetting(f.cityValues) ?? "",
-    workplaceTypes: f.workplaceTypes,
-    locationSearchScope: f.searchScope,
-    locationMatchStrictness: f.matchStrictness,
-    scrapeMaxAgeDays: parseMaxAge(f.scrapeMaxAgeDays),
-    blockedCompanyKeywords: f.blockedKeywords,
-    runBudget: clampInt(f.runBudget, 50, 1000, 500),
-    topN: clampInt(f.topN, 1, 50, 10),
-    minSuitabilityCategory: f.minSuitabilityCategory,
-    enabledSourceIds: f.enabledSourceIds,
-    providerInstanceIds: f.providerInstanceIds,
-  });
-
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!form) throw new Error("Form not ready");
-      const config = buildConfig(form);
+      const config = buildConfig(form, existing?.config ?? defaultProfileConfig());
       const name = form.name.trim();
       return id
         ? api.updateProfile(id, { name, config })
@@ -220,14 +89,8 @@ export function ProfileEditorPage() {
     instancesQuery.data?.providers.flatMap((provider) => provider.instances) ??
     [];
 
-  // `enabled` is NESTED for extractors and FLAT for instances — an
-  // `extractors.filter((e) => e.enabled)` silently drops every one of them.
-  const enabledExtractorIds = extractors
-    .filter((extractor) => extractor.row.enabled)
-    .map((extractor) => extractor.extractorId);
-  const enabledInstanceIds = instances
-    .filter((instance) => instance.enabled)
-    .map((instance) => instance.id);
+  const enabledExtractorIds = enabledExtractorIdsOf(extractors);
+  const enabledInstanceIds = enabledInstanceIdsOf(instances);
 
   // A new profile starts with every source the User Profile has enabled,
   // Apify actors included. Seeded once, when the source lists land.
@@ -253,19 +116,10 @@ export function ProfileEditorPage() {
     enabledInstanceIds,
   ]);
 
-  // A source runs only when it is ticked here AND enabled on the Sources page.
-  // Guard on that intersection, never on the ticks alone: a profile whose only
-  // ticks are greyed-out would otherwise save as valid and then launch runs
-  // that scrape nothing.
-  const hasEffectiveSource =
-    form !== null &&
-    (form.enabledSourceIds.some((id) => enabledExtractorIds.includes(id)) ||
-      form.providerInstanceIds.some((id) => enabledInstanceIds.includes(id)));
-
   const canSave =
     form !== null &&
     form.name.trim().length > 0 &&
-    hasEffectiveSource &&
+    hasEffectiveSourceSelection(form, extractors, instances) &&
     !saveMutation.isPending;
 
   return (
@@ -335,243 +189,12 @@ export function ProfileEditorPage() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Search terms</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <TokenizedField
-                  id="profile-search-terms"
-                  values={form.searchTerms}
-                  draft={form.searchTermsDraft}
-                  parseInput={parseSearchTermsInput}
-                  onDraftChange={(value) => update({ searchTermsDraft: value })}
-                  onValuesChange={(value) => update({ searchTerms: value })}
-                  placeholder="Type and press Enter"
-                  helperText="Add multiple terms by separating with commas or pressing Enter."
-                  removeLabelPrefix="Remove"
-                />
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Location</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <CountryField
-                    value={form.country}
-                    onChange={(value) => update({ country: value })}
-                  />
-                  <TokenizedField
-                    id="profile-cities"
-                    label="Cities"
-                    labelClassName="text-base font-semibold"
-                    values={form.cityValues}
-                    draft={form.cityDraft}
-                    parseInput={parseCityLocationsInput}
-                    onDraftChange={(value) => update({ cityDraft: value })}
-                    onValuesChange={(value) => update({ cityValues: value })}
-                    placeholder='e.g. "London"'
-                    removeLabelPrefix="Remove city"
-                  />
-                </div>
-                <WorkplaceTypesField
-                  value={form.workplaceTypes}
-                  onToggle={toggleWorkplace}
-                />
-                <LocationScopeField
-                  value={form.searchScope}
-                  onChange={(value) => update({ searchScope: value })}
-                />
-                <MatchStrictnessField
-                  value={form.matchStrictness}
-                  onChange={(value) => update({ matchStrictness: value })}
-                />
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Run settings</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid gap-4 md:grid-cols-3">
-                  <NumberField
-                    id="profile-run-budget"
-                    label="Max jobs discovered"
-                    min={50}
-                    max={1000}
-                    value={form.runBudget}
-                    onChange={(value) => update({ runBudget: value })}
-                  />
-                  <NumberField
-                    id="profile-top-n"
-                    label="Resumes tailored"
-                    min={1}
-                    max={50}
-                    value={form.topN}
-                    onChange={(value) => update({ topN: value })}
-                  />
-                  <NumberField
-                    id="profile-max-age"
-                    label="Max job age (days)"
-                    min={1}
-                    max={365}
-                    value={form.scrapeMaxAgeDays}
-                    onChange={(value) => update({ scrapeMaxAgeDays: value })}
-                  />
-                </div>
-                <MinFitField
-                  value={form.minSuitabilityCategory}
-                  onChange={(value) =>
-                    update({ minSuitabilityCategory: value })
-                  }
-                />
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Blocked companies</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <TokenizedField
-                  id="profile-blocked"
-                  values={form.blockedKeywords}
-                  draft={form.blockedDraft}
-                  parseInput={parseSearchTermsInput}
-                  onDraftChange={(value) => update({ blockedDraft: value })}
-                  onValuesChange={(value) => update({ blockedKeywords: value })}
-                  placeholder="Company name keyword"
-                  helperText="Jobs from companies matching these keywords are skipped."
-                  removeLabelPrefix="Remove keyword"
-                />
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Sources</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                    Extractors
-                  </p>
-                  {extractors.length > 0 ? (
-                    <div className="flex flex-wrap gap-2 gap-x-4">
-                      {extractors.map((extractor) => {
-                        const checkboxId = `pin-extractor-${extractor.extractorId}`;
-                        // Disabled on the Sources page → shown, but not
-                        // selectable. Never hidden: the user has to be able to
-                        // see why they cannot pick it.
-                        const sourceDisabled = !extractor.row.enabled;
-                        return (
-                          <div
-                            key={extractor.extractorId}
-                            className="flex items-center gap-2"
-                          >
-                            <label
-                              htmlFor={checkboxId}
-                              className={cn(
-                                "flex items-center gap-3 text-sm",
-                                sourceDisabled
-                                  ? "cursor-not-allowed opacity-50"
-                                  : "cursor-pointer",
-                              )}
-                            >
-                              <Checkbox
-                                id={checkboxId}
-                                disabled={sourceDisabled}
-                                checked={form.enabledSourceIds.includes(
-                                  extractor.extractorId,
-                                )}
-                                onCheckedChange={(checked) =>
-                                  toggleExtractor(
-                                    extractor.extractorId,
-                                    checked === true,
-                                  )
-                                }
-                              />
-                              {extractor.displayName}
-                            </label>
-                            {sourceDisabled ? (
-                              <span className="text-xs text-muted-foreground">
-                                disabled on the Sources page
-                              </span>
-                            ) : null}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      No extractors available.
-                    </p>
-                  )}
-                </div>
-
-                <div className="space-y-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                    Apify actors
-                  </p>
-                  {instances.length > 0 ? (
-                    <div className="flex flex-wrap gap-2 gap-x-4">
-                      {instances.map((instance) => {
-                        const checkboxId = `pin-instance-${instance.id}`;
-                        const sourceDisabled = !instance.enabled;
-                        return (
-                          <div
-                            key={instance.id}
-                            className="flex items-center gap-2"
-                          >
-                            <label
-                              htmlFor={checkboxId}
-                              className={cn(
-                                "flex items-center gap-3 text-sm",
-                                sourceDisabled
-                                  ? "cursor-not-allowed opacity-50"
-                                  : "cursor-pointer",
-                              )}
-                            >
-                              <Checkbox
-                                id={checkboxId}
-                                disabled={sourceDisabled}
-                                checked={form.providerInstanceIds.includes(
-                                  instance.id,
-                                )}
-                                onCheckedChange={(checked) =>
-                                  toggleInstance(instance.id, checked === true)
-                                }
-                              />
-                              {instance.label}
-                            </label>
-                            {sourceDisabled ? (
-                              <span className="text-xs text-muted-foreground">
-                                disabled on the Sources page
-                              </span>
-                            ) : null}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      No Apify actors configured.
-                    </p>
-                  )}
-                </div>
-
-                {!hasEffectiveSource ? (
-                  <p className="text-sm text-destructive">
-                    Select at least one source. A source runs only when it is
-                    ticked here and enabled on the Sources page.
-                  </p>
-                ) : null}
-              </CardContent>
-            </Card>
+            <ProfileConfigFields
+              form={form}
+              onChange={update}
+              extractors={extractors}
+              instances={instances}
+            />
           </div>
         )}
       </PageMain>

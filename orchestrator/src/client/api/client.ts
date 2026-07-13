@@ -1522,6 +1522,8 @@ import type {
 export interface SourceConfigsExtractorEntry {
   extractorId: string;
   displayName: string;
+  /** One line, shown next to the source's checkbox when picking sources. */
+  description?: string;
   providesSources: readonly string[];
   row: SourceConfigRow;
   schema: SourceConfigSchema | null;

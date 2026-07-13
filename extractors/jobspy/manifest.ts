@@ -93,6 +93,8 @@ function isJobSpySite(source: string): source is JobSpySite {
 export const manifest: ExtractorManifest = {
   id: "jobspy",
   displayName: "JobSpy",
+  description:
+    "LinkedIn, Indeed and Glassdoor in one scraper. The broadest source, and the best coverage of large employers.",
   providesSources: ["indeed", "linkedin", "glassdoor"],
   capabilities: { locationEvidence: true, joinedTerms: true },
   configSchema: jobspyConfigSchema,

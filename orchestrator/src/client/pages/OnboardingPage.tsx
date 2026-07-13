@@ -99,7 +99,11 @@ export const OnboardingPage: React.FC = () => {
                     cvChoice={flow.cvChoice}
                     cvDocument={flow.cvDocument}
                     cvFormatChoice={flow.cvFormatChoice}
+                    extractors={flow.extractors}
                     hasExistingCv={flow.hasExistingCv}
+                    instances={flow.instances}
+                    searchProfileForm={flow.searchProfileForm}
+                    sourceEnabledIds={flow.sourceEnabledIds}
                     storedCvSourceFormat={flow.storedCvSourceFormat}
                     hasSavedSearchTermsInSession={
                       flow.hasSavedSearchTermsInSession
@@ -109,8 +113,6 @@ export const OnboardingPage: React.FC = () => {
                     llmKeyHint={flow.llmKeyHint}
                     llmValidation={flow.llmValidation}
                     personalBrief={flow.watch("personalBrief")}
-                    searchTermDraft={flow.watch("searchTermDraft")}
-                    searchTerms={flow.watch("searchTerms")}
                     searchTermsSource={flow.searchTermsSource}
                     searchTermsStale={flow.searchTermsStale}
                     selectedProvider={flow.selectedProvider}
@@ -129,15 +131,9 @@ export const OnboardingPage: React.FC = () => {
                         shouldDirty: true,
                       })
                     }
+                    onProfileFormChange={flow.handleProfileFormChange}
                     onRegenerateSearchTerms={flow.handleRegenerateSearchTerms}
-                    onSearchTermDraftChange={(value) =>
-                      flow.setValue("searchTermDraft", value)
-                    }
-                    onSearchTermsChange={(values) =>
-                      flow.setValue("searchTerms", values, {
-                        shouldDirty: true,
-                      })
-                    }
+                    onToggleSource={flow.handleToggleSource}
                   />
                 </CardContent>
 

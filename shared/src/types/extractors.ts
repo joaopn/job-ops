@@ -51,6 +51,8 @@ export interface ExtractorRunResult {
 export interface ExtractorManifest {
   id: string;
   displayName: string;
+  /** One line, shown next to the source's checkbox when picking sources. */
+  description?: string;
   providesSources: readonly string[];
   requiredEnvVars?: readonly string[];
   capabilities?: ExtractorCapabilities;

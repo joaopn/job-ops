@@ -83,6 +83,8 @@ function toProgress(event: {
 export const manifest: ExtractorManifest = {
   id: "workingnomads",
   displayName: "Working Nomads",
+  description:
+    "Curated remote-only listings. Useful when you specifically want remote work.",
   providesSources: ["workingnomads"],
   capabilities: { locationEvidence: true, joinedTerms: true },
   configSchema: workingnomadsConfigSchema,
