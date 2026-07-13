@@ -40,6 +40,8 @@ export type HiringCafeProgressEvent =
       pageNo: number;
       resultsOnPage: number;
       totalCollected: number;
+      descriptionsFetched: number;
+      descriptionsMissing: number;
     }
   | {
       type: "term_complete";
@@ -112,6 +114,8 @@ function parseProgressLine(line: string): HiringCafeProgressEvent | null {
       pageNo,
       resultsOnPage: toNumberOrNull(parsed.resultsOnPage) ?? 0,
       totalCollected: toNumberOrNull(parsed.totalCollected) ?? 0,
+      descriptionsFetched: toNumberOrNull(parsed.descriptionsFetched) ?? 0,
+      descriptionsMissing: toNumberOrNull(parsed.descriptionsMissing) ?? 0,
     };
   }
 

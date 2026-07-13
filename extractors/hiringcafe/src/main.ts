@@ -8,21 +8,32 @@ import {
   toNumberOrNull,
   toStringOrNull,
 } from "job-ops-shared/utils/type-conversion";
-import { firefox, type Page } from "playwright";
+import { type BrowserContext, firefox, type Page } from "playwright";
 import {
   normalizeCountryKey,
   resolveHiringCafeCountryLocation,
 } from "./country-map.js";
 import { createDefaultSearchState } from "./default-search-state.js";
+import { asRecord, BASE_URL, fetchJobDescription } from "./detail.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const BASE_URL = "https://hiring.cafe";
 const JOBOPS_PROGRESS_PREFIX = "JOBOPS_PROGRESS ";
 const DEFAULT_MAX_JOBS_PER_TERM = 200;
 const DEFAULT_SEARCH_TERM = "web developer";
 const DEFAULT_DATE_FETCHED_PAST_N_DAYS = 30;
 const DEFAULT_LOCATION_RADIUS_MILES = 1;
 const PAGE_LIMIT = 50;
+
+// Descriptions are fetched one page at a time (see fetchJobDescription): each
+// detail page is ~62 KB / ~0.7s, so a 200-job term costs ~140s serially; at
+// 5-way it is ~28s. Going much higher risks Cloudflare rate-limiting the very
+// browser session our search pagination depends on — losing that session costs
+// the whole run, not one job.
+const DEFAULT_DETAIL_FETCH_CONCURRENCY = 5;
+const DETAIL_FETCH_CONCURRENCY = parsePositiveInt(
+  process.env.HIRING_CAFE_DETAIL_CONCURRENCY,
+  DEFAULT_DETAIL_FETCH_CONCURRENCY,
+);
 
 type RawHiringCafeJob = Record<string, unknown>;
 
@@ -116,11 +127,6 @@ function encodeSearchState(searchState: unknown): string {
   // state now rides as a URL-encoded JSON `searchState` query param against
   // the SSR-rendered home page. No base64 layer.
   return encodeURIComponent(JSON.stringify(searchState));
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  return value as Record<string, unknown>;
 }
 
 function asStringArray(value: unknown): string[] {
@@ -568,6 +574,58 @@ async function fetchSsrSearchPage(
   };
 }
 
+interface PageEntry {
+  job: ExtractedJob;
+  requisitionId: string | null;
+}
+
+/**
+ * Fill in the descriptions for the jobs this page contributed. Only jobs that
+ * survived mapping, dedupe and the term cap get here, so we never pay for a job
+ * we then drop.
+ *
+ * A job whose description cannot be fetched is kept with no description rather
+ * than dropped: a transient Cloudflare blip must not silently cost us jobs.
+ */
+async function enrichPageDescriptions(
+  context: BrowserContext,
+  entries: PageEntry[],
+): Promise<{ fetched: number; missing: number }> {
+  // Read `context.request` HERE, never at startup: the Camoufox-instability
+  // fallback below closes the browser and reassigns `context`, so a handle
+  // captured earlier would point at a closed browser.
+  const request = context.request;
+
+  // Skip anything that already has a description — if hiring.cafe ever puts the
+  // field back in the search payload, this whole path turns into a no-op.
+  const pending = entries.filter((entry) => !entry.job.jobDescription);
+  if (pending.length === 0) return { fetched: 0, missing: 0 };
+
+  let cursor = 0;
+  let fetched = 0;
+  const workerCount = Math.min(DETAIL_FETCH_CONCURRENCY, pending.length);
+
+  const workers = Array.from({ length: workerCount }, async () => {
+    while (cursor < pending.length) {
+      const entry = pending[cursor];
+      cursor += 1;
+      if (!entry.requisitionId) continue;
+
+      const description = await fetchJobDescription(
+        request,
+        entry.requisitionId,
+      );
+      if (description) {
+        entry.job.jobDescription = description;
+        fetched += 1;
+      }
+    }
+  });
+  await Promise.all(workers);
+
+  return { fetched, missing: pending.length - fetched };
+}
+
 async function run(): Promise<void> {
   const searchTerms = parseSearchTerms(
     process.env.HIRING_CAFE_SEARCH_TERMS,
@@ -698,8 +756,13 @@ async function run(): Promise<void> {
         if (pageResult.hits.length === 0) break;
 
         let mappedOnPage = 0;
+        const pageEntries: PageEntry[] = [];
         for (const rawJob of pageResult.hits) {
           if (termCollected >= termTarget) break;
+          // Expired postings are dead on arrival — skip before spending a
+          // detail fetch on them.
+          if (rawJob.is_expired === true) continue;
+
           const mapped = mapHiringCafeJob(rawJob);
           if (!mapped) continue;
 
@@ -708,8 +771,26 @@ async function run(): Promise<void> {
           seen.add(dedupeKey);
 
           allJobs.push(mapped);
+          pageEntries.push({
+            job: mapped,
+            requisitionId: toStringOrNull(rawJob.requisition_id),
+          });
           termCollected += 1;
           mappedOnPage += 1;
+        }
+
+        // Must run BEFORE the emit below, or the counts are always zero.
+        const descriptions = await enrichPageDescriptions(context, pageEntries);
+
+        // The search payload dropped descriptions once already and nobody
+        // noticed for weeks. If the detail route dies too, say so loudly in the
+        // logs rather than importing a page of unscoreable jobs in silence.
+        // `missing` also counts hits with no requisition_id, so name that cause
+        // too — otherwise a renamed field reads as a blocked route.
+        if (descriptions.missing > 0 && descriptions.fetched === 0) {
+          console.warn(
+            `Hiring Cafe: 0/${descriptions.missing} descriptions fetched on page ${pageNo + 1} — the job detail route may be blocked or changed, or hits no longer carry requisition_id`,
+          );
         }
 
         emitProgress({
@@ -720,6 +801,8 @@ async function run(): Promise<void> {
           pageNo,
           resultsOnPage: mappedOnPage,
           totalCollected: termCollected,
+          descriptionsFetched: descriptions.fetched,
+          descriptionsMissing: descriptions.missing,
         });
 
         if (termCollected >= termTarget) break;

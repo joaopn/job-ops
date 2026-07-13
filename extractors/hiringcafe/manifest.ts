@@ -76,6 +76,8 @@ function toProgress(event: {
   searchTerm: string;
   pageNo?: number;
   totalCollected?: number;
+  descriptionsFetched?: number;
+  descriptionsMissing?: number;
 }): ExtractorProgressEvent {
   if (event.type === "term_start") {
     return {
@@ -90,6 +92,14 @@ function toProgress(event: {
   if (event.type === "page_fetched") {
     const pageNo = (event.pageNo ?? 0) + 1;
     const totalCollected = event.totalCollected ?? 0;
+    // Descriptions are fetched per job from the detail page; surfacing the
+    // count is the only in-run signal that the fetch still works at all.
+    const fetched = event.descriptionsFetched ?? 0;
+    const missing = event.descriptionsMissing ?? 0;
+    const descriptions =
+      fetched + missing > 0
+        ? `, ${fetched}/${fetched + missing} with descriptions`
+        : "";
     return {
       phase: "list",
       termsProcessed: Math.max(event.termIndex - 1, 0),
@@ -98,7 +108,7 @@ function toProgress(event: {
       jobPagesEnqueued: totalCollected,
       jobPagesProcessed: totalCollected,
       currentUrl: `page ${pageNo}`,
-      detail: `Hiring Cafe: term ${event.termIndex}/${event.termTotal}, page ${pageNo} (${totalCollected} collected)`,
+      detail: `Hiring Cafe: term ${event.termIndex}/${event.termTotal}, page ${pageNo} (${totalCollected} collected${descriptions})`,
     };
   }
 
