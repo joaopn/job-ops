@@ -56,6 +56,7 @@ function makeProfile(overrides: Partial<Profile> = {}): Profile {
 function makeExtractor(
   extractorId: string,
   displayName: string,
+  enabled = true,
 ): SourceConfigsExtractorEntry {
   return {
     extractorId,
@@ -63,7 +64,7 @@ function makeExtractor(
     providesSources: [],
     row: {
       extractorId,
-      enabled: true,
+      enabled,
       config: {},
       mappings: {},
       updatedAt: "2025-01-01T00:00:00.000Z",
@@ -144,18 +145,83 @@ describe("ProfileEditorPage", () => {
     );
   });
 
-  it("creates a new profile from defaults once named", async () => {
+  it("creates a new profile pre-ticked with every enabled source", async () => {
     renderAt("/profiles/new");
     const nameInput = await screen.findByLabelText("Name");
-    expect(screen.getByRole("button", { name: /^save$/i })).toBeDisabled();
+    const save = screen.getByRole("button", { name: /^save$/i });
+    expect(save).toBeDisabled();
 
     fireEvent.change(nameInput, { target: { value: "Fresh" } });
-    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    await waitFor(() => expect(save).toBeEnabled());
+    fireEvent.click(save);
 
     await waitFor(() => expect(createProfile).toHaveBeenCalledTimes(1));
-    expect(createProfile).toHaveBeenCalledWith(
-      expect.objectContaining({ name: "Fresh" }),
+    const [input] = vi.mocked(createProfile).mock.calls[0];
+    expect(input.name).toBe("Fresh");
+    // Pins the new invariant: a fresh profile is born with its sources ticked,
+    // not empty. An empty list now means "no sources", so a regression here
+    // would ship a profile that scrapes nothing.
+    expect(input.config?.enabledSourceIds).toEqual(
+      expect.arrayContaining(["jobspy", "hiringcafe"]),
     );
     expect(await screen.findByText("profiles-list")).toBeInTheDocument();
+  });
+
+  it("greys out a source disabled on the Sources page", async () => {
+    vi.mocked(getSourceConfigs).mockResolvedValue({
+      extractors: [
+        makeExtractor("jobspy", "JobSpy"),
+        makeExtractor("hiringcafe", "Hiring Cafe", false),
+      ],
+    });
+
+    renderAt("/profiles/p1");
+    await screen.findByLabelText("Name");
+
+    // Visible, never hidden — the user has to see why they cannot pick it.
+    expect(await screen.findByLabelText("Hiring Cafe")).toBeDisabled();
+    expect(screen.getByLabelText("JobSpy")).toBeEnabled();
+    expect(
+      screen.getByText(/disabled on the Sources page/i),
+    ).toBeInTheDocument();
+  });
+
+  it("blocks save when every ticked source is disabled", async () => {
+    // Ticked in the profile, but disabled on the Sources page → it cannot run.
+    // A ticks-only guard would call this valid and then launch runs that
+    // silently scrape nothing.
+    vi.mocked(getProfiles).mockResolvedValue({
+      profiles: [
+        makeProfile({
+          id: "p1",
+          config: {
+            ...makeProfile().config,
+            enabledSourceIds: ["hiringcafe"],
+            providerInstanceIds: [],
+          },
+        }),
+      ],
+      defaultProfileId: "p1",
+    });
+    vi.mocked(getSourceConfigs).mockResolvedValue({
+      extractors: [
+        makeExtractor("jobspy", "JobSpy"),
+        makeExtractor("hiringcafe", "Hiring Cafe", false),
+      ],
+    });
+
+    renderAt("/profiles/p1");
+    await screen.findByLabelText("Name");
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /^save$/i })).toBeDisabled(),
+    );
+    expect(screen.getByText(/Select at least one source/i)).toBeInTheDocument();
+
+    // Ticking an enabled source makes the selection effective again.
+    fireEvent.click(screen.getByLabelText("JobSpy"));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /^save$/i })).toBeEnabled(),
+    );
   });
 });

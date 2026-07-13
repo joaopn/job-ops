@@ -51,7 +51,15 @@ describe.sequential("profiles repository CRUD", () => {
       "onsite",
     ]);
     expect(created.config.scrapeMaxAgeDays).toBeNull();
-    expect(created.config.enabledSourceIds).toEqual([]);
+    // A new Search Profile is born TICKED — every source the User Profile has
+    // enabled. An empty list now means "no sources at all", so creating a
+    // profile with one would ship something that can only be rejected at run
+    // time.
+    const { getEnabledExtractorIds } = await import("./source-configs");
+    expect(created.config.enabledSourceIds).toEqual(
+      await getEnabledExtractorIds(),
+    );
+    expect(created.config.enabledSourceIds.length).toBeGreaterThan(0);
   });
 
   it("round-trips through getProfile and getAllProfiles", async () => {

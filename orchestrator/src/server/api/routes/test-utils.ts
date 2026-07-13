@@ -154,9 +154,27 @@ export async function startServer(options?: {
     );
   }
   const { createApp } = await import("../../app");
-  const { closeDb } = await import("@server/db/index");
+  const { closeDb, db, schema } = await import("@server/db/index");
   const { getPipelineStatus } = await import("@server/pipeline/index");
   vi.mocked(getPipelineStatus).mockReturnValue({ isRunning: false });
+
+  // The stub registry invents manifest ids (`test-<platform>`), but migrate
+  // seeds `source_configs` from the REAL extractor list — so none of the stub's
+  // extractors has a row. In production every registered extractor does (it is
+  // the invariant discovery already relies on: a manifest with no enabled row
+  // is dropped). Mirror it here, or every run in a route test resolves to zero
+  // enabled sources.
+  for (const manifest of defaultRegistry.manifests.values()) {
+    await db
+      .insert(schema.sourceConfigs)
+      .values({
+        extractorId: manifest.id,
+        enabled: true,
+        configJson: {},
+        mappingsJson: {},
+      })
+      .onConflictDoNothing();
+  }
 
   await applyStoredEnvOverrides();
 

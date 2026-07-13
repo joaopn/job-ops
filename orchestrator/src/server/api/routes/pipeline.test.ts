@@ -483,6 +483,166 @@ describe.sequential("Pipeline API routes", () => {
     );
   });
 
+  it("rejects a run whose only pinned source is disabled on the Sources page", async () => {
+    // The silent-zero regression. The pin list is NON-empty, so a guard that
+    // only asked "did you select something?" would let this run start — and
+    // discovery would then drop the disabled extractor with a bare `continue`,
+    // finishing successfully having scraped nothing.
+    const { runPipeline } = await import("@server/pipeline/index");
+    const { db, schema } = await import("@server/db");
+    const { eq } = await import("drizzle-orm");
+
+    const profileId = await createProfile(baseUrl, {
+      searchTerms: ["ml engineer"],
+      searchCountry: "germany",
+      enabledSourceIds: ["test-linkedin"],
+      providerInstanceIds: [],
+    });
+
+    await db
+      .update(schema.sourceConfigs)
+      .set({ enabled: false })
+      .where(eq(schema.sourceConfigs.extractorId, "test-linkedin"));
+
+    const res = await fetch(`${baseUrl}/api/pipeline/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ profileId }),
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.ok).toBe(false);
+    expect(body.error.code).toBe("INVALID_REQUEST");
+    expect(runPipeline).not.toHaveBeenCalled();
+  });
+
+  it("rejects a run when the profile selects no sources at all", async () => {
+    const { runPipeline } = await import("@server/pipeline/index");
+
+    // A source-less profile can no longer be CREATED — createProfile fills an
+    // absent-or-empty selection with every enabled source. It is still
+    // reachable by clearing the selection on an update (which must stay able
+    // to narrow one), so that is the path this 400 backstops.
+    const profileId = await createProfile(baseUrl, {
+      searchTerms: ["ml engineer"],
+      searchCountry: "germany",
+    });
+
+    const clearRes = await fetch(`${baseUrl}/api/profiles/${profileId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        config: { enabledSourceIds: [], providerInstanceIds: [] },
+      }),
+    });
+    expect((await clearRes.json()).ok).toBe(true);
+
+    const res = await fetch(`${baseUrl}/api/pipeline/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ profileId }),
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.ok).toBe(false);
+    expect(runPipeline).not.toHaveBeenCalled();
+  });
+
+  it("still runs a per-source re-run scoped to one extractor", async () => {
+    // The re-run button empties the OTHER side deliberately: an extractor
+    // re-run posts `providerInstanceIds: []`. That must not trip the guard.
+    const { runPipeline } = await import("@server/pipeline/index");
+    await createProfile(baseUrl, {
+      searchTerms: ["ml engineer"],
+      searchCountry: "germany",
+      enabledSourceIds: ["test-linkedin"],
+    });
+
+    const res = await fetch(`${baseUrl}/api/pipeline/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sources: ["linkedin"],
+        providerInstanceIds: [],
+        partial: true,
+      }),
+    });
+    const body = await res.json();
+
+    expect(body.ok).toBe(true);
+    expect(runPipeline).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sources: ["linkedin"],
+        providerInstanceIds: [],
+        partial: true,
+      }),
+    );
+  });
+
+  it("still runs a per-source re-run scoped to one Apify instance", async () => {
+    // The mirror shape: an Apify re-run posts `sources: []`. A naive
+    // "resolved sources empty → reject" would 400 every one of these.
+    const { runPipeline } = await import("@server/pipeline/index");
+    const { db, schema } = await import("@server/db");
+
+    await db.insert(schema.providerInstances).values({
+      id: "inst-1",
+      providerId: "apify",
+      actorRef: "acme/actor",
+      label: "Acme actor",
+      templateId: null,
+      enabled: true,
+      inputTemplateJson: "{}",
+      outputMappingJson: "{}",
+      mappingsJson: {},
+    });
+
+    const res = await fetch(`${baseUrl}/api/pipeline/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sources: [],
+        providerInstanceIds: ["inst-1"],
+        partial: true,
+      }),
+    });
+    const body = await res.json();
+
+    expect(body.ok).toBe(true);
+    expect(runPipeline).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sources: [],
+        providerInstanceIds: ["inst-1"],
+      }),
+    );
+  });
+
+  it("rejects a body-provided source whose extractor is disabled", async () => {
+    // Symmetric with provider instances, which already 400 on a disabled id.
+    const { runPipeline } = await import("@server/pipeline/index");
+    const { db, schema } = await import("@server/db");
+    const { eq } = await import("drizzle-orm");
+
+    await db
+      .update(schema.sourceConfigs)
+      .set({ enabled: false })
+      .where(eq(schema.sourceConfigs.extractorId, "test-linkedin"));
+
+    const res = await fetch(`${baseUrl}/api/pipeline/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sources: ["linkedin"] }),
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.ok).toBe(false);
+    expect(body.error.message).toMatch(/not enabled/i);
+    expect(runPipeline).not.toHaveBeenCalled();
+  });
+
   it("returns conflict when cancelling with no active pipeline", async () => {
     const res = await fetch(`${baseUrl}/api/pipeline/cancel`, {
       method: "POST",

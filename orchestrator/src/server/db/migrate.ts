@@ -1262,5 +1262,68 @@ try {
   process.exit(1);
 }
 
+// An empty `enabledSourceIds` used to mean "every enabled extractor". It now
+// means "no extractors" — a tick means what it says. Without this backfill,
+// every Search Profile carrying an empty list would silently stop scraping.
+// Runs last, so the source_configs backfill and the profiles seed have both
+// populated the world it reads.
+//
+// `providerInstanceIds` is deliberately NOT backfilled: an empty list there
+// ALREADY means "no Apify actors", so those profiles run none today. Filling
+// it would start spending the user's money on every run.
+try {
+  const profileRows = sqlite
+    .prepare("SELECT id, config_json FROM profiles")
+    .all() as Array<{ id: string; config_json: string }>;
+
+  if (profileRows.length > 0) {
+    const enabledExtractorIds = (
+      sqlite
+        .prepare("SELECT extractor_id FROM source_configs WHERE enabled = 1")
+        .all() as Array<{ extractor_id: string }>
+    ).map((r) => r.extractor_id);
+
+    const update = sqlite.prepare(
+      "UPDATE profiles SET config_json = ?, updated_at = datetime('now') WHERE id = ?",
+    );
+
+    let backfilled = 0;
+    for (const row of profileRows) {
+      let config: Record<string, unknown>;
+      try {
+        const parsed = JSON.parse(row.config_json);
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+          continue;
+        }
+        config = parsed as Record<string, unknown>;
+      } catch {
+        continue;
+      }
+
+      const current = config.enabledSourceIds;
+      const isEmpty = !Array.isArray(current) || current.length === 0;
+      if (!isEmpty) continue;
+
+      config.enabledSourceIds = enabledExtractorIds;
+      update.run(JSON.stringify(config), row.id);
+      backfilled += 1;
+    }
+
+    if (backfilled > 0) {
+      // Honest log: with nothing enabled, an empty list is backfilled with an
+      // empty list — same effective behavior as before, but no source will run
+      // until one is enabled on the Sources page.
+      console.log(
+        enabledExtractorIds.length > 0
+          ? `✅ backfilled enabledSourceIds on ${backfilled} profile(s) with ${enabledExtractorIds.length} enabled extractor(s)`
+          : `⚠️ ${backfilled} profile(s) had no source selection and no extractor is enabled — enable one on the Sources page`,
+      );
+    }
+  }
+} catch (error) {
+  console.error("❌ enabledSourceIds backfill failed:", error);
+  process.exit(1);
+}
+
 sqlite.close();
 console.log("🎉 Database migrations complete!");

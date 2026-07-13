@@ -24,6 +24,7 @@ import { getRunJobs } from "@server/pipeline/run-job-capture";
 import * as pipelineRepo from "@server/repositories/pipeline";
 import { getProfile } from "@server/repositories/profiles";
 import { getEnabledProviderInstances } from "@server/repositories/provider-instances";
+import { getEnabledExtractorIds } from "@server/repositories/source-configs";
 import { getDefaultProfile } from "@server/services/profiles";
 import {
   type ExtractorSourceId,
@@ -283,27 +284,43 @@ pipelineRouter.post("/run", async (req: Request, res: Response) => {
     });
 
     // Sources: a body list wins verbatim (including `[]` = "no built-in
-    // extractors"). Otherwise expand the Profile's pinned extractor ids to
-    // their platform ids via the registry. No profile / empty pin → leave
-    // undefined so discovery uses all enabled extractors, or `[]` respectively.
+    // extractors"). Otherwise expand the Search Profile's pinned extractor ids
+    // to their platform ids via the registry. An empty pin set means NO
+    // extractors — a tick means what it says, and there is no "empty = all"
+    // fallback. No profile at all → undefined → discovery uses every enabled
+    // extractor.
     let resolvedSources: ExtractorSourceId[] | undefined;
     if (body.sources !== undefined) {
       resolvedSources = body.sources;
-    } else if (profileConfig && profileConfig.enabledSourceIds.length > 0) {
-      const registry = await loadRegistry();
-      if (!registry) {
-        return fail(
-          res,
-          serviceUnavailable(
-            "Extractor registry is unavailable. Try again after fixing startup errors.",
-          ),
-        );
+    } else if (profileConfig) {
+      if (profileConfig.enabledSourceIds.length === 0) {
+        // Short-circuit before the registry load: an unavailable registry must
+        // not turn a "no sources selected" 400 into a 503.
+        resolvedSources = [];
+      } else {
+        const registry = await loadRegistry();
+        if (!registry) {
+          return fail(
+            res,
+            serviceUnavailable(
+              "Extractor registry is unavailable. Try again after fixing startup errors.",
+            ),
+          );
+        }
+        const pinned = new Set(profileConfig.enabledSourceIds);
+        resolvedSources = Array.from(registry.manifestBySource.entries())
+          .filter(([, manifest]) => pinned.has(manifest.id))
+          .map(([platform]) => platform);
       }
-      const pinned = new Set(profileConfig.enabledSourceIds);
-      resolvedSources = Array.from(registry.manifestBySource.entries())
-        .filter(([, manifest]) => pinned.has(manifest.id))
-        .map(([platform]) => platform);
     }
+
+    // A source runs only when the User Profile has it enabled (Sources page)
+    // AND the run selects it. Both sets are needed below to gate on the
+    // EFFECTIVE selection rather than the raw one.
+    const enabledExtractorIds = new Set(await getEnabledExtractorIds());
+    const enabledInstanceIds = new Set(
+      (await getEnabledProviderInstances()).map((row) => row.id),
+    );
 
     // Body-provided sources are validated (unknown → 400, incompatible with the
     // resolved location intent → 400). Profile-derived sources are NOT gated
@@ -331,6 +348,24 @@ pipelineRouter.post("/run", async (req: Request, res: Response) => {
         );
       }
 
+      // Gate the body list on enablement too, mirroring what provider
+      // instances already do below. Without this a disabled extractor passes
+      // every check here and is then dropped silently at grouping, so the run
+      // succeeds having scraped nothing.
+      const disabledSources = body.sources.filter((source) => {
+        const manifest = registry.manifestBySource.get(source);
+        return manifest !== undefined && !enabledExtractorIds.has(manifest.id);
+      });
+      if (disabledSources.length > 0) {
+        return fail(
+          res,
+          badRequest(
+            `Requested sources are not enabled: ${disabledSources.join(", ")}`,
+            { disabledSources },
+          ),
+        );
+      }
+
       const sourcePlans = planLocationSources({
         intent: locationIntent,
         sources: body.sources,
@@ -354,10 +389,8 @@ pipelineRouter.post("/run", async (req: Request, res: Response) => {
     }
 
     if (body.providerInstanceIds && body.providerInstanceIds.length > 0) {
-      const enabledInstances = await getEnabledProviderInstances();
-      const enabledIds = new Set(enabledInstances.map((row) => row.id));
       const unknownInstanceIds = body.providerInstanceIds.filter(
-        (id) => !enabledIds.has(id),
+        (id) => !enabledInstanceIds.has(id),
       );
       if (unknownInstanceIds.length > 0) {
         return fail(
@@ -368,6 +401,46 @@ pipelineRouter.post("/run", async (req: Request, res: Response) => {
           ),
         );
       }
+    }
+
+    // EFFECTIVE = selected AND enabled. The guard tests this intersection, not
+    // the raw selection: a Search Profile pinned to a source that was later
+    // disabled on the Sources page has a NON-empty pin list, so a selection-only
+    // guard stays silent — discovery then drops the source (a bare `continue`
+    // at the grouping step) and the run succeeds having scraped nothing. Both
+    // sets must be empty to reject: the per-source re-run button deliberately
+    // empties one side to scope the run to the other.
+    const effectiveInstanceIds =
+      resolvedProviderInstanceIds === undefined
+        ? Array.from(enabledInstanceIds)
+        : resolvedProviderInstanceIds.filter((id) => enabledInstanceIds.has(id));
+
+    let effectiveSourceCount = 0;
+    if (resolvedSources === undefined || resolvedSources.length > 0) {
+      const registry = await loadRegistry();
+      if (!registry) {
+        return fail(
+          res,
+          serviceUnavailable(
+            "Extractor registry is unavailable. Try again after fixing startup errors.",
+          ),
+        );
+      }
+      const candidates =
+        resolvedSources ?? Array.from(registry.manifestBySource.keys());
+      effectiveSourceCount = candidates.filter((source) => {
+        const manifest = registry.manifestBySource.get(source);
+        return manifest !== undefined && enabledExtractorIds.has(manifest.id);
+      }).length;
+    }
+
+    if (effectiveSourceCount === 0 && effectiveInstanceIds.length === 0) {
+      return fail(
+        res,
+        badRequest(
+          "No sources are enabled for this run. Enable a source on the Sources page, then select it in the search profile.",
+        ),
+      );
     }
 
     // maxJobsPerTerm: a body value wins; otherwise derive it from the Profile's

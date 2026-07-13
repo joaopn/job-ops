@@ -10,6 +10,8 @@ import {
 import { desc, eq } from "drizzle-orm";
 import { db, schema } from "../db/index";
 import type { ProfileDbRow } from "../db/schema";
+import { getEnabledProviderInstances } from "./provider-instances";
+import { getEnabledExtractorIds } from "./source-configs";
 
 const { profiles } = schema;
 
@@ -50,6 +52,21 @@ export async function createProfile(
     ...defaultProfileConfig(),
     ...(input.config ?? {}),
   };
+
+  // A new Search Profile starts with every source the User Profile has
+  // enabled, Apify actors included. Absent and empty are treated identically:
+  // `parseProfileConfig` collapses an omitted list to `[]`, so the distinction
+  // cannot survive a round-trip — and an explicitly source-less profile could
+  // only ever be rejected at run time anyway.
+  if (config.enabledSourceIds.length === 0) {
+    config.enabledSourceIds = await getEnabledExtractorIds();
+  }
+  if (config.providerInstanceIds.length === 0) {
+    config.providerInstanceIds = (await getEnabledProviderInstances()).map(
+      (row) => row.id,
+    );
+  }
+
   await db.insert(profiles).values({
     id,
     name: input.name,

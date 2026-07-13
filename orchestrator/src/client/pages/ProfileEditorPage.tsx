@@ -20,6 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 import {
   normalizeWorkplaceTypes,
   parseCityLocationsInput,
@@ -209,9 +210,6 @@ export function ProfileEditorPage() {
     },
   });
 
-  const canSave =
-    form !== null && form.name.trim().length > 0 && !saveMutation.isPending;
-
   // Only genuinely-missing profiles are "not found". A warm-cache Edit has
   // `existing` on the first frame but `form` not yet hydrated — that must show
   // the loading branch, not a not-found flash.
@@ -221,6 +219,54 @@ export function ProfileEditorPage() {
   const instances =
     instancesQuery.data?.providers.flatMap((provider) => provider.instances) ??
     [];
+
+  // `enabled` is NESTED for extractors and FLAT for instances — an
+  // `extractors.filter((e) => e.enabled)` silently drops every one of them.
+  const enabledExtractorIds = extractors
+    .filter((extractor) => extractor.row.enabled)
+    .map((extractor) => extractor.extractorId);
+  const enabledInstanceIds = instances
+    .filter((instance) => instance.enabled)
+    .map((instance) => instance.id);
+
+  // A new profile starts with every source the User Profile has enabled,
+  // Apify actors included. Seeded once, when the source lists land.
+  const seededNewProfileRef = useRef(false);
+  useEffect(() => {
+    if (!isNew || seededNewProfileRef.current) return;
+    if (sourcesQuery.isLoading || instancesQuery.isLoading) return;
+    seededNewProfileRef.current = true;
+    setForm((prev) =>
+      prev
+        ? {
+            ...prev,
+            enabledSourceIds: enabledExtractorIds,
+            providerInstanceIds: enabledInstanceIds,
+          }
+        : prev,
+    );
+  }, [
+    isNew,
+    sourcesQuery.isLoading,
+    instancesQuery.isLoading,
+    enabledExtractorIds,
+    enabledInstanceIds,
+  ]);
+
+  // A source runs only when it is ticked here AND enabled on the Sources page.
+  // Guard on that intersection, never on the ticks alone: a profile whose only
+  // ticks are greyed-out would otherwise save as valid and then launch runs
+  // that scrape nothing.
+  const hasEffectiveSource =
+    form !== null &&
+    (form.enabledSourceIds.some((id) => enabledExtractorIds.includes(id)) ||
+      form.providerInstanceIds.some((id) => enabledInstanceIds.includes(id)));
+
+  const canSave =
+    form !== null &&
+    form.name.trim().length > 0 &&
+    hasEffectiveSource &&
+    !saveMutation.isPending;
 
   return (
     <>
@@ -418,26 +464,45 @@ export function ProfileEditorPage() {
                     <div className="flex flex-wrap gap-2 gap-x-4">
                       {extractors.map((extractor) => {
                         const checkboxId = `pin-extractor-${extractor.extractorId}`;
+                        // Disabled on the Sources page → shown, but not
+                        // selectable. Never hidden: the user has to be able to
+                        // see why they cannot pick it.
+                        const sourceDisabled = !extractor.row.enabled;
                         return (
-                          <label
+                          <div
                             key={extractor.extractorId}
-                            htmlFor={checkboxId}
-                            className="flex cursor-pointer items-center gap-3 text-sm"
+                            className="flex items-center gap-2"
                           >
-                            <Checkbox
-                              id={checkboxId}
-                              checked={form.enabledSourceIds.includes(
-                                extractor.extractorId,
+                            <label
+                              htmlFor={checkboxId}
+                              className={cn(
+                                "flex items-center gap-3 text-sm",
+                                sourceDisabled
+                                  ? "cursor-not-allowed opacity-50"
+                                  : "cursor-pointer",
                               )}
-                              onCheckedChange={(checked) =>
-                                toggleExtractor(
+                            >
+                              <Checkbox
+                                id={checkboxId}
+                                disabled={sourceDisabled}
+                                checked={form.enabledSourceIds.includes(
                                   extractor.extractorId,
-                                  checked === true,
-                                )
-                              }
-                            />
-                            {extractor.displayName}
-                          </label>
+                                )}
+                                onCheckedChange={(checked) =>
+                                  toggleExtractor(
+                                    extractor.extractorId,
+                                    checked === true,
+                                  )
+                                }
+                              />
+                              {extractor.displayName}
+                            </label>
+                            {sourceDisabled ? (
+                              <span className="text-xs text-muted-foreground">
+                                disabled on the Sources page
+                              </span>
+                            ) : null}
+                          </div>
                         );
                       })}
                     </div>
@@ -456,23 +521,39 @@ export function ProfileEditorPage() {
                     <div className="flex flex-wrap gap-2 gap-x-4">
                       {instances.map((instance) => {
                         const checkboxId = `pin-instance-${instance.id}`;
+                        const sourceDisabled = !instance.enabled;
                         return (
-                          <label
+                          <div
                             key={instance.id}
-                            htmlFor={checkboxId}
-                            className="flex cursor-pointer items-center gap-3 text-sm"
+                            className="flex items-center gap-2"
                           >
-                            <Checkbox
-                              id={checkboxId}
-                              checked={form.providerInstanceIds.includes(
-                                instance.id,
+                            <label
+                              htmlFor={checkboxId}
+                              className={cn(
+                                "flex items-center gap-3 text-sm",
+                                sourceDisabled
+                                  ? "cursor-not-allowed opacity-50"
+                                  : "cursor-pointer",
                               )}
-                              onCheckedChange={(checked) =>
-                                toggleInstance(instance.id, checked === true)
-                              }
-                            />
-                            {instance.label}
-                          </label>
+                            >
+                              <Checkbox
+                                id={checkboxId}
+                                disabled={sourceDisabled}
+                                checked={form.providerInstanceIds.includes(
+                                  instance.id,
+                                )}
+                                onCheckedChange={(checked) =>
+                                  toggleInstance(instance.id, checked === true)
+                                }
+                              />
+                              {instance.label}
+                            </label>
+                            {sourceDisabled ? (
+                              <span className="text-xs text-muted-foreground">
+                                disabled on the Sources page
+                              </span>
+                            ) : null}
+                          </div>
                         );
                       })}
                     </div>
@@ -482,6 +563,13 @@ export function ProfileEditorPage() {
                     </p>
                   )}
                 </div>
+
+                {!hasEffectiveSource ? (
+                  <p className="text-sm text-destructive">
+                    Select at least one source. A source runs only when it is
+                    ticked here and enabled on the Sources page.
+                  </p>
+                ) : null}
               </CardContent>
             </Card>
           </div>
