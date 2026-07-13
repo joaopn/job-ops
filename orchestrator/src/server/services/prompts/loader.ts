@@ -1,7 +1,4 @@
-import {
-  getAllPromptRows,
-  getPromptRow,
-} from "@server/repositories/prompts";
+import { getAllPromptRows, getPromptRow } from "@server/repositories/prompts";
 import { parse as parseYaml } from "yaml";
 import { getDefaultPromptVars } from "./fragments";
 import { type ModelHints, type PromptFile, promptFileSchema } from "./schema";
@@ -193,6 +190,39 @@ export async function loadPrompt(
 }
 
 /**
+ * Render a fragment on its own, outside any consuming prompt. Used when the
+ * server picks a fragment at call time and passes the rendered text in as a
+ * variable (the CV format note), rather than the prompt splicing it with
+ * `{{> ...}}`.
+ *
+ * Same one-level-deep rule as `expandPartials`: a fragment that references
+ * another partial is rejected rather than expanded, so both paths agree.
+ */
+export async function renderFragment(
+  name: string,
+  vars: PromptVars = {},
+): Promise<string> {
+  const file = await loadFragment(name);
+  if (!file.template) {
+    throw new Error(`Fragment "${name}" has no \`template\` field.`);
+  }
+
+  const referencesPartial = PARTIAL_PATTERN.test(file.template);
+  PARTIAL_PATTERN.lastIndex = 0;
+  if (referencesPartial) {
+    throw new Error(
+      `Fragment "${name}" references another partial; nested partials are not supported.`,
+    );
+  }
+
+  const merged: Record<string, string> = {
+    ...getDefaultPromptVars(),
+    ...normalizeVars(vars),
+  };
+  return interpolate(file.template, merged, `fragment:${name}`);
+}
+
+/**
  * Structural validation for a prompt save: YAML parses, the (strict) prompt
  * schema accepts it, and every `{{> partial}}` it references exists and is
  * expandable. Deliberately does NOT validate `{{var}}` names — variables are
@@ -210,13 +240,15 @@ export async function validatePromptContent(
   const parsed = parseContent(content, name);
 
   if (name.startsWith("fragments/")) {
-    const referencesPartial = [parsed.system, parsed.user, parsed.template].some(
-      (body) => {
-        const matched = PARTIAL_PATTERN.test(body);
-        PARTIAL_PATTERN.lastIndex = 0;
-        return matched;
-      },
-    );
+    const referencesPartial = [
+      parsed.system,
+      parsed.user,
+      parsed.template,
+    ].some((body) => {
+      const matched = PARTIAL_PATTERN.test(body);
+      PARTIAL_PATTERN.lastIndex = 0;
+      return matched;
+    });
     if (referencesPartial) {
       throw new Error(
         `Fragment "${name}" references another partial; fragments cannot include {{> ...}} (expansion is one level deep).`,

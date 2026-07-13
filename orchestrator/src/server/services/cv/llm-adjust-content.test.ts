@@ -2,6 +2,7 @@
 import { loadPrompt } from "@server/services/prompts";
 import type { CvField } from "@shared/types";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { getCvFormatNote } from "./cv-format-note";
 import { llmAdjustContent } from "./llm-adjust-content";
 
 const callJsonMock = vi.fn();
@@ -42,10 +43,15 @@ vi.mock("@server/services/writing-style", () => ({
 
 const settingsMock = vi.fn().mockResolvedValue({
   maxTailoredContentChars: { value: 100_000, default: 100_000, override: null },
+  cvSourceFormat: null,
 });
 
 vi.mock("@server/services/settings", () => ({
   getEffectiveSettings: () => settingsMock(),
+}));
+
+vi.mock("./cv-format-note", () => ({
+  getCvFormatNote: vi.fn(async (format: string) => `format-note:${format}`),
 }));
 
 const SAMPLE_FIELDS: CvField[] = [
@@ -162,6 +168,66 @@ describe("llmAdjustContent", () => {
     );
   });
 
+  it("passes the LaTeX format note when the profile's CV format is unset", async () => {
+    callJsonMock.mockResolvedValue({
+      success: true,
+      data: {
+        patchesJson: JSON.stringify([
+          { fieldId: "basics.name", newValue: "Ada L." },
+        ]),
+        matched: [],
+        skipped: [],
+      },
+    });
+
+    await llmAdjustContent({
+      personalBrief: "x",
+      jobDescription: "y",
+      currentFields: SAMPLE_FIELDS,
+      currentOverrides: {},
+    });
+
+    expect(getCvFormatNote).toHaveBeenCalledWith("latex");
+    expect(loadPrompt).toHaveBeenCalledWith(
+      "cv-adjust",
+      expect.objectContaining({ cvFormatNote: "format-note:latex" }),
+    );
+  });
+
+  it("passes the Word format note on a docx profile", async () => {
+    settingsMock.mockResolvedValueOnce({
+      maxTailoredContentChars: {
+        value: 100_000,
+        default: 100_000,
+        override: null,
+      },
+      cvSourceFormat: "docx",
+    });
+    callJsonMock.mockResolvedValue({
+      success: true,
+      data: {
+        patchesJson: JSON.stringify([
+          { fieldId: "basics.name", newValue: "Ada L." },
+        ]),
+        matched: [],
+        skipped: [],
+      },
+    });
+
+    await llmAdjustContent({
+      personalBrief: "x",
+      jobDescription: "y",
+      currentFields: SAMPLE_FIELDS,
+      currentOverrides: {},
+    });
+
+    expect(getCvFormatNote).toHaveBeenCalledWith("docx");
+    expect(loadPrompt).toHaveBeenCalledWith(
+      "cv-adjust",
+      expect.objectContaining({ cvFormatNote: "format-note:docx" }),
+    );
+  });
+
   it("returns failure when the LLM call fails", async () => {
     callJsonMock.mockResolvedValue({ success: false, error: "rate limited" });
 
@@ -266,18 +332,15 @@ describe("llmAdjustContent", () => {
     });
 
     const lastCall = vi.mocked(loadPrompt).mock.calls.at(-1);
-    const fieldsJson = (
-      lastCall?.[1] as { fieldsJson?: string } | undefined
-    )?.fieldsJson;
+    const fieldsJson = (lastCall?.[1] as { fieldsJson?: string } | undefined)
+      ?.fieldsJson;
     expect(fieldsJson).toBeDefined();
     const parsed = JSON.parse(fieldsJson ?? "[]") as Array<{
       id: string;
       locked: boolean;
     }>;
     const name = parsed.find((entry) => entry.id === "basics.name");
-    const bullet = parsed.find(
-      (entry) => entry.id === "experience.0.bullet.0",
-    );
+    const bullet = parsed.find((entry) => entry.id === "experience.0.bullet.0");
     expect(name?.locked).toBe(true);
     expect(bullet?.locked).toBe(false);
   });
@@ -309,9 +372,8 @@ describe("llmAdjustContent", () => {
     });
 
     const lastCall = vi.mocked(loadPrompt).mock.calls.at(-1);
-    const fieldsJson = (
-      lastCall?.[1] as { fieldsJson?: string } | undefined
-    )?.fieldsJson;
+    const fieldsJson = (lastCall?.[1] as { fieldsJson?: string } | undefined)
+      ?.fieldsJson;
     const parsed = JSON.parse(fieldsJson ?? "[]") as Array<{
       id: string;
       value: string;

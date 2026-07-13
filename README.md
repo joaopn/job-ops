@@ -1,9 +1,10 @@
 # job-ops-tex
 
-Self-hosted job search workspace built around a LaTeX-native CV pipeline.
-Scrapes job boards, scores fit, tailors a LaTeX CV and a cover letter per
-job, and tracks them through an inbox/live/closed lifecycle. Runs locally
-in Docker. Does not auto-apply.
+Self-hosted job search workspace built around a LaTeX-native CV pipeline,
+with Word (`.docx`) as an alternative CV substrate. Scrapes job boards,
+scores fit, tailors your CV and a cover letter per job, and tracks them
+through an inbox/live/closed lifecycle. Runs locally in Docker. Does not
+auto-apply.
 
 ## What this is
 
@@ -26,8 +27,16 @@ Workflow:
    proposes accept/reject patches against either document.
 6. Move the job through Inbox → Live → Closed with outcome tagging.
 
+Word CVs: a User Profile can use `.docx` instead of LaTeX — the choice is
+made once, at onboarding, and is permanent for that profile. The server
+extracts the document's text, the LLM names the tailorable spans (it never
+writes markup), and the upload is gated on exact text equality plus a
+successful LibreOffice conversion. Tailoring then rewrites those spans, so
+the file you download is a `.docx`; the PDF is only a preview. Cover
+letters remain LaTeX-only.
+
 LLM providers: OpenAI, Gemini, OpenRouter, Codex, or any
-OpenAI-compatible endpoint. Prompts are stored in the database (seeded from `prompts/` YAML defaults) and editable in-app.
+OpenAI-compatible endpoint. Prompts are stored in the database (seeded from `prompts/` YAML defaults) and editable in-app. Both CV-tailoring prompts are format-aware: the server splices in the rules for the profile's CV format (`prompts/fragments/cv-format-latex.yaml` / `cv-format-docx.yaml`).
 
 ## Where it came from
 
@@ -54,6 +63,9 @@ Replaced or added:
   tailored JSON mirrors whatever shape the source CV uses.
 - Field-level tailoring via JSON-Patch over flattened TeX, plus an
   ATS-coverage sidecar (matched/skipped JD keywords).
+- Word (`.docx`) CV substrate: server-owned marker splicing over
+  LLM-selected text spans, an exact-text-equality upload gate, and
+  LibreOffice/unoserver conversion for PDF previews.
 - Cover-letter document substrate with its own gated upload, per-job
   Generate, and Edit/PDF tab toggle.
 - Job lifecycle redesign: Inbox / Live / Closed tabs, repost detection,

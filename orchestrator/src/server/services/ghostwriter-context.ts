@@ -4,12 +4,15 @@ import { sanitizeUnknown } from "@infra/sanitize";
 import type { CoverLetterDocument, CvDocument, Job } from "@shared/types";
 import * as jobsRepo from "../repositories/jobs";
 import { getActiveCoverLetterDocument } from "./cover-letter/active";
+import { resolveCvSourceFormat } from "./cv/cv-format";
+import { getCvFormatNote } from "./cv/cv-format-note";
 import { getActiveCvDocument } from "./cv-active";
 import {
   getWritingLanguageLabel,
   resolveWritingOutputLanguage,
 } from "./output-language";
 import { loadPrompt } from "./prompts";
+import { getEffectiveSettings } from "./settings";
 import {
   getWritingStyle,
   stripLanguageDirectivesFromConstraints,
@@ -134,7 +137,11 @@ async function buildSystemPrompt(
     style.constraints,
   );
 
+  const settings = await getEffectiveSettings();
+  const cvFormatNote = await getCvFormatNote(resolveCvSourceFormat(settings));
+
   const loaded = await loadPrompt("ghostwriter-system", {
+    cvFormatNote,
     outputLanguage,
     tone: style.tone,
     formality: style.formality,

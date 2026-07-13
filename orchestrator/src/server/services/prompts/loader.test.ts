@@ -26,6 +26,7 @@ import {
   clearPromptCache,
   listPrompts,
   loadPrompt,
+  renderFragment,
   validatePromptContent,
 } from "./loader";
 
@@ -242,6 +243,70 @@ user: |
 `,
     );
     expect((await loadPrompt("cached", {})).user.trim()).toBe("second");
+  });
+});
+
+describe("renderFragment", () => {
+  it("renders a fragment standalone, interpolating its variables", async () => {
+    setPrompt(
+      "fragments/cv-format-docx",
+      `name: cv-format-docx
+template: |
+  CV field values are PLAIN TEXT ({{tone}}).
+`,
+    );
+
+    const rendered = await renderFragment("cv-format-docx", { tone: "firm" });
+
+    expect(rendered.trim()).toBe("CV field values are PLAIN TEXT (firm).");
+  });
+
+  it("throws when the fragment references another partial", async () => {
+    setPrompt(
+      "fragments/other",
+      `name: other
+template: |
+  inner
+`,
+    );
+    setPrompt(
+      "fragments/nested",
+      `name: nested
+template: |
+  {{> other}}
+`,
+    );
+
+    await expect(renderFragment("nested", {})).rejects.toThrow(
+      /nested partials are not supported/i,
+    );
+  });
+
+  it("throws when the fragment has no template body", async () => {
+    setPrompt(
+      "fragments/empty",
+      `name: empty
+description: no body
+`,
+    );
+
+    await expect(renderFragment("empty", {})).rejects.toThrow(
+      /has no `template` field/,
+    );
+  });
+
+  it("throws when a referenced variable is not provided", async () => {
+    setPrompt(
+      "fragments/needy",
+      `name: needy
+template: |
+  Hello {{who}}.
+`,
+    );
+
+    await expect(renderFragment("needy", {})).rejects.toThrow(
+      /missing variables: who/i,
+    );
   });
 });
 

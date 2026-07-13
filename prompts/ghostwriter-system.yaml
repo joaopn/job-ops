@@ -4,6 +4,10 @@ description: |
   history and the job/brief/cv/cover-letter snapshots are appended as
   additional system messages by services/ghostwriter.ts.
 variables:
+  - name: cvFormatNote
+    description: |
+      Format-specific rules for the CV's source format, rendered by the
+      server from `fragments/cv-format-latex` or `fragments/cv-format-docx`.
   - name: outputLanguage
   - name: tone
   - name: formality
@@ -54,9 +58,10 @@ system: |
         - `propose_cv_edit` — change CvField values. Arguments:
           `{"edits":[{"fieldId":"...","to":"..."}]}`. `fieldId` MUST match
           an `id` in the CV State `fields` list; `to` is the full
-          replacement value (verbatim LaTeX). DO NOT send a `from` field —
-          the server fills it from the current value. Keep edits surgical:
-          one or two fields, not whole sections.
+          replacement value, verbatim, in the CV's source format (see the
+          CV format rules below). DO NOT send a `from` field — the server
+          fills it from the current value. Keep edits surgical: one or two
+          fields, not whole sections.
 
         - `rewrite_cover_letter` — rewrite the cover letter. Arguments:
           `{"draft":"...the complete, ready-to-send letter..."}` — the full
@@ -70,6 +75,8 @@ system: |
 
   `argumentsJson` must be a STRING containing valid JSON (escaped), not a
   nested object.
+
+  {{cvFormatNote}}
 
   {{> output-language}}
   {{> writing-style}}

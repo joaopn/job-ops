@@ -15,6 +15,8 @@ import {
   type CvField,
   type CvFieldOverrides,
 } from "@shared/types";
+import { resolveCvSourceFormat } from "./cv-format";
+import { getCvFormatNote } from "./cv-format-note";
 
 /**
  * `patchesJson` is a JSON-encoded string instead of an array of objects —
@@ -116,10 +118,12 @@ function buildFieldsView(
 export async function llmAdjustContent(
   args: AdjustContentArgs,
 ): Promise<AdjustContentResult> {
-  const [model, writingStyle] = await Promise.all([
+  const [model, writingStyle, settings] = await Promise.all([
     resolveLlmModel("tailoring"),
     getWritingStyle(),
+    getEffectiveSettings(),
   ]);
+  const cvFormatNote = await getCvFormatNote(resolveCvSourceFormat(settings));
 
   const lockedFieldIds = new Set(args.lockedFieldIds ?? []);
   // The LLM sees locked fields with their user-edited override (so it can
@@ -140,6 +144,7 @@ export async function llmAdjustContent(
     personalBrief: args.personalBrief || "(empty — no candidate brief on file)",
     jobDescription: args.jobDescription || "(empty)",
     fieldsJson: JSON.stringify(fieldsView, null, 2),
+    cvFormatNote,
     ...buildWritingStyleVars(writingStyle),
   });
 
@@ -304,7 +309,6 @@ export async function llmAdjustContent(
   // Post-LLM size check. Snapshot what tailoredFields would look like AFTER
   // applying the patches and reject if the serialized size exceeds the
   // user's configured cap. The user can lift the cap or trim their CV.
-  const settings = await getEffectiveSettings();
   const maxTailoredContentChars = settings.maxTailoredContentChars.value;
   const overridesPreview: CvFieldOverrides = { ...args.currentOverrides };
   for (const patch of patches) {

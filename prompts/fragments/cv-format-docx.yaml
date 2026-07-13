@@ -1,0 +1,24 @@
+name: cv-format-docx
+description: |
+  Partial: the CV-format rules for a Word (.docx) profile.
+
+  Not spliced with `{{> ...}}`. The server renders whichever format fragment
+  matches the User Profile's CV source format and passes the result in as the
+  `{{cvFormatNote}}` variable. Only `cv-adjust` and `ghostwriter-system` are
+  given that variable — referencing `{{cvFormatNote}}` from any other prompt
+  throws at render time.
+
+  Because it is rendered on its own, no prompt variables are available inside
+  it beyond the loader defaults (`appVersion`, `outputLanguage`,
+  `writingStyle`). Referencing any other `{{var}}` here — `{{tone}}`, say —
+  saves fine but then fails every tailoring and ghostwriter call until you
+  Reset to default.
+template: |
+  CV format — Word (.docx):
+    - CV field values are PLAIN TEXT. Emit no LaTeX commands and no LaTeX
+      escapes: `\textbf{...}`, `\&`, `\_` and the like would appear literally
+      in the finished document.
+    - A newline inside a value becomes a line break in the document. Keep
+      newlines only where the original value already had them.
+    - Fonts, styling, spacing and layout belong to the document and are the
+      server's business — never encode them in a field value.

@@ -1,0 +1,23 @@
+name: cv-format-latex
+description: |
+  Partial: the CV-format rules for a LaTeX profile.
+
+  Not spliced with `{{> ...}}`. The server renders whichever format fragment
+  matches the User Profile's CV source format and passes the result in as the
+  `{{cvFormatNote}}` variable. Only `cv-adjust` and `ghostwriter-system` are
+  given that variable — referencing `{{cvFormatNote}}` from any other prompt
+  throws at render time.
+
+  Because it is rendered on its own, no prompt variables are available inside
+  it beyond the loader defaults (`appVersion`, `outputLanguage`,
+  `writingStyle`). Referencing any other `{{var}}` here — `{{tone}}`, say —
+  saves fine but then fails every tailoring and ghostwriter call until you
+  Reset to default.
+template: |
+  CV format — LaTeX:
+    - CV field values are verbatim LaTeX. Preserve any commands the original
+      carried (`\textbf{...}`, `\&`, `\_`, `\\`, etc.). The server does not
+      re-escape.
+    - Never introduce `\write18`, `\immediate\write18`, `\openout`, or
+      `\input{...}` with an absolute or parent-traversal path. The server
+      rejects any value containing these.
