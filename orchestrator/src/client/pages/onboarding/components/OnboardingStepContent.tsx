@@ -2,8 +2,10 @@ import type { SourceConfigsExtractorEntry } from "@client/api";
 import type { EditorForm } from "@client/pages/profiles/ProfileConfigFields";
 import type { LlmProviderId } from "@client/pages/settings/utils";
 import type {
+  AppSettings,
   CvDocument,
   CvSourceFormat,
+  ProviderActorTemplateSummary,
   ProviderInstanceRow,
   SearchTermsSuggestionResponse,
 } from "@shared/types.js";
@@ -25,6 +27,8 @@ import { SearchProfileStep } from "./SearchProfileStep";
 import { SourcesStep } from "./SourcesStep";
 
 export const OnboardingStepContent: React.FC<{
+  apifyProviderId: string | null;
+  apifyTemplates: ProviderActorTemplateSummary[];
   basicAuthChoice: BasicAuthChoice;
   basicAuthPassword: string;
   basicAuthUser: string;
@@ -35,8 +39,10 @@ export const OnboardingStepContent: React.FC<{
   cvFormatChoice: CvFormatChoice;
   extractors: SourceConfigsExtractorEntry[];
   hasExistingCv: boolean;
+  instanceEnabledIds: string[];
   instances: ProviderInstanceRow[];
   searchProfileForm: EditorForm | null;
+  settings: AppSettings | null | undefined;
   sourceEnabledIds: string[];
   storedCvSourceFormat: CvSourceFormat | null;
   isBusy: boolean;
@@ -54,9 +60,11 @@ export const OnboardingStepContent: React.FC<{
   onCvChoiceChange: (choice: CvChoice) => void;
   onCvDocumentChange: (cv: CvDocument) => void;
   onCvFormatChoiceChange: (choice: CvFormatChoice) => void;
+  onInstanceCreated: (instance: ProviderInstanceRow) => void;
   onPersonalBriefChange: (value: string) => void;
   onProfileFormChange: (patch: Partial<EditorForm>) => void;
   onRegenerateSearchTerms: () => Promise<void>;
+  onToggleInstance: (instanceId: string, enabled: boolean) => void;
   onToggleSource: (extractorId: string, enabled: boolean) => void;
 }> = (props) => {
   if (props.currentStep === "llm") {
@@ -116,10 +124,17 @@ export const OnboardingStepContent: React.FC<{
   if (props.currentStep === "sources") {
     return (
       <SourcesStep
+        apifyProviderId={props.apifyProviderId}
+        apifyTemplates={props.apifyTemplates}
         extractors={props.extractors}
         enabledIds={props.sourceEnabledIds}
+        instanceEnabledIds={props.instanceEnabledIds}
+        instances={props.instances}
         isBusy={props.isBusy}
+        settings={props.settings}
+        onInstanceCreated={props.onInstanceCreated}
         onToggle={props.onToggleSource}
+        onToggleInstance={props.onToggleInstance}
       />
     );
   }

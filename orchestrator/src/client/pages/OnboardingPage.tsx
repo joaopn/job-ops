@@ -91,6 +91,8 @@ export const OnboardingPage: React.FC = () => {
 
                 <CardContent className="flex flex-1 flex-col gap-6 pt-6">
                   <OnboardingStepContent
+                    apifyProviderId={flow.apifyProviderId}
+                    apifyTemplates={flow.apifyTemplates}
                     basicAuthChoice={flow.basicAuthChoice}
                     basicAuthPassword={flow.watch("basicAuthPassword")}
                     basicAuthUser={flow.watch("basicAuthUser")}
@@ -101,8 +103,10 @@ export const OnboardingPage: React.FC = () => {
                     cvFormatChoice={flow.cvFormatChoice}
                     extractors={flow.extractors}
                     hasExistingCv={flow.hasExistingCv}
+                    instanceEnabledIds={flow.instanceEnabledIds}
                     instances={flow.instances}
                     searchProfileForm={flow.searchProfileForm}
+                    settings={flow.settings}
                     sourceEnabledIds={flow.sourceEnabledIds}
                     storedCvSourceFormat={flow.storedCvSourceFormat}
                     hasSavedSearchTermsInSession={
@@ -126,6 +130,7 @@ export const OnboardingPage: React.FC = () => {
                     onCvChoiceChange={flow.setCvChoice}
                     onCvDocumentChange={flow.setCvDocument}
                     onCvFormatChoiceChange={flow.setCvFormatChoice}
+                    onInstanceCreated={flow.handleInstanceCreated}
                     onPersonalBriefChange={(value) =>
                       flow.setValue("personalBrief", value, {
                         shouldDirty: true,
@@ -133,6 +138,7 @@ export const OnboardingPage: React.FC = () => {
                     }
                     onProfileFormChange={flow.handleProfileFormChange}
                     onRegenerateSearchTerms={flow.handleRegenerateSearchTerms}
+                    onToggleInstance={flow.handleToggleInstance}
                     onToggleSource={flow.handleToggleSource}
                   />
                 </CardContent>

@@ -43,7 +43,7 @@ export const STEP_COPY: Record<
     eyebrow: "Step 5",
     title: "Choose the job boards to search.",
     description:
-      "These are the free sources Job Ops can scrape. All of them are on by default; turn off any you don't want. You can change this later on the Sources page.",
+      "The built-in boards are free and all on by default; turn off any you don't want. Apify actors are optional, need your own paid Apify account, and any actor you add here will run — and spend credits — on your next search. You can change all of this later on the Sources page.",
   },
   basicauth: {
     eyebrow: "Step 6",

@@ -1,6 +1,7 @@
+import type { SourceConfigsExtractorEntry } from "@client/api";
 import { renderHookWithQueryClient } from "@client/test/renderWithQueryClient";
 import { createAppSettings } from "@shared/testing/factories";
-import type { CvDocument, Profile } from "@shared/types";
+import type { CvDocument, Profile, ProviderInstanceRow } from "@shared/types";
 import { act, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -14,6 +15,7 @@ vi.mock("@client/api", () => ({
   validateLlm: vi.fn(),
   suggestOnboardingSearchTerms: vi.fn(),
   updateProfile: vi.fn(),
+  updateProviderInstance: vi.fn(),
   upsertSourceConfig: vi.fn(),
   updateSettings: vi.fn(),
   updateCvDocument: vi.fn(),
@@ -31,11 +33,16 @@ import {
   getSourceConfigs,
   listCvDocuments,
   suggestOnboardingSearchTerms,
+  updateProfile,
+  updateProviderInstance,
   validateLlm,
 } from "@client/api";
 import { useOnboardingFlow } from "./useOnboardingFlow";
 
-function makeProfile(searchTerms: string[]): Profile {
+function makeProfile(
+  searchTerms: string[],
+  providerInstanceIds: string[] = [],
+): Profile {
   return {
     id: "p1",
     name: "Default",
@@ -52,10 +59,55 @@ function makeProfile(searchTerms: string[]): Profile {
       topN: 10,
       minSuitabilityCategory: "good_fit",
       enabledSourceIds: ["jobspy"],
-      providerInstanceIds: [],
+      providerInstanceIds,
     },
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
+  };
+}
+
+function makeExtractorEntry(): SourceConfigsExtractorEntry {
+  return {
+    extractorId: "jobspy",
+    displayName: "JobSpy",
+    providesSources: [],
+    row: {
+      extractorId: "jobspy",
+      enabled: true,
+      config: {},
+      mappings: {},
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    },
+    schema: null,
+    effectiveSettings: {},
+  };
+}
+
+function makeInstance(enabled: boolean): ProviderInstanceRow {
+  return {
+    id: "i1",
+    providerId: "apify",
+    templateId: null,
+    label: "LinkedIn (Apify)",
+    actorRef: "curious_coder/linkedin-jobs-scraper",
+    enabled,
+    inputTemplateJson: "{}",
+    outputMappingJson: "{}",
+    mappings: {},
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  };
+}
+
+function apifyProviders(instances: ProviderInstanceRow[]) {
+  return {
+    providers: [
+      {
+        id: "apify",
+        displayName: "Apify",
+        templates: [],
+        instances,
+      },
+    ],
   };
 }
 
@@ -193,5 +245,187 @@ describe("useOnboardingFlow — basic auth default", () => {
 
     await waitFor(() => expect(result.current.settings).not.toBeNull());
     expect(result.current.basicAuthChoice).toBe("enable");
+  });
+});
+
+describe("useOnboardingFlow — saving the sources step", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getSettings).mockResolvedValue(createAppSettings());
+    vi.mocked(validateLlm).mockResolvedValue({ valid: true, message: null });
+    vi.mocked(listCvDocuments).mockResolvedValue([]);
+    vi.mocked(getSourceConfigs).mockResolvedValue({
+      extractors: [makeExtractorEntry()],
+    });
+    vi.mocked(updateProviderInstance).mockResolvedValue(makeInstance(true));
+  });
+
+  async function renderAtSources() {
+    const rendered = renderHookWithQueryClient(() => useOnboardingFlow());
+    await waitFor(() =>
+      expect(rendered.result.current.sourceEnabledIds).toEqual(["jobspy"]),
+    );
+    await act(async () => {
+      rendered.result.current.setCurrentStep("sources");
+    });
+    return rendered;
+  }
+
+  it("enables a ticked actor AND pins it into the default Search Profile", async () => {
+    // Both levels, or the actor is inert: a source runs only when it is enabled
+    // on the User Profile AND pinned in the Search Profile, and Apify pins are
+    // never backfilled.
+    vi.mocked(getProviderInstances).mockResolvedValue(
+      apifyProviders([makeInstance(false)]),
+    );
+    vi.mocked(getProfiles).mockResolvedValue({
+      profiles: [makeProfile(["role"])],
+      defaultProfileId: "p1",
+    });
+    vi.mocked(updateProfile).mockResolvedValue(makeProfile(["role"], ["i1"]));
+
+    const { result } = await renderAtSources();
+
+    await act(async () => {
+      result.current.handleToggleInstance("i1", true);
+    });
+    await act(async () => {
+      await result.current.handlePrimaryAction();
+    });
+
+    expect(updateProviderInstance).toHaveBeenCalledWith("i1", {
+      enabled: true,
+    });
+    expect(updateProfile).toHaveBeenCalledWith("p1", {
+      config: { providerInstanceIds: ["i1"] },
+    });
+  });
+
+  it("pins an actor created in the wizard, before the instances query refetches it", async () => {
+    // The dialog invalidates the instances query WITHOUT awaiting it, so the new
+    // actor sits in the tick list while `instances` still lacks it. Filtering the
+    // pin set against `instances` would drop the pin of the very actor the user
+    // just added — enabled, unpinned, silently never run.
+    vi.mocked(getProviderInstances).mockResolvedValue(apifyProviders([]));
+    vi.mocked(getProfiles).mockResolvedValue({
+      profiles: [makeProfile(["role"])],
+      defaultProfileId: "p1",
+    });
+    vi.mocked(updateProfile).mockResolvedValue(makeProfile(["role"], ["i1"]));
+
+    const { result } = await renderAtSources();
+
+    await act(async () => {
+      result.current.handleInstanceCreated(makeInstance(true));
+    });
+    await act(async () => {
+      await result.current.handlePrimaryAction();
+    });
+
+    expect(updateProfile).toHaveBeenCalledWith("p1", {
+      config: { providerInstanceIds: ["i1"] },
+    });
+  });
+
+  it("drops the pin of an actor the user un-ticks (the pin write is authoritative)", async () => {
+    vi.mocked(getProviderInstances).mockResolvedValue(
+      apifyProviders([makeInstance(true)]),
+    );
+    vi.mocked(getProfiles).mockResolvedValue({
+      profiles: [makeProfile(["role"], ["i1"])],
+      defaultProfileId: "p1",
+    });
+    vi.mocked(updateProfile).mockResolvedValue(makeProfile(["role"], []));
+    vi.mocked(updateProviderInstance).mockResolvedValue(makeInstance(false));
+
+    const { result } = await renderAtSources();
+    await waitFor(() =>
+      expect(result.current.instanceEnabledIds).toEqual(["i1"]),
+    );
+
+    await act(async () => {
+      result.current.handleToggleInstance("i1", false);
+    });
+    await act(async () => {
+      await result.current.handlePrimaryAction();
+    });
+
+    expect(updateProviderInstance).toHaveBeenCalledWith("i1", {
+      enabled: false,
+    });
+    expect(updateProfile).toHaveBeenCalledWith("p1", {
+      config: { providerInstanceIds: [] },
+    });
+  });
+
+  it("saves what the step shows: a ticked actor is pinned even if the user did not toggle it", async () => {
+    // What the wizard shows IS what gets written. An enabled actor hydrates
+    // TICKED, so saving the step pins it — the step's state is the source of
+    // truth for the default profile's actor pins.
+    vi.mocked(getProviderInstances).mockResolvedValue(
+      apifyProviders([makeInstance(true)]),
+    );
+    vi.mocked(getProfiles).mockResolvedValue({
+      profiles: [makeProfile(["role"])],
+      defaultProfileId: "p1",
+    });
+    vi.mocked(updateProfile).mockResolvedValue(makeProfile(["role"], ["i1"]));
+
+    const { result } = await renderAtSources();
+    await waitFor(() =>
+      expect(result.current.instanceEnabledIds).toEqual(["i1"]),
+    );
+
+    await act(async () => {
+      await result.current.handlePrimaryAction();
+    });
+
+    expect(updateProfile).toHaveBeenCalledWith("p1", {
+      config: { providerInstanceIds: ["i1"] },
+    });
+    // Already enabled — no redundant instance write.
+    expect(updateProviderInstance).not.toHaveBeenCalled();
+  });
+
+  it("refuses the whole save when no profile is available to pin into", async () => {
+    // Writing the instance enable without the pin would leave the actor
+    // enabled-but-unpinned — configured in the UI, absent from every run — under
+    // a green "Sources saved" toast. Refuse before ANY write instead.
+    vi.mocked(getProviderInstances).mockResolvedValue(
+      apifyProviders([makeInstance(false)]),
+    );
+    vi.mocked(getProfiles).mockReturnValue(new Promise(() => {}));
+
+    const { result } = await renderAtSources();
+    await waitFor(() => expect(result.current.instanceEnabledIds).toEqual([]));
+
+    await act(async () => {
+      result.current.handleToggleInstance("i1", true);
+    });
+    await act(async () => {
+      await result.current.handlePrimaryAction();
+    });
+
+    expect(updateProviderInstance).not.toHaveBeenCalled();
+    expect(updateProfile).not.toHaveBeenCalled();
+  });
+
+  it("never writes pins from an unhydrated tick list", async () => {
+    // With the instances query in flight the tick list is null; treating that as
+    // "nothing ticked" would un-pin actors the step never rendered.
+    vi.mocked(getProviderInstances).mockReturnValue(new Promise(() => {}));
+    vi.mocked(getProfiles).mockResolvedValue({
+      profiles: [makeProfile(["role"], ["i1"])],
+      defaultProfileId: "p1",
+    });
+
+    const { result } = await renderAtSources();
+
+    await act(async () => {
+      await result.current.handlePrimaryAction();
+    });
+
+    expect(updateProfile).not.toHaveBeenCalled();
+    expect(updateProviderInstance).not.toHaveBeenCalled();
   });
 });

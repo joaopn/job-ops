@@ -10,6 +10,7 @@ import {
   buildConfig,
   type EditorForm,
   enabledExtractorIdsOf,
+  enabledInstanceIdsOf,
   formFromConfig,
   nextPinSet,
 } from "@client/pages/profiles/ProfileConfigFields";
@@ -23,6 +24,7 @@ import type {
   AppSettings,
   CvDocument,
   CvDocumentSummary,
+  ProviderInstanceRow,
   SearchTermsSuggestionResponse,
   ValidationResult,
 } from "@shared/types.js";
@@ -111,6 +113,10 @@ export function useOnboardingFlow() {
     null,
   );
   const sourcesHydratedRef = useRef(false);
+  const [instanceEnabledIds, setInstanceEnabledIds] = useState<string[] | null>(
+    null,
+  );
+  const instancesHydratedRef = useRef(false);
   const autoSuggestedRef = useRef(false);
 
   const { control, getValues, reset, setValue, watch } =
@@ -161,6 +167,12 @@ export function useOnboardingFlow() {
   const instances =
     instancesQuery.data?.providers.flatMap((provider) => provider.instances) ??
     [];
+  const apifyProvider =
+    instancesQuery.data?.providers.find(
+      (provider) => provider.id === "apify",
+    ) ?? null;
+  const apifyProviderId = apifyProvider?.id ?? null;
+  const apifyTemplates = apifyProvider?.templates ?? [];
 
   useEffect(() => {
     if (!settings) return;
@@ -224,6 +236,22 @@ export function useOnboardingFlow() {
     setSourceEnabledIds(enabledExtractorIdsOf(sourcesQuery.data.extractors));
   }, [sourcesQuery.data]);
 
+  // The Apify ticks. Hydrated from `instance.enabled` ALONE, never from
+  // "enabled AND pinned": an enabled-but-unpinned actor would otherwise arrive
+  // unticked, and the authoritative save below would then DISABLE it — undoing
+  // a decision the user made on the Sources page. So an unticked actor here is
+  // always a disabled one.
+  useEffect(() => {
+    if (instancesHydratedRef.current) return;
+    if (!instancesQuery.data) return;
+    instancesHydratedRef.current = true;
+    setInstanceEnabledIds(
+      enabledInstanceIdsOf(
+        instancesQuery.data.providers.flatMap((provider) => provider.instances),
+      ),
+    );
+  }, [instancesQuery.data]);
+
   const llmProvider = watch("llmProvider");
   const selectedProvider = normalizeLlmProvider(
     llmProvider || settings?.llmProvider?.value || "openrouter",
@@ -286,9 +314,14 @@ export function useOnboardingFlow() {
   const cvFormatComplete = storedCvSourceFormat !== null;
   const hasExistingCv = Boolean(activeCvId);
   // The step is complete when the installation actually has a source enabled —
-  // which a fresh install does, since migrate enables every extractor.
-  const sourcesComplete = extractors.some((extractor) => extractor.row.enabled);
-  const hasEnabledSource = (sourceEnabledIds?.length ?? 0) > 0;
+  // which a fresh install does, since migrate enables every extractor. An Apify
+  // actor counts, matching the server's run-time rule (a run is refused only
+  // when NEITHER an extractor nor an instance is effective).
+  const sourcesComplete =
+    extractors.some((extractor) => extractor.row.enabled) ||
+    instances.some((instance) => instance.enabled);
+  const hasEnabledSource =
+    (sourceEnabledIds?.length ?? 0) + (instanceEnabledIds?.length ?? 0) > 0;
 
   const toValidationState = useCallback(
     (
@@ -649,8 +682,26 @@ export function useOnboardingFlow() {
     [],
   );
 
+  const handleToggleInstance = useCallback(
+    (instanceId: string, enabled: boolean) => {
+      setInstanceEnabledIds((prev) =>
+        nextPinSet(prev ?? [], instanceId, enabled),
+      );
+    },
+    [],
+  );
+
+  // The dialog creates wizard actors ENABLED, and the tick list is hydrate-once,
+  // so it would never see the new row on its own.
+  const handleInstanceCreated = useCallback((instance: ProviderInstanceRow) => {
+    setInstanceEnabledIds((prev) => nextPinSet(prev ?? [], instance.id, true));
+  }, []);
+
   const handleSaveSources = useCallback(async () => {
-    if (!sourceEnabledIds || sourceEnabledIds.length === 0) {
+    const pickedExtractors = sourceEnabledIds ?? [];
+    const pickedInstances = instanceEnabledIds ?? [];
+
+    if (pickedExtractors.length === 0 && pickedInstances.length === 0) {
       toast.info("Pick at least one source to continue");
       return false;
     }
@@ -658,25 +709,104 @@ export function useOnboardingFlow() {
     // Only write the ones that actually changed. `upsertSourceConfig` preserves
     // `config`/`mappings` when the patch omits them, so an enabled-only write
     // cannot clobber an extractor's settings.
-    const changed = extractors.filter(
+    const changedExtractors = extractors.filter(
       (extractor) =>
         extractor.row.enabled !==
-        sourceEnabledIds.includes(extractor.extractorId),
+        pickedExtractors.includes(extractor.extractorId),
+    );
+    const changedInstances = instances.filter(
+      (instance) => instance.enabled !== pickedInstances.includes(instance.id),
     );
 
-    if (changed.length === 0) return true;
+    // WHAT THE STEP SHOWS IS WHAT GETS SAVED. The extractor ticks write the
+    // User-Profile level only (migrate already pinned every enabled extractor
+    // into every Search Profile). Apify pins are never backfilled — money safety
+    // — so the actor ticks are the only thing that can write them, and they write
+    // BOTH levels: the default profile's actor pins become exactly the ticked
+    // set. A null tick list means the instances query has not landed; never
+    // derive pins from it, or a Save would rewrite pins the step never rendered.
+    //
+    // NO existence filter against `instances`: the dialog invalidates the
+    // instances query without awaiting it, so a just-created actor sits in the
+    // tick list before it appears in `instances`, and filtering would silently
+    // drop the pin of the very actor the user just added. A pin for an id that no
+    // longer exists is harmless — the run intersects profile pins with the
+    // enabled instances before using them.
+    const nextPins = instanceEnabledIds;
+    const storedPins = defaultProfile?.config.providerInstanceIds ?? [];
+    const pinsChanged =
+      nextPins !== null &&
+      (nextPins.length !== storedPins.length ||
+        nextPins.some((id) => !storedPins.includes(id)));
+
+    // Refuse BEFORE any write when a pin write is due but no profile resolved
+    // (query unlanded or errored). Writing the instance enables anyway would
+    // leave an actor enabled-but-unpinned — configured in the UI, absent from
+    // every run — under a green "Sources saved" toast. Note `storedPins` falls
+    // back to `[]` when the profile is missing, so this catches every case that
+    // WOULD have written a pin, not every case the user touched an actor; a
+    // change that leaves the pin set empty writes only the (inert) disable.
+    if (pinsChanged && !defaultProfileId) {
+      toast.error("No profile is available to save the Apify actor selection");
+      return false;
+    }
+
+    if (
+      changedExtractors.length === 0 &&
+      changedInstances.length === 0 &&
+      !pinsChanged
+    ) {
+      return true;
+    }
 
     try {
       setIsSaving(true);
-      await Promise.all(
-        changed.map((extractor) =>
+      await Promise.all([
+        ...changedExtractors.map((extractor) =>
           api.upsertSourceConfig(extractor.extractorId, {
-            enabled: sourceEnabledIds.includes(extractor.extractorId),
+            enabled: pickedExtractors.includes(extractor.extractorId),
           }),
         ),
-      );
+        ...changedInstances.map((instance) =>
+          api.updateProviderInstance(instance.id, {
+            enabled: pickedInstances.includes(instance.id),
+          }),
+        ),
+      ]);
+
+      if (pinsChanged && nextPins && defaultProfileId) {
+        // A partial `config` is merged field-level server-side, so this cannot
+        // drop the profile's other keys — and unlike `buildConfig` it cannot
+        // write stale search terms.
+        const updated = await api.updateProfile(defaultProfileId, {
+          config: { providerInstanceIds: nextPins },
+        });
+        queryClient.setQueryData<api.ProfilesResponse>(
+          queryKeys.profiles.list(),
+          (prev) =>
+            prev
+              ? {
+                  ...prev,
+                  profiles: prev.profiles.map((profile) =>
+                    profile.id === updated.id ? updated : profile,
+                  ),
+                }
+              : prev,
+        );
+        // `profileForm` is hydrate-once and feeds `buildConfig` on the Search
+        // Profile step, which writes `providerInstanceIds` verbatim. Leaving it
+        // stale would let a Back-nav + re-save put the OLD pin list back and
+        // silently un-pin what we just pinned.
+        setProfileForm((prev) =>
+          prev ? { ...prev, providerInstanceIds: nextPins } : prev,
+        );
+      }
+
       await queryClient.invalidateQueries({
         queryKey: queryKeys.sourceConfigs.all,
+      });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.providerInstances.all,
       });
       toast.success("Sources saved");
       return true;
@@ -688,7 +818,15 @@ export function useOnboardingFlow() {
     } finally {
       setIsSaving(false);
     }
-  }, [extractors, queryClient, sourceEnabledIds]);
+  }, [
+    defaultProfile,
+    defaultProfileId,
+    extractors,
+    instanceEnabledIds,
+    instances,
+    queryClient,
+    sourceEnabledIds,
+  ]);
 
   const handleSaveCvFormat = useCallback(async () => {
     if (cvFormatChoice === null) {
@@ -918,6 +1056,8 @@ export function useOnboardingFlow() {
   });
 
   return {
+    apifyProviderId,
+    apifyTemplates,
     basicAuthChoice,
     canGoBack,
     complete,
@@ -929,6 +1069,7 @@ export function useOnboardingFlow() {
     cvFormatChoice,
     extractors,
     hasExistingCv,
+    instanceEnabledIds: instanceEnabledIds ?? [],
     instances,
     isBusy,
     isGeneratingSearchTerms,
@@ -953,7 +1094,9 @@ export function useOnboardingFlow() {
     setCvFormatChoice,
     setCvDocument,
     setValue,
+    handleInstanceCreated,
     handleProfileFormChange,
+    handleToggleInstance,
     handleToggleSource,
     handleRegenerateSearchTerms: async () => {
       await handleGenerateSearchTerms({ showToast: true });

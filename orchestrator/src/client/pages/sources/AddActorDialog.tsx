@@ -4,6 +4,7 @@ import { toast } from "@client/lib/toast";
 import type {
   CreateProviderInstanceInput,
   ProviderActorTemplateSummary,
+  ProviderInstanceRow,
 } from "@shared/types";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
@@ -34,6 +35,13 @@ interface AddActorDialogProps {
   onOpenChange: (open: boolean) => void;
   providerId: string;
   templates: ProviderActorTemplateSummary[];
+  /**
+   * The Sources page creates actors DISABLED (you Test one before enabling it).
+   * The onboarding wizard has no Test surface and treats its tick as "use this
+   * actor", so it creates them enabled.
+   */
+  defaultEnabled?: boolean;
+  onCreated?: (instance: ProviderInstanceRow) => void;
 }
 
 const FREEFORM_INPUT_STARTER = JSON.stringify(
@@ -67,6 +75,8 @@ export function AddActorDialog({
   onOpenChange,
   providerId,
   templates,
+  defaultEnabled = false,
+  onCreated,
 }: AddActorDialogProps) {
   const queryClient = useQueryClient();
   const [mode, setMode] = useState<Mode>(
@@ -103,11 +113,12 @@ export function AddActorDialog({
   const mutation = useMutation({
     mutationFn: async (input: CreateProviderInstanceInput) =>
       api.createProviderInstance(input),
-    onSuccess: () => {
+    onSuccess: (created) => {
       toast.success("Actor added");
       queryClient.invalidateQueries({
         queryKey: queryKeys.providerInstances.all,
       });
+      onCreated?.(created);
       onOpenChange(false);
     },
     onError: (error) => {
@@ -146,7 +157,7 @@ export function AddActorDialog({
       actorRef: trimmedActor,
       label: trimmedLabel,
       templateId: mode === "template" ? (selectedTemplate?.id ?? null) : null,
-      enabled: false,
+      enabled: defaultEnabled,
       inputTemplateJson,
       outputMappingJson: mode === "template" ? "{}" : outputMappingJson,
       mappings:
