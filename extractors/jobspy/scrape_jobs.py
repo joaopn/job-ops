@@ -113,6 +113,21 @@ def _scrape_for_sites(
     return scrape_jobs(**kwargs)
 
 
+def _safe_scrape_into(frames: list[pd.DataFrame], site: str, **kwargs: object) -> bool:
+    """Scrape one site, tolerating a per-site failure.
+
+    A single flaky site (Glassdoor CSRF timeouts, LinkedIn rate-limits) must not
+    abort the whole run and discard the sites that already succeeded. Returns
+    True on success, False on failure (logged, no frame contributed).
+    """
+    try:
+        frames.append(_scrape_for_sites(sites=[site], **kwargs))
+        return True
+    except Exception as exc:  # noqa: BLE001 - broad on purpose: keep other sites
+        print(f"jobspy: {site} scrape failed, skipping ({exc})", flush=True)
+        return False
+
+
 def main() -> int:
     sites = _parse_sites(_env_str("JOBSPY_SITES", "indeed,linkedin"))
     search_term = _env_str("JOBSPY_SEARCH_TERM", "web developer")
@@ -146,6 +161,8 @@ def main() -> int:
         },
     )
     frames: list[pd.DataFrame] = []
+    attempted = 0
+    succeeded = 0
     # JobSpy's site-level geo filters are inconsistent:
     # - LinkedIn only respects `location`.
     # - Indeed/Glassdoor respect `country_indeed`, and `location` is optional
@@ -153,32 +170,34 @@ def main() -> int:
     # Run them separately so "country with no city" does not become a global
     # LinkedIn search, and so we do not inject synthetic locations into Indeed.
     if "linkedin" in sites:
-        frames.append(
-            _scrape_for_sites(
-                sites=["linkedin"],
-                search_term=search_term,
-                location=linkedin_location,
-                results_wanted=results_wanted,
-                hours_old=hours_old,
-                country_indeed="",
-                linkedin_fetch_description=linkedin_fetch_description,
-                is_remote=is_remote,
-            )
-        )
+        attempted += 1
+        if _safe_scrape_into(
+            frames,
+            "linkedin",
+            search_term=search_term,
+            location=linkedin_location,
+            results_wanted=results_wanted,
+            hours_old=hours_old,
+            country_indeed="",
+            linkedin_fetch_description=linkedin_fetch_description,
+            is_remote=is_remote,
+        ):
+            succeeded += 1
 
     if "indeed" in sites:
-        frames.append(
-            _scrape_for_sites(
-                sites=["indeed"],
-                search_term=search_term,
-                location=indeed_location,
-                results_wanted=results_wanted,
-                hours_old=hours_old,
-                country_indeed=country_indeed,
-                linkedin_fetch_description=linkedin_fetch_description,
-                is_remote=is_remote,
-            )
-        )
+        attempted += 1
+        if _safe_scrape_into(
+            frames,
+            "indeed",
+            search_term=search_term,
+            location=indeed_location,
+            results_wanted=results_wanted,
+            hours_old=hours_old,
+            country_indeed=country_indeed,
+            linkedin_fetch_description=linkedin_fetch_description,
+            is_remote=is_remote,
+        ):
+            succeeded += 1
 
     if "glassdoor" in sites:
         effective_glassdoor_location = glassdoor_location
@@ -195,18 +214,23 @@ def main() -> int:
                 print(
                     "jobspy: Glassdoor location matched country; keeping original location"
                 )
-        frames.append(
-            _scrape_for_sites(
-                sites=["glassdoor"],
-                search_term=search_term,
-                location=effective_glassdoor_location,
-                results_wanted=results_wanted,
-                hours_old=hours_old,
-                country_indeed=country_indeed,
-                linkedin_fetch_description=linkedin_fetch_description,
-                is_remote=is_remote,
-            )
-        )
+        attempted += 1
+        if _safe_scrape_into(
+            frames,
+            "glassdoor",
+            search_term=search_term,
+            location=effective_glassdoor_location,
+            results_wanted=results_wanted,
+            hours_old=hours_old,
+            country_indeed=country_indeed,
+            linkedin_fetch_description=linkedin_fetch_description,
+            is_remote=is_remote,
+        ):
+            succeeded += 1
+
+    if attempted > 0 and succeeded == 0:
+        print("jobspy: all requested sites failed", flush=True)
+        return 1
 
     jobs = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
