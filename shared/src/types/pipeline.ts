@@ -264,6 +264,7 @@ export type JobAction =
   | "skip"
   | "move_to_ready"
   | "rescore"
+  | "rescrape"
   | "move_to_backlog"
   | "move_to_stale"
   | "move_to_inbox"
@@ -276,6 +277,7 @@ export type JobActionRequest =
       action:
         | "skip"
         | "rescore"
+        | "rescrape"
         | "move_to_backlog"
         | "move_to_stale"
         | "move_to_inbox"

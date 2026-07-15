@@ -976,6 +976,39 @@ const MANUAL_JOB_SCHEMA: JsonSchemaDefinition = {
   },
 };
 
+/**
+ * Fetch a URL and produce a job draft — the shared fetch+infer head used by
+ * both the batch-URL importer and the per-job rescrape action. Tier 1/2
+ * programmatic extraction is a verbatim DOM read (no tier-3 LLM); otherwise the
+ * page text is passed to the LLM. Returns the full normalized inference result
+ * ({ job, usage, warning }) so batch import keeps its token-usage + warning
+ * surfaces; rescrape ignores everything but `job`. Fetch/infer failures throw
+ * (AppError), caught by the callers' error mappers.
+ */
+export async function fetchJobDraft(
+  url: string,
+  options: { signal?: AbortSignal } = {},
+): Promise<{
+  job: ManualJobDraft;
+  usage: ManualJobInferenceResult["usage"];
+  warning: string | null;
+}> {
+  const fetched = await fetchAndExtractJobContent(url, options);
+  if (fetched.programmatic) {
+    return {
+      job: fetched.programmatic,
+      usage: fetched.programmaticUsage ?? null,
+      warning: null,
+    };
+  }
+  const inference = await inferManualJobDetails(fetched.content);
+  return {
+    job: inference.job,
+    usage: inference.usage ?? null,
+    warning: inference.warning ?? null,
+  };
+}
+
 export async function inferManualJobDetails(
   jobDescription: string,
 ): Promise<ManualJobInferenceResult> {

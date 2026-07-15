@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   canMoveToReady,
   canRescore,
+  canRescrape,
   canSkip,
   getFailedJobIds,
 } from "./jobActions";
@@ -43,6 +44,40 @@ describe("jobActions", () => {
         createJob({ id: "2", status: "processing" }),
       ]),
     ).toBe(false);
+  });
+
+  it("computes rescrape eligibility: not processing AND an http(s) URL", () => {
+    // Non-processing rows with real http(s) URLs are rescrapable.
+    expect(
+      canRescrape([
+        createJob({ id: "1", status: "discovered" }),
+        createJob({ id: "2", status: "backlog" }),
+        createJob({ id: "3", status: "stale" }),
+        createJob({ id: "4", status: "closed" }),
+      ]),
+    ).toBe(true);
+
+    // A processing row is excluded (mid-tailor).
+    expect(
+      canRescrape([
+        createJob({ id: "1", status: "discovered" }),
+        createJob({ id: "2", status: "processing" }),
+      ]),
+    ).toBe(false);
+
+    // A synthetic manual:// URL (paste-JD job) is not rescrapable.
+    expect(
+      canRescrape([
+        createJob({
+          id: "1",
+          status: "discovered",
+          jobUrl: "manual://abc",
+        }),
+      ]),
+    ).toBe(false);
+
+    // Empty selection is never actionable.
+    expect(canRescrape([])).toBe(false);
   });
 
   it("extracts failed job ids from an action response", () => {

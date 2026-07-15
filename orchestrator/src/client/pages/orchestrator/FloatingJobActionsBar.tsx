@@ -11,6 +11,7 @@ interface FloatingJobActionsBarProps {
   canMoveSelected: boolean;
   canSkipSelected: boolean;
   canRescoreSelected: boolean;
+  canRescrapeSelected: boolean;
   canMoveToBacklogSelected: boolean;
   canMoveToStaleSelected: boolean;
   canMoveToInboxSelected: boolean;
@@ -20,6 +21,7 @@ interface FloatingJobActionsBarProps {
   onMoveToReady: () => void;
   onSkipSelected: () => void;
   onRescoreSelected: () => void;
+  onRescrapeSelected: () => void;
   onMoveToBacklog: () => void;
   onMoveToStale: () => void;
   onMoveToInbox: () => void;
@@ -36,6 +38,7 @@ export const FloatingJobActionsBar: React.FC<FloatingJobActionsBarProps> = ({
   canMoveSelected,
   canSkipSelected,
   canRescoreSelected,
+  canRescrapeSelected,
   canMoveToBacklogSelected,
   canMoveToStaleSelected,
   canMoveToInboxSelected,
@@ -45,6 +48,7 @@ export const FloatingJobActionsBar: React.FC<FloatingJobActionsBarProps> = ({
   onMoveToReady,
   onSkipSelected,
   onRescoreSelected,
+  onRescrapeSelected,
   onMoveToBacklog,
   onMoveToStale,
   onMoveToInbox,
@@ -53,6 +57,22 @@ export const FloatingJobActionsBar: React.FC<FloatingJobActionsBarProps> = ({
   onClear,
 }) => {
   const buttonClass = "w-full sm:w-auto";
+
+  // Re-fetch each selected job from its own URL and refresh its stored fields.
+  // Available on the shelves (Inbox / Backlog / Stale) and All — the tabs where
+  // a partial-scrape (e.g. a missing description) still matters for triage.
+  const rescrapeButton = canRescrapeSelected ? (
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      className={buttonClass}
+      disabled={jobActionInFlight}
+      onClick={onRescrapeSelected}
+    >
+      Rescrape
+    </Button>
+  ) : null;
 
   // Per-tab button rendering. Each branch returns the buttons that make
   // sense for the rows in that tab. Selection-state guards (`can*Selected`)
@@ -99,6 +119,7 @@ export const FloatingJobActionsBar: React.FC<FloatingJobActionsBarProps> = ({
                 Recalculate match
               </Button>
             )}
+            {rescrapeButton}
             {canSkipSelected && (
               <Button
                 type="button"
@@ -207,6 +228,7 @@ export const FloatingJobActionsBar: React.FC<FloatingJobActionsBarProps> = ({
                 Recalculate match
               </Button>
             )}
+            {rescrapeButton}
             {canSkipSelected && (
               <Button
                 type="button"
@@ -261,6 +283,7 @@ export const FloatingJobActionsBar: React.FC<FloatingJobActionsBarProps> = ({
                 Move to Backlog
               </Button>
             )}
+            {rescrapeButton}
             {canSkipSelected && (
               <Button
                 type="button"
@@ -321,6 +344,7 @@ export const FloatingJobActionsBar: React.FC<FloatingJobActionsBarProps> = ({
                 Recalculate match
               </Button>
             )}
+            {rescrapeButton}
           </>
         );
     }

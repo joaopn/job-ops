@@ -5,10 +5,11 @@ import { logger } from "@infra/logger";
 import { setupSse, startSseHeartbeat, writeSseData } from "@infra/sse";
 import { processJob } from "@server/pipeline/index";
 import * as jobsRepo from "@server/repositories/jobs";
-import * as settingsRepo from "@server/repositories/settings";
 import { getActivePersonalBrief } from "@server/services/brief";
+import { isJobScoringEnabled } from "@server/services/job-scoring-settings";
 import {
   fetchAndExtractJobContent,
+  fetchJobDraft,
   inferManualJobDetails,
 } from "@server/services/manualJob";
 import {
@@ -200,12 +201,6 @@ const batchUrlImportSchema = z.object({
     .max(BATCH_URL_IMPORT_MAX_URLS),
 });
 
-async function isJobScoringEnabled(): Promise<boolean> {
-  const raw = await settingsRepo.getSetting("enableJobScoring");
-  if (raw === null) return true;
-  return raw === "1" || raw === "true";
-}
-
 async function scoreJobAsync(jobId: string): Promise<void> {
   const job = await jobsRepo.getJobById(jobId);
   if (!job) return;
@@ -230,9 +225,13 @@ async function importSingleUrl(
   url: string,
   options: { signal?: AbortSignal; scoringEnabled: boolean },
 ): Promise<BatchUrlImportItemResult> {
-  let fetched: Awaited<ReturnType<typeof fetchAndExtractJobContent>>;
+  // Shared fetch+infer head: tier 1/2 programmatic extraction is a verbatim DOM
+  // read (skips the tier-3 LLM); otherwise the page text goes to the LLM. Both
+  // paths normalize to { job, usage, warning } — usage/warning must survive here
+  // for the batch-import result shapes below.
+  let inference: Awaited<ReturnType<typeof fetchJobDraft>>;
   try {
-    fetched = await fetchAndExtractJobContent(url, { signal: options.signal });
+    inference = await fetchJobDraft(url, { signal: options.signal });
   } catch (error) {
     const err = toAppError(error);
     return {
@@ -242,32 +241,6 @@ async function importSingleUrl(
       code: err.code,
       message: err.message,
     };
-  }
-
-  // Tier 1 (per-host) or Tier 2 (LLM-selector): programmatic extraction
-  // succeeded; skip the full tier-3 LLM call. jobDescription is a verbatim
-  // DOM read. Tier 2 still consumes tokens for the selector inference;
-  // those are surfaced via programmaticUsage so the UI shows them.
-  let inference: Awaited<ReturnType<typeof inferManualJobDetails>>;
-  if (fetched.programmatic) {
-    inference = {
-      job: fetched.programmatic,
-      warning: null,
-      usage: fetched.programmaticUsage ?? null,
-    };
-  } else {
-    try {
-      inference = await inferManualJobDetails(fetched.content);
-    } catch (error) {
-      const err = toAppError(error);
-      return {
-        ok: false,
-        status: "failed",
-        url,
-        code: err.code,
-        message: err.message,
-      };
-    }
   }
 
   const draft = inference.job;

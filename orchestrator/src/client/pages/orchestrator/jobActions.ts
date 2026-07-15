@@ -38,6 +38,19 @@ export function canRescore(jobs: JobListItem[]): boolean {
   return jobs.length > 0 && jobs.every((job) => job.status !== "processing");
 }
 
+function isRescrapableUrl(url: string | null | undefined): boolean {
+  return !!url && (url.startsWith("https://") || url.startsWith("http://"));
+}
+
+export function canRescrape(jobs: JobListItem[]): boolean {
+  return (
+    jobs.length > 0 &&
+    jobs.every(
+      (job) => job.status !== "processing" && isRescrapableUrl(job.jobUrl),
+    )
+  );
+}
+
 export function canMoveToBacklog(jobs: JobListItem[]): boolean {
   return (
     jobs.length > 0 &&

@@ -22,6 +22,7 @@ describe.sequential("POST /api/jobs/actions — 5g action variants", () => {
     status: string;
     outcome?: string | null;
     closedAt?: number | null;
+    jobUrl?: string;
   }) {
     const { db, schema } = await import("@server/db/index");
     await db.insert(schema.jobs).values({
@@ -29,7 +30,7 @@ describe.sequential("POST /api/jobs/actions — 5g action variants", () => {
       source: "linkedin",
       title: "Backend Engineer",
       employer: "Acme",
-      jobUrl: `https://example.com/${overrides.id}`,
+      jobUrl: overrides.jobUrl ?? `https://example.com/${overrides.id}`,
       status: overrides.status as
         | "discovered"
         | "selected"
@@ -463,5 +464,41 @@ describe.sequential("POST /api/jobs/actions — 5g action variants", () => {
       "dups-a",
       "dups-b",
     ]);
+  });
+
+  // Rescrape: only the two guard paths are unit-tested here. Both short-circuit
+  // BEFORE fetchJobDraft (status check, then URL check), so no network/browser
+  // is touched and this vi.mock-free harness stays hermetic. Do NOT add a
+  // happy-path rescrape test here — a non-processing, http-URL job would run the
+  // real fetchAndExtractJobContent → live network. The happy path is browser
+  // smoke only.
+  it("rescrape rejects a processing job before any fetch", async () => {
+    await seedJob({ id: "rescrape-proc", status: "processing" });
+
+    const { body } = await postAction({
+      action: "rescrape",
+      jobIds: ["rescrape-proc"],
+    });
+
+    expect(body.data.succeeded).toBe(0);
+    expect(body.data.failed).toBe(1);
+    expect(body.data.results[0].error.code).toBe("INVALID_REQUEST");
+  });
+
+  it("rescrape rejects a non-http (manual://) URL before any fetch", async () => {
+    await seedJob({
+      id: "rescrape-manual",
+      status: "discovered",
+      jobUrl: "manual://11111111-1111-1111-1111-111111111111",
+    });
+
+    const { body } = await postAction({
+      action: "rescrape",
+      jobIds: ["rescrape-manual"],
+    });
+
+    expect(body.data.succeeded).toBe(0);
+    expect(body.data.failed).toBe(1);
+    expect(body.data.results[0].error.code).toBe("INVALID_REQUEST");
   });
 });

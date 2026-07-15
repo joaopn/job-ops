@@ -19,6 +19,7 @@ import {
   canMoveToStale,
   canReopen,
   canRescore,
+  canRescrape,
   canSkip,
   getFailedJobIds,
 } from "./jobActions";
@@ -30,6 +31,7 @@ const jobActionLabel: Record<JobAction, string> = {
   move_to_ready: "Tailoring selected jobs...",
   skip: "Skipping selected jobs...",
   rescore: "Calculating match scores...",
+  rescrape: "Re-fetching from URL...",
   move_to_backlog: "Moving to Backlog...",
   move_to_stale: "Moving to Stale...",
   move_to_inbox: "Moving to Inbox...",
@@ -42,6 +44,7 @@ const jobActionSuccessLabel: Record<JobAction, string> = {
   move_to_ready: "jobs sent to Tailoring",
   skip: "jobs skipped",
   rescore: "matches recalculated",
+  rescrape: "jobs rescraped",
   move_to_backlog: "jobs moved to Backlog",
   move_to_stale: "jobs moved to Stale",
   move_to_inbox: "jobs moved to Inbox",
@@ -105,6 +108,10 @@ export function useJobSelectionActions({
   );
   const canRescoreSelected = useMemo(
     () => canRescore(selectedJobs),
+    [selectedJobs],
+  );
+  const canRescrapeSelected = useMemo(
+    () => canRescrape(selectedJobs),
     [selectedJobs],
   );
   const canMoveToBacklogSelected = useMemo(
@@ -423,6 +430,7 @@ export function useJobSelectionActions({
     canSkipSelected,
     canMoveSelected,
     canRescoreSelected,
+    canRescrapeSelected,
     canMoveToBacklogSelected,
     canMoveToStaleSelected,
     canMoveToInboxSelected,

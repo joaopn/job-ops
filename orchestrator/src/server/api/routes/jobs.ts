@@ -27,7 +27,12 @@ import {
 } from "@server/services/cv/ats-coverage";
 import { renderCvPdf } from "@server/services/cv/render-cv";
 import { getActiveCvDocument } from "@server/services/cv-active";
-import { scoreJobSuitability } from "@server/services/scorer";
+import { isJobScoringEnabled } from "@server/services/job-scoring-settings";
+import { fetchJobDraft } from "@server/services/manualJob";
+import {
+  JobNotScoreableError,
+  scoreJobSuitability,
+} from "@server/services/scorer";
 import { getEffectiveSettings } from "@server/services/settings";
 import { asyncPool } from "@server/utils/async-pool";
 import {
@@ -44,6 +49,8 @@ import {
   type JobStatus,
   type JobsListResponse,
   type JobsRevisionResponse,
+  type ManualJobDraft,
+  type UpdateJobInput,
 } from "@shared/types";
 import { type Request, type Response, Router } from "express";
 import { z } from "zod";
@@ -112,6 +119,10 @@ const jobActionRequestSchema = z.discriminatedUnion("action", [
   }),
   z.object({
     action: z.literal("rescore"),
+    jobIds: z.array(z.string().min(1)).min(1).max(100),
+  }),
+  z.object({
+    action: z.literal("rescrape"),
     jobIds: z.array(z.string().min(1)).min(1).max(100),
   }),
   z.object({
@@ -277,6 +288,7 @@ type JobActionExecutionOptions = {
   forceMoveToReady?: boolean;
   requestOrigin?: string | null;
   markClosedOutcome?: JobOutcome;
+  rescrapeScoringEnabled?: boolean;
 };
 
 function createSharedRescoreBriefLoader(): () => Promise<string> {
@@ -338,6 +350,57 @@ function scheduleBackgroundTailor(
 
   if (backgroundTailorActive < BACKGROUND_TAILOR_CONCURRENCY) run();
   else backgroundTailorQueue.push(run);
+}
+
+// Trim-to-null normalization (reimplemented locally rather than reaching for
+// manual-jobs.ts's module-private cleanOptional — a route module).
+function trimToNull(value?: string | null): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+// Only http(s) URLs can be re-fetched. Synthetic `manual://…` URLs (paste-JD
+// jobs) and anything else are not rescrapable.
+function isRescrapableUrl(url: string | null | undefined): boolean {
+  return !!url && (url.startsWith("https://") || url.startsWith("http://"));
+}
+
+// Build the field patch for a rescrape. The description is overwritten
+// unconditionally (trimmed) — it is the field partial-scrapes break, and its
+// emptiness is guarded separately by the caller (→ 422). Every OTHER field is
+// filled ONLY when the current stored value is missing (null/""/whitespace) and
+// the fresh draft has a value — so a good existing title/salary is never
+// clobbered by a weaker re-inference. `jobUrl` (identity key) and `status` are
+// never touched.
+function buildRescrapeUpdate(job: Job, draft: ManualJobDraft): UpdateJobInput {
+  const update: UpdateJobInput = {
+    jobDescription: trimToNull(draft.jobDescription),
+  };
+
+  // Returns the fresh value to write, or undefined to keep the existing one:
+  // fill only when the current stored value is missing (null/""/whitespace) and
+  // the draft carries a real value.
+  const fillMissing = (
+    current: string | null | undefined,
+    fresh: string | undefined,
+  ): string | undefined =>
+    trimToNull(current) !== null ? undefined : (trimToNull(fresh) ?? undefined);
+
+  const title = fillMissing(job.title, draft.title);
+  if (title !== undefined) update.title = title;
+  const employer = fillMissing(job.employer, draft.employer);
+  if (employer !== undefined) update.employer = employer;
+  const location = fillMissing(job.location, draft.location);
+  if (location !== undefined) update.location = location;
+  const salary = fillMissing(job.salary, draft.salary);
+  if (salary !== undefined) update.salary = salary;
+  const deadline = fillMissing(job.deadline, draft.deadline);
+  if (deadline !== undefined) update.deadline = deadline;
+  const applicationLink = fillMissing(job.applicationLink, draft.applicationLink);
+  if (applicationLink !== undefined) update.applicationLink = applicationLink;
+
+  return update;
 }
 
 async function executeJobActionForJob(
@@ -561,6 +624,67 @@ async function executeJobActionForJob(
           code: "NOT_FOUND",
           message: "Job not found",
         });
+      }
+
+      return { jobId, ok: true, job: updated };
+    }
+
+    if (action === "rescrape") {
+      if (job.status === "processing") {
+        throw badRequest(
+          `Job is not rescrapable from status "${job.status}"`,
+          { jobId, status: job.status, disallowedStatus: "processing" },
+        );
+      }
+      if (!isRescrapableUrl(job.jobUrl)) {
+        throw badRequest("Job has no rescrapable URL", {
+          jobId,
+          jobUrl: job.jobUrl,
+        });
+      }
+
+      // Re-fetch the source page and infer a fresh draft. Fetch/infer failures
+      // throw AppError, caught below and mapped to the failure result.
+      const { job: draft } = await fetchJobDraft(job.jobUrl); // usage/warning ignored
+      const description = trimToNull(draft.jobDescription);
+      if (!description) {
+        throw unprocessableEntity(
+          "Re-fetch returned no job description; the job was left unchanged.",
+          { jobId },
+        );
+      }
+
+      let updated = await jobsRepo.updateJob(
+        jobId,
+        buildRescrapeUpdate(job, draft),
+      );
+      if (!updated) {
+        throw new AppError({
+          status: 404,
+          code: "NOT_FOUND",
+          message: "Job not found",
+        });
+      }
+
+      // The refreshed description changes fit — re-score inline so the streamed
+      // row carries the new suitability. A scoring failure must NOT fail the
+      // rescrape: the fields are already refreshed.
+      if (options?.rescrapeScoringEnabled) {
+        try {
+          const brief = options.getBriefForRescore
+            ? await options.getBriefForRescore()
+            : await getActivePersonalBrief();
+          const { category, reason } = await scoreJobSuitability(updated, brief);
+          updated =
+            (await jobsRepo.updateJob(jobId, {
+              suitabilityCategory: category,
+              suitabilityReason: reason,
+            })) ?? updated;
+        } catch (error) {
+          if (!(error instanceof JobNotScoreableError)) {
+            logger.warn("Rescrape rescore failed", { jobId, error });
+          }
+        }
       }
 
       return { jobId, ok: true, job: updated };
@@ -819,9 +943,17 @@ jobsRouter.post("/actions", async (req: Request, res: Response) => {
     const parsed = jobActionRequestSchema.parse(req.body);
     const dedupedJobIds = Array.from(new Set(parsed.jobIds));
     const requestOrigin = resolveRequestOrigin(req);
+    const rescrapeScoringEnabled =
+      parsed.action === "rescrape" ? await isJobScoringEnabled() : false;
     const executionOptions: JobActionExecutionOptions = {
       ...(parsed.action === "rescore"
         ? { getBriefForRescore: createSharedRescoreBriefLoader() }
+        : {}),
+      ...(parsed.action === "rescrape"
+        ? {
+            getBriefForRescore: createSharedRescoreBriefLoader(),
+            rescrapeScoringEnabled,
+          }
         : {}),
       ...(parsed.action === "move_to_ready" &&
       parsed.options?.force !== undefined
@@ -899,9 +1031,17 @@ jobsRouter.post("/actions/stream", async (req: Request, res: Response) => {
   const requestOrigin = resolveRequestOrigin(req);
   const requestId = String(res.getHeader("x-request-id") || "unknown");
   const action = parsed.data.action;
+  const rescrapeScoringEnabled =
+    action === "rescrape" ? await isJobScoringEnabled() : false;
   const executionOptions: JobActionExecutionOptions = {
     ...(parsed.data.action === "rescore"
       ? { getBriefForRescore: createSharedRescoreBriefLoader() }
+      : {}),
+    ...(parsed.data.action === "rescrape"
+      ? {
+          getBriefForRescore: createSharedRescoreBriefLoader(),
+          rescrapeScoringEnabled,
+        }
       : {}),
     ...(parsed.data.action === "move_to_ready" &&
     parsed.data.options?.force !== undefined
