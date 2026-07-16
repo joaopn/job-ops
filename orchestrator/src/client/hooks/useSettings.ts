@@ -31,6 +31,7 @@ export function useSettings() {
       settings?.renderMarkdownInJobDescriptions?.value ?? true,
     inboxStaleThresholdDays:
       settings?.inboxStaleThresholdDays?.value ?? 7,
+    maxBulkActionJobs: settings?.maxBulkActionJobs?.value ?? 1000,
     // Mirrors the server's resolveCvSourceFormat: an unset format is latex.
     cvSourceFormat: settings?.cvSourceFormat ?? "latex",
     refreshSettings,

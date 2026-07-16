@@ -59,6 +59,7 @@ export const PipelineSettingsSection: React.FC<
     autoTailoringEnabled,
     enableJobScoring,
     inboxStaleThresholdDays,
+    maxBulkActionJobs,
     manualJobFetchTimeoutMs,
     manualJobFetchMinExtractedChars,
     manualJobFetchBrowserSettleMs,
@@ -218,6 +219,51 @@ export const PipelineSettingsSection: React.FC<
             <span className="font-mono">
               {inboxStaleThresholdDays.effective}
             </span>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label htmlFor="maxBulkActionJobs" className="text-sm font-medium">
+            Max jobs per bulk action
+          </label>
+          <Controller
+            name="maxBulkActionJobs"
+            control={control}
+            rules={{
+              validate: (v) =>
+                v === null ||
+                v === undefined ||
+                (Number.isInteger(v) && v >= 1) ||
+                "Must be a whole number of at least 1",
+            }}
+            render={({ field }) => (
+              <Input
+                id="maxBulkActionJobs"
+                type="number"
+                min={1}
+                step={1}
+                placeholder={String(maxBulkActionJobs.default)}
+                disabled={isLoading || isSaving}
+                value={field.value ?? ""}
+                onChange={(e) => {
+                  const value = e.target.valueAsNumber;
+                  field.onChange(Number.isFinite(value) ? value : null);
+                }}
+              />
+            )}
+          />
+          {errors.maxBulkActionJobs && (
+            <div className="text-xs text-destructive">
+              {errors.maxBulkActionJobs.message as string}
+            </div>
+          )}
+          <div className="text-xs text-muted-foreground">
+            The most jobs a single multi-select action (tailor, skip, move,
+            rescrape, …) may run at once.
+          </div>
+          <div className="text-xs text-muted-foreground">
+            Current:{" "}
+            <span className="font-mono">{maxBulkActionJobs.effective}</span>
           </div>
         </div>
 

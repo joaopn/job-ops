@@ -115,19 +115,19 @@ const updateOutcomeSchema = z.object({
 const jobActionRequestSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("skip"),
-    jobIds: z.array(z.string().min(1)).min(1).max(100),
+    jobIds: z.array(z.string().min(1)).min(1),
   }),
   z.object({
     action: z.literal("rescore"),
-    jobIds: z.array(z.string().min(1)).min(1).max(100),
+    jobIds: z.array(z.string().min(1)).min(1),
   }),
   z.object({
     action: z.literal("rescrape"),
-    jobIds: z.array(z.string().min(1)).min(1).max(100),
+    jobIds: z.array(z.string().min(1)).min(1),
   }),
   z.object({
     action: z.literal("move_to_ready"),
-    jobIds: z.array(z.string().min(1)).min(1).max(100),
+    jobIds: z.array(z.string().min(1)).min(1),
     options: z
       .object({
         force: z.boolean().optional(),
@@ -136,30 +136,30 @@ const jobActionRequestSchema = z.discriminatedUnion("action", [
   }),
   z.object({
     action: z.literal("move_to_backlog"),
-    jobIds: z.array(z.string().min(1)).min(1).max(100),
+    jobIds: z.array(z.string().min(1)).min(1),
   }),
   z.object({
     action: z.literal("move_to_stale"),
-    jobIds: z.array(z.string().min(1)).min(1).max(100),
+    jobIds: z.array(z.string().min(1)).min(1),
   }),
   z.object({
     action: z.literal("move_to_inbox"),
-    jobIds: z.array(z.string().min(1)).min(1).max(100),
+    jobIds: z.array(z.string().min(1)).min(1),
   }),
   z.object({
     action: z.literal("mark_closed"),
-    jobIds: z.array(z.string().min(1)).min(1).max(100),
+    jobIds: z.array(z.string().min(1)).min(1),
     options: z.object({
       outcome: z.enum(APPLICATION_OUTCOMES),
     }),
   }),
   z.object({
     action: z.literal("mark_duplicated"),
-    jobIds: z.array(z.string().min(1)).min(1).max(100),
+    jobIds: z.array(z.string().min(1)).min(1),
   }),
   z.object({
     action: z.literal("reopen"),
-    jobIds: z.array(z.string().min(1)).min(1).max(100),
+    jobIds: z.array(z.string().min(1)).min(1),
   }),
 ]);
 
@@ -941,6 +941,13 @@ jobsRouter.get("/duplicates", async (_req: Request, res: Response) => {
 jobsRouter.post("/actions", async (req: Request, res: Response) => {
   try {
     const parsed = jobActionRequestSchema.parse(req.body);
+    const maxBulkActionJobs = (await getEffectiveSettings()).maxBulkActionJobs
+      .value;
+    if (parsed.jobIds.length > maxBulkActionJobs) {
+      throw badRequest(
+        `Too many jobs for one action (max ${maxBulkActionJobs}).`,
+      );
+    }
     const dedupedJobIds = Array.from(new Set(parsed.jobIds));
     const requestOrigin = resolveRequestOrigin(req);
     const rescrapeScoringEnabled =
@@ -1024,6 +1031,15 @@ jobsRouter.post("/actions/stream", async (req: Request, res: Response) => {
     return fail(
       res,
       badRequest("Invalid job action request", parsed.error.flatten()),
+    );
+  }
+
+  const maxBulkActionJobs = (await getEffectiveSettings()).maxBulkActionJobs
+    .value;
+  if (parsed.data.jobIds.length > maxBulkActionJobs) {
+    return fail(
+      res,
+      badRequest(`Too many jobs for one action (max ${maxBulkActionJobs}).`),
     );
   }
 

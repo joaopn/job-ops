@@ -212,7 +212,8 @@ export const OrchestratorPage: React.FC = () => {
     [navigateWithContext, activeTab],
   );
 
-  const { settings, inboxStaleThresholdDays } = useSettings();
+  const { settings, inboxStaleThresholdDays, maxBulkActionJobs } =
+    useSettings();
   const effectiveStaleThresholdDays =
     staleThresholdDays ?? inboxStaleThresholdDays;
   const {
@@ -342,6 +343,7 @@ export const OrchestratorPage: React.FC = () => {
     activeJobs,
     activeTab,
     loadJobs,
+    maxBulkActionJobs,
     pushUndo: undoController.pushUndo,
     undo: undoController.undo,
   });

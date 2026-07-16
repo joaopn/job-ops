@@ -25,8 +25,6 @@ import {
 } from "./jobActions";
 import { clampNumber } from "./utils";
 
-const MAX_JOB_ACTION_JOB_IDS = 100;
-
 const jobActionLabel: Record<JobAction, string> = {
   move_to_ready: "Tailoring selected jobs...",
   skip: "Skipping selected jobs...",
@@ -69,6 +67,7 @@ interface UseJobSelectionActionsArgs {
   activeJobs: JobListItem[];
   activeTab: FilterTab;
   loadJobs: () => Promise<void>;
+  maxBulkActionJobs: number;
   pushUndo?: (entry: { label: string; restore: () => Promise<void> }) => void;
   undo?: () => void;
 }
@@ -77,6 +76,7 @@ export function useJobSelectionActions({
   activeJobs,
   activeTab,
   loadJobs,
+  maxBulkActionJobs,
   pushUndo,
   undo,
 }: UseJobSelectionActionsArgs) {
@@ -198,16 +198,16 @@ export function useJobSelectionActions({
       setSelectedJobIds(() => {
         if (!checked) return new Set();
         const allIds = activeJobs.map((job) => job.id);
-        if (allIds.length <= MAX_JOB_ACTION_JOB_IDS) {
+        if (allIds.length <= maxBulkActionJobs) {
           return new Set(allIds);
         }
         toast.error(
-          `Select all is limited to ${MAX_JOB_ACTION_JOB_IDS} jobs per action.`,
+          `Select all is limited to ${maxBulkActionJobs} jobs per action.`,
         );
-        return new Set(allIds.slice(0, MAX_JOB_ACTION_JOB_IDS));
+        return new Set(allIds.slice(0, maxBulkActionJobs));
       });
     },
-    [activeJobs],
+    [activeJobs, maxBulkActionJobs],
   );
 
   const clearSelection = useCallback(() => {
@@ -220,9 +220,9 @@ export function useJobSelectionActions({
       const action = request.action;
       const selectedAtStart = request.jobIds;
       if (selectedAtStart.length === 0) return;
-      if (selectedAtStart.length > MAX_JOB_ACTION_JOB_IDS) {
+      if (selectedAtStart.length > maxBulkActionJobs) {
         toast.error(
-          `You can run job actions on up to ${MAX_JOB_ACTION_JOB_IDS} jobs at a time.`,
+          `You can run job actions on up to ${maxBulkActionJobs} jobs at a time.`,
         );
         return;
       }
@@ -398,7 +398,7 @@ export function useJobSelectionActions({
         setJobActionInFlight(null);
       }
     },
-    [loadJobs, pushUndo, undo],
+    [loadJobs, maxBulkActionJobs, pushUndo, undo],
   );
 
   // Option-less variants. mark_closed needs an outcome and goes through

@@ -73,6 +73,7 @@ const DEFAULT_FORM_VALUES: UpdateSettingsInput = {
   autoTailoringEnabled: null,
   enableJobScoring: null,
   inboxStaleThresholdDays: null,
+  maxBulkActionJobs: null,
   maxBriefChars: null,
   maxJobDescriptionChars: null,
   maxTailoredContentChars: null,
@@ -270,6 +271,7 @@ const SECTION_FIELD_MAP: Record<
     "autoTailoringEnabled",
     "enableJobScoring",
     "inboxStaleThresholdDays",
+    "maxBulkActionJobs",
     "manualJobFetchTimeoutMs",
     "manualJobFetchMinExtractedChars",
     "manualJobFetchBrowserSettleMs",
@@ -325,6 +327,7 @@ const NULL_SETTINGS_PAYLOAD: UpdateSettingsInput = {
   autoTailoringEnabled: null,
   enableJobScoring: null,
   inboxStaleThresholdDays: null,
+  maxBulkActionJobs: null,
   maxBriefChars: null,
   maxJobDescriptionChars: null,
   maxTailoredContentChars: null,
@@ -370,6 +373,7 @@ const mapSettingsToForm = (data: AppSettings): UpdateSettingsInput => ({
   autoTailoringEnabled: data.autoTailoringEnabled.override,
   enableJobScoring: data.enableJobScoring.override,
   inboxStaleThresholdDays: data.inboxStaleThresholdDays.override,
+  maxBulkActionJobs: data.maxBulkActionJobs.override,
   maxBriefChars: data.maxBriefChars.override,
   maxJobDescriptionChars: data.maxJobDescriptionChars.override,
   maxTailoredContentChars: data.maxTailoredContentChars.override,
@@ -494,6 +498,10 @@ const getDerivedSettings = (settings: AppSettings | null) => {
       inboxStaleThresholdDays: {
         effective: settings?.inboxStaleThresholdDays?.value ?? 7,
         default: settings?.inboxStaleThresholdDays?.default ?? 7,
+      },
+      maxBulkActionJobs: {
+        effective: settings?.maxBulkActionJobs?.value ?? 1000,
+        default: settings?.maxBulkActionJobs?.default ?? 1000,
       },
       manualJobFetchTimeoutMs: {
         effective: settings?.manualJobFetchTimeoutMs?.value ?? 15_000,
@@ -736,6 +744,10 @@ export const SettingsPage: React.FC = () => {
         inboxStaleThresholdDays: nullIfSame(
           data.inboxStaleThresholdDays,
           pipeline.inboxStaleThresholdDays.default,
+        ),
+        maxBulkActionJobs: nullIfSame(
+          data.maxBulkActionJobs,
+          pipeline.maxBulkActionJobs.default,
         ),
         manualJobFetchTimeoutMs: nullIfSame(
           data.manualJobFetchTimeoutMs,

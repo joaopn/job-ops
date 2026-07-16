@@ -215,6 +215,7 @@ export const createAppSettings = (
   enableJobScoring: { value: true, default: true, override: null },
   jwtExpirySeconds: { value: null, default: null, override: null },
   inboxStaleThresholdDays: { value: 7, default: 7, override: null },
+  maxBulkActionJobs: { value: 1000, default: 1000, override: null },
   maxBriefChars: { value: 200_000, default: 200_000, override: null },
   maxJobDescriptionChars: { value: 100_000, default: 100_000, override: null },
   maxTailoredContentChars: {

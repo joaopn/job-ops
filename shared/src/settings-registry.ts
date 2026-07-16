@@ -328,6 +328,13 @@ export const settingsRegistry = {
     },
     serialize: serializeNullableNumber,
   },
+  maxBulkActionJobs: {
+    kind: "typed" as const,
+    schema: z.number().int().min(1),
+    default: (): number => 1000,
+    parse: parseIntOrNull,
+    serialize: serializeNullableNumber,
+  },
   // --- Context limits (LLM-bound character caps) ---
   // Enforced at the write boundary; exceeding a cap returns 422 with the
   // observed length rather than silently truncating into the prompt.

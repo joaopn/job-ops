@@ -113,6 +113,7 @@ describe("useJobSelectionActions", () => {
         activeJobs,
         activeTab: "inbox",
         loadJobs,
+        maxBulkActionJobs: 100,
       }),
     );
 
@@ -133,6 +134,7 @@ describe("useJobSelectionActions", () => {
         activeJobs,
         activeTab: "inbox",
         loadJobs,
+        maxBulkActionJobs: 100,
       }),
     );
 
@@ -184,6 +186,7 @@ describe("useJobSelectionActions", () => {
         activeJobs,
         activeTab: "inbox",
         loadJobs,
+        maxBulkActionJobs: 100,
       }),
     );
 
@@ -247,6 +250,7 @@ describe("useJobSelectionActions", () => {
         activeJobs,
         activeTab: "tailoring",
         loadJobs,
+        maxBulkActionJobs: 100,
       }),
     );
 
